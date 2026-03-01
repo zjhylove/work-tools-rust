@@ -138,7 +138,8 @@
 
 /* 表单样式 */
 .auth-form {
-  max-width: 600px;
+  width: 100%;
+  max-width: 800px;
   background: var(--bg-primary);
   border-radius: 12px;
   padding: 20px;
