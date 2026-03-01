@@ -117,8 +117,8 @@
 }
 
 .field-table th {
-  background: var(--bg-secondary);
-  font-weight: 500;
+  background: var(--bg-tertiary);
+  font-weight: 600;
   color: var(--text-primary);
   font-size: 12px;
   text-transform: uppercase;
@@ -134,7 +134,7 @@
 }
 
 .field-table tr:hover td {
-  background: var(--bg-secondary);
+  background: var(--bg-tertiary);
 }
 
 .field-table .empty-table {

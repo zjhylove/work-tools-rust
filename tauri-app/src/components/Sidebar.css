@@ -1,6 +1,6 @@
 .sidebar {
   width: 260px;
-  background: var(--bg-secondary);
+  background: var(--bg-tertiary);
   border-right: 1px solid var(--border-color);
   display: flex;
   flex-direction: column;
@@ -43,9 +43,10 @@
 }
 
 .sidebar-item.active {
-  background: var(--accent-light);
+  background: var(--bg-primary);
   color: var(--accent);
   box-shadow: var(--shadow-sm);
+  border: 1px solid var(--border-color);
 }
 
 .plugin-icon {
