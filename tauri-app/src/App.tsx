@@ -104,6 +104,7 @@ function App() {
     if (pluginId === "password-manager") {
       try {
         const entries = await invoke<PasswordEntry[]>("get_password_entries");
+        console.log("加载到的密码条目:", entries);
         setPasswordEntries(entries);
         setSelectedEntry(null);
         setIsEditMode(false);
@@ -112,6 +113,14 @@ function App() {
       } catch (error) {
         console.error("加载密码列表失败:", error);
         setPasswordEntries([]);
+      }
+    } else if (pluginId === "auth") {
+      // Auth plugin 处理
+      try {
+        const entries = await invoke<any[]>("get_auth_entries");
+        console.log("加载到的认证条目:", entries);
+      } catch (error) {
+        console.error("加载认证列表失败:", error);
       }
     }
 
@@ -400,7 +409,10 @@ function App() {
             <For each={plugins()}>
               {(plugin) => (
                 <div
-                  onClick={() => openPlugin(plugin.id)}
+                  onClick={() => {
+                    console.log("点击了插件:", plugin.id, plugin.name);
+                    openPlugin(plugin.id);
+                  }}
                   style={{
                     padding: "12px 15px",
                     cursor: "pointer",

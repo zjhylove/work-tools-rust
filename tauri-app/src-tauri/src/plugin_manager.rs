@@ -96,8 +96,6 @@ impl PluginManager {
     async fn get_plugin_info(&self, exe_path: &Path) -> Result<PluginInfo> {
         // 启动插件进程
         let mut child = Command::new(exe_path)
-            .arg("--mode")
-            .arg("info")
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
