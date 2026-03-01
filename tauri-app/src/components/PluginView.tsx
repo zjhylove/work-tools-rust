@@ -1,4 +1,4 @@
-import { createSignal, onMount, Show, Setter } from "solid-js";
+import { createSignal, onMount, Show, Setter, createEffect } from "solid-js";
 import { invoke } from "@tauri-apps/api/core";
 import { createPluginBridge } from "../utils/pluginBridge";
 import "./PluginView.css";
@@ -13,31 +13,44 @@ export default (props: PluginViewProps) => {
   const [loading, setLoading] = createSignal(true);
   const [error, setError] = createSignal<string>("");
 
-  onMount(async () => {
+  // 使用 createEffect 代替 onMount,以便在 pluginId 变化时重新加载
+  createEffect(async () => {
+    const pluginId = props.pluginId;
+    if (!pluginId) return;
+
+    console.log("[PluginView] 开始加载插件:", pluginId);
     try {
       setLoading(true);
       setError("");
 
       const viewHtml = await invoke<string>("get_plugin_view", {
-        pluginId: props.pluginId,
+        pluginId: pluginId,
       });
 
+      console.log(
+        "[PluginView] 获取到 HTML 内容:",
+        viewHtml.substring(0, 100) + "...",
+      );
       setHtml(viewHtml);
 
       // 创建插件桥并暴露到 window
-      const bridge = createPluginBridge(props.pluginId);
+      const bridge = createPluginBridge(pluginId);
       bridge.exposeToWindow();
+      console.log("[PluginView] 插件桥已暴露到 window");
 
       // 等待DOM更新后自动加载初始数据
       setTimeout(async () => {
         try {
           // 对于 password-manager,自动加载数据
-          if (props.pluginId === "password-manager") {
+          if (pluginId === "password-manager") {
+            console.log("[PluginView] 开始加载密码列表...");
             const result = await bridge.call("list_passwords");
-            console.log("密码列表:", result);
+            console.log("[PluginView] 密码列表:", result);
 
             // 更新DOM显示数据
             const listEl = document.getElementById("password-list");
+            console.log("[PluginView] 找到 password-list 元素:", listEl);
+
             if (listEl && result.entries) {
               if (result.entries.length === 0) {
                 listEl.innerHTML = "<p>暂无密码条目</p>";
@@ -55,12 +68,14 @@ export default (props: PluginViewProps) => {
             }
           }
         } catch (err) {
-          console.error("加载初始数据失败:", err);
+          console.error("[PluginView] 加载初始数据失败:", err);
         }
       }, 100);
 
       setLoading(false);
+      console.log("[PluginView] 插件加载完成");
     } catch (err) {
+      console.error("[PluginView] 加载插件失败:", err);
       setError(err as string);
       setLoading(false);
     }
