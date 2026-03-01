@@ -228,11 +228,6 @@ export default function AuthPlugin() {
             + 添加
           </button>
         </Show>
-        <Show when={viewMode() !== "list"}>
-          <button class="btn-secondary" onClick={() => setViewMode("list")}>
-            ← 返回
-          </button>
-        </Show>
       </div>
 
       {/* 错误提示 */}
@@ -304,113 +299,117 @@ export default function AuthPlugin() {
         </div>
       </Show>
 
-      {/* 表单视图 */}
+      {/* 表单模态对话框 */}
       <Show when={viewMode() === "add" || viewMode() === "edit"}>
-        <div class="auth-form">
-          <div class="form-group">
-            <label>发行方 *</label>
-            <input
-              type="text"
-              value={formData().issuer || ""}
-              onInput={(e) =>
-                setFormData((prev) => ({
-                  ...prev,
-                  issuer: e.currentTarget.value,
-                }))
-              }
-              placeholder="例如: Google"
-            />
-          </div>
+        <div class="modal-overlay">
+          <div class="modal auth-modal">
+            <h3>{viewMode() === "add" ? "添加认证" : "编辑认证"}</h3>
 
-          <div class="form-group">
-            <label>账户名称 *</label>
-            <input
-              type="text"
-              value={formData().name || ""}
-              onInput={(e) =>
-                setFormData((prev) => ({
-                  ...prev,
-                  name: e.currentTarget.value,
-                }))
-              }
-              placeholder="例如: user@example.com"
-            />
-          </div>
-
-          <div class="form-group">
-            <label>密钥 *</label>
-            <div class="input-with-button">
+            <div class="form-group">
+              <label>发行方 *</label>
               <input
                 type="text"
-                value={formData().secret || ""}
+                value={formData().issuer || ""}
                 onInput={(e) =>
                   setFormData((prev) => ({
                     ...prev,
-                    secret: e.currentTarget.value,
+                    issuer: e.currentTarget.value,
                   }))
                 }
-                placeholder="输入或生成密钥"
+                placeholder="例如: Google"
               />
-              <button class="btn-secondary" onClick={generateSecret}>
-                生成
+            </div>
+
+            <div class="form-group">
+              <label>账户名称 *</label>
+              <input
+                type="text"
+                value={formData().name || ""}
+                onInput={(e) =>
+                  setFormData((prev) => ({
+                    ...prev,
+                    name: e.currentTarget.value,
+                  }))
+                }
+                placeholder="例如: user@example.com"
+              />
+            </div>
+
+            <div class="form-group">
+              <label>密钥 *</label>
+              <div class="input-with-button">
+                <input
+                  type="text"
+                  value={formData().secret || ""}
+                  onInput={(e) =>
+                    setFormData((prev) => ({
+                      ...prev,
+                      secret: e.currentTarget.value,
+                    }))
+                  }
+                  placeholder="输入或生成密钥"
+                />
+                <button class="btn-secondary" onClick={generateSecret}>
+                  生成
+                </button>
+              </div>
+            </div>
+
+            <div class="form-row">
+              <div class="form-group">
+                <label>算法</label>
+                <select
+                  value={formData().algorithm || "SHA1"}
+                  onChange={(e) =>
+                    setFormData((prev) => ({
+                      ...prev,
+                      algorithm: e.currentTarget.value,
+                    }))
+                  }
+                >
+                  <option value="SHA1">SHA1</option>
+                  <option value="SHA256">SHA256</option>
+                  <option value="SHA512">SHA512</option>
+                </select>
+              </div>
+
+              <div class="form-group">
+                <label>位数</label>
+                <input
+                  type="number"
+                  value={formData().digits || 6}
+                  onInput={(e) =>
+                    setFormData((prev) => ({
+                      ...prev,
+                      digits: parseInt(e.currentTarget.value) || 6,
+                    }))
+                  }
+                />
+              </div>
+
+              <div class="form-group">
+                <label>周期(秒)</label>
+                <input
+                  type="number"
+                  value={formData().period || 30}
+                  onInput={(e) =>
+                    setFormData((prev) => ({
+                      ...prev,
+                      period: parseInt(e.currentTarget.value) || 30,
+                    }))
+                  }
+                />
+              </div>
+            </div>
+
+            <div class="modal-actions">
+              <button class="btn-primary" onClick={saveEntry}>
+                {viewMode() === "add" ? "添加" : "保存"}
+              </button>
+              <button class="btn-secondary" onClick={() => setViewMode("list")}>
+                取消
               </button>
             </div>
-          </div>
-
-          <div class="form-row">
-            <div class="form-group">
-              <label>算法</label>
-              <select
-                value={formData().algorithm || "SHA1"}
-                onChange={(e) =>
-                  setFormData((prev) => ({
-                    ...prev,
-                    algorithm: e.currentTarget.value,
-                  }))
-                }
-              >
-                <option value="SHA1">SHA1</option>
-                <option value="SHA256">SHA256</option>
-                <option value="SHA512">SHA512</option>
-              </select>
-            </div>
-
-            <div class="form-group">
-              <label>位数</label>
-              <input
-                type="number"
-                value={formData().digits || 6}
-                onInput={(e) =>
-                  setFormData((prev) => ({
-                    ...prev,
-                    digits: parseInt(e.currentTarget.value) || 6,
-                  }))
-                }
-              />
-            </div>
-
-            <div class="form-group">
-              <label>周期(秒)</label>
-              <input
-                type="number"
-                value={formData().period || 30}
-                onInput={(e) =>
-                  setFormData((prev) => ({
-                    ...prev,
-                    period: parseInt(e.currentTarget.value) || 30,
-                  }))
-                }
-              />
-            </div>
-          </div>
-
-          <div class="form-actions">
-            <button class="btn-primary" onClick={saveEntry}>
-              {viewMode() === "add" ? "添加" : "保存"}
-            </button>
-            <button class="btn-secondary" onClick={() => setViewMode("list")}>
-              取消
-            </button>
           </div>
         </div>
       </Show>
