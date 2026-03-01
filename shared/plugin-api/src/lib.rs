@@ -1,7 +1,7 @@
 use serde_json::Value;
 
 /// 插件 Trait - 所有插件必须实现此接口
-pub trait Plugin {
+pub trait Plugin: Send + Sync {
     /// 插件唯一标识符
     fn id(&self) -> &str;
 
@@ -21,12 +21,12 @@ pub trait Plugin {
     fn get_view(&self) -> String;
 
     /// 插件初始化 (可选实现)
-    fn init(&mut self) -> Result<(), Box<dyn std::error::Error>> {
+    fn init(&mut self) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         Ok(())
     }
 
     /// 插件销毁时的清理 (可选实现)
-    fn destroy(&mut self) -> Result<(), Box<dyn std::error::Error>> {
+    fn destroy(&mut self) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         Ok(())
     }
 
@@ -35,7 +35,7 @@ pub trait Plugin {
         &mut self,
         _method: &str,
         _params: Value,
-    ) -> Result<Value, Box<dyn std::error::Error>> {
+    ) -> Result<Value, Box<dyn std::error::Error + Send + Sync>> {
         Err("method not implemented".into())
     }
 }

@@ -1,24 +1,23 @@
 use anyhow::{Context, Result};
+use libloading::{Library, Symbol};
 use serde_json::Value;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
-use std::process::Stdio;
-use tokio::process::{Child, Command};
 use tokio::sync::RwLock;
-use tokio::io::{AsyncWriteExt, AsyncBufReadExt, BufReader};
+use worktools_plugin_api::{Plugin, PluginCreateFn};
 use worktools_shared_types::PluginInfo;
 
-/// 插件进程信息
-#[derive(Debug)]
-pub struct PluginProcess {
+/// 已加载的插件
+pub struct LoadedPlugin {
     pub info: PluginInfo,
-    pub child: Option<Child>,
-    pub is_installed: bool,
+    pub instance: Box<dyn Plugin>,
+    /// 保存 Library 实例,防止被卸载
+    _library: Library,
 }
 
 /// 插件管理器
 pub struct PluginManager {
-    plugins: RwLock<HashMap<String, PluginProcess>>,
+    plugins: RwLock<HashMap<String, LoadedPlugin>>,
     plugin_dir: PathBuf,
 }
 
@@ -39,7 +38,7 @@ impl PluginManager {
         })
     }
 
-    /// 初始化插件管理器,扫描可用插件
+    /// 初始化插件管理器,扫描并加载所有插件
     pub async fn init(&self) -> Result<()> {
         tracing::info!("初始化插件管理器,插件目录: {:?}", self.plugin_dir);
 
@@ -51,127 +50,94 @@ impl PluginManager {
             let entry = entry?;
             let path = entry.path();
 
-            // 查找可执行文件
+            // 查找动态库文件
             if path.is_dir() {
                 if let Some(plugin_name) = path.file_name().and_then(|n| n.to_str()) {
-                    let exe_path = path.join(plugin_name);
-                    if exe_path.exists() {
-                        self.discover_plugin(&exe_path).await?;
+                    // 根据平台查找动态库文件
+                    let lib_name = if cfg!(target_os = "macos") {
+                        format!("lib{}.dylib", plugin_name.replace('-', "_"))
+                    } else if cfg!(target_os = "linux") {
+                        format!("lib{}.so", plugin_name.replace('-', "_"))
+                    } else if cfg!(target_os = "windows") {
+                        format!("{}.dll", plugin_name.replace('-', "_"))
+                    } else {
+                        continue;
+                    };
+
+                    let lib_path = path.join(&lib_name);
+                    if lib_path.exists() {
+                        if let Err(e) = self.load_plugin(&lib_path).await {
+                            tracing::warn!("加载插件失败 {:?}: {}", lib_path, e);
+                        }
                     }
                 }
             }
         }
 
-        tracing::info!("插件管理器初始化完成,发现 {} 个插件", self.plugins.read().await.len());
-        Ok(())
-    }
-
-    /// 发现并注册插件
-    async fn discover_plugin(&self, exe_path: &Path) -> Result<()> {
-        let plugin_name = exe_path
-            .file_stem()
-            .and_then(|n| n.to_str())
-            .unwrap_or("unknown")
-            .to_string();
-
-        tracing::info!("发现插件: {}", plugin_name);
-
-        // 启动插件获取信息
-        let info = self.get_plugin_info(exe_path).await?;
-
-        let mut plugins = self.plugins.write().await;
-        plugins.insert(
-            info.id.clone(),
-            PluginProcess {
-                info,
-                child: None,
-                is_installed: false,
-            },
+        tracing::info!(
+            "插件管理器初始化完成,成功加载 {} 个插件",
+            self.plugins.read().await.len()
         );
-
         Ok(())
     }
 
-    /// 获取插件信息
-    async fn get_plugin_info(&self, exe_path: &Path) -> Result<PluginInfo> {
-        // 启动插件进程
-        let mut child = Command::new(exe_path)
-            .stdin(Stdio::piped())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .spawn()
-            .context("启动插件进程失败")?;
+    /// 加载插件动态库
+    async fn load_plugin(&self, lib_path: &Path) -> Result<()> {
+        tracing::info!("加载插件: {:?}", lib_path);
 
-        // 发送 get_info 请求
-        let request = r#"{"jsonrpc":"2.0","method":"get_info","params":{},"id":1}"#;
+        unsafe {
+            // 加载动态库
+            let library = Library::new(lib_path)
+                .context("加载动态库失败")?;
 
-        if let Some(mut stdin) = child.stdin.take() {
-            stdin.write_all(request.as_bytes()).await?;
-            stdin.flush().await?;
-        }
+            // 获取 plugin_create 函数
+            let create: Symbol<PluginCreateFn> = library.get(b"plugin_create")
+                .context("未找到 plugin_create 导出函数")?;
 
-        // 读取响应
-        if let Some(stdout) = child.stdout.take() {
-            let reader = BufReader::new(stdout);
-            let mut lines = reader.lines();
-
-            if let Some(line_result) = lines.next_line().await? {
-                let response: Value = serde_json::from_str(&line_result)?;
-                if let Some(_result) = response.get("result") {
-                    let info: PluginInfo = serde_json::from_value(_result.clone())?;
-                    child.kill().await.ok();
-                    return Ok(info);
-                }
-            }
-        }
-
-        child.kill().await.ok();
-        anyhow::bail!("获取插件信息失败")
-    }
-
-    /// 安装插件
-    pub async fn install_plugin(&self, plugin_id: &str) -> Result<()> {
-        let mut plugins = self.plugins.write().await;
-
-        if let Some(plugin) = plugins.get_mut(plugin_id) {
-            if plugin.is_installed {
-                tracing::warn!("插件已安装: {}", plugin_id);
-                return Ok(());
+            // 调用工厂函数创建插件实例
+            let plugin_ptr = create();
+            if plugin_ptr.is_null() {
+                anyhow::bail!("plugin_create 返回空指针");
             }
 
-            // TODO: 启动插件进程
-            plugin.is_installed = true;
-            tracing::info!("插件安装成功: {}", plugin_id);
+            let mut plugin = Box::from_raw(plugin_ptr);
+
+            // 初始化插件
+            if let Err(e) = plugin.init() {
+                anyhow::bail!("插件初始化失败: {}", e);
+            }
+
+            // 构建插件信息
+            let info = PluginInfo {
+                id: plugin.id().to_string(),
+                name: plugin.name().to_string(),
+                description: plugin.description().to_string(),
+                version: plugin.version().to_string(),
+                icon: plugin.icon().to_string(),
+            };
+
+            tracing::info!(
+                "插件加载成功: {} (v{})",
+                info.name,
+                info.version
+            );
+
+            // 保存到已加载插件列表
+            let mut plugins = self.plugins.write().await;
+            plugins.insert(
+                info.id.clone(),
+                LoadedPlugin {
+                    info,
+                    instance: *plugin,
+                    _library: library,
+                },
+            );
         }
 
         Ok(())
     }
 
-    /// 卸载插件
-    pub async fn uninstall_plugin(&self, plugin_id: &str) -> Result<()> {
-        let mut plugins = self.plugins.write().await;
-
-        if let Some(plugin) = plugins.get_mut(plugin_id) {
-            // TODO: 停止插件进程
-            plugin.is_installed = false;
-            tracing::info!("插件卸载成功: {}", plugin_id);
-        }
-
-        Ok(())
-    }
-
-    /// 获取所有可用插件
-    pub async fn get_available_plugins(&self) -> Vec<PluginInfo> {
-        self.plugins
-            .read()
-            .await
-            .values()
-            .filter(|p| !p.is_installed)
-            .map(|p| p.info.clone())
-            .collect()
-    }
-
-    /// 获取所有已安装插件
+    /// 获取所有已加载的插件
     pub async fn get_installed_plugins(&self) -> Vec<PluginInfo> {
         self.plugins
             .read()
@@ -190,66 +156,34 @@ impl PluginManager {
             .map(|p| p.info.clone())
     }
 
+    /// 获取插件视图 HTML
+    pub async fn get_plugin_view(&self, plugin_id: &str) -> Result<String> {
+        let plugins = self.plugins.read().await;
+
+        let plugin = plugins
+            .get(plugin_id)
+            .ok_or_else(|| anyhow::anyhow!("插件不存在: {}", plugin_id))?;
+
+        Ok(plugin.instance.get_view())
+    }
+
     /// 调用插件方法
-    pub async fn call_plugin_method(&self, plugin_id: &str, method: &str, params: Value) -> Result<Value> {
-        // 查找插件可执行文件
-        let plugin_path = self.plugin_dir.join(plugin_id).join(plugin_id);
+    pub async fn call_plugin_method(
+        &self,
+        plugin_id: &str,
+        method: &str,
+        params: Value,
+    ) -> Result<Value> {
+        let mut plugins = self.plugins.write().await;
 
-        if !plugin_path.exists() {
-            anyhow::bail!("插件不存在: {}", plugin_id);
-        }
+        let plugin = plugins
+            .get_mut(plugin_id)
+            .ok_or_else(|| anyhow::anyhow!("插件不存在: {}", plugin_id))?;
 
-        // 启动插件进程
-        let mut child = Command::new(&plugin_path)
-            .stdin(Stdio::piped())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .spawn()
-            .context("启动插件进程失败")?;
-
-        // 构建请求
-        let request = serde_json::json!({
-            "jsonrpc": "2.0",
-            "method": method,
-            "params": params,
-            "id": 1
-        });
-
-        // 发送请求
-        if let Some(mut stdin) = child.stdin.take() {
-            stdin.write_all(request.to_string().as_bytes()).await?;
-            stdin.write_all(b"\n").await?;
-            stdin.flush().await?;
-        }
-
-        // 读取响应
-        if let Some(stdout) = child.stdout.take() {
-            let reader = BufReader::new(stdout);
-            let mut lines = reader.lines();
-
-            if let Some(line_result) = lines.next_line().await? {
-                let response: Value = serde_json::from_str(&line_result)?;
-
-                // 关闭插件进程
-                child.kill().await.ok();
-
-                // 检查响应
-                if let Some(error) = response.get("error") {
-                    if !error.is_null() {
-                        anyhow::bail!("插件返回错误: {}", error);
-                    }
-                }
-
-                if let Some(result) = response.get("result") {
-                    return Ok(result.clone());
-                }
-
-                anyhow::bail!("插件响应格式错误");
-            }
-        }
-
-        child.kill().await.ok();
-        anyhow::bail!("读取插件响应失败")
+        plugin
+            .instance
+            .handle_call(method, params)
+            .map_err(|e| anyhow::anyhow!("插件方法调用失败: {}", e))
     }
 }
 

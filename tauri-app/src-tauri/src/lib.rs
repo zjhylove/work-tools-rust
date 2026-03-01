@@ -66,12 +66,8 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
-            commands::get_available_plugins,
             commands::get_installed_plugins,
-            commands::install_plugin,
-            commands::uninstall_plugin,
             commands::get_plugin_view,
-            commands::init_plugin,
             commands::call_plugin_method,
             commands::get_plugin_config,
             commands::set_plugin_config,
