@@ -2,6 +2,7 @@
 members = [
     "shared/types",
     "shared/rpc-protocol",
+    "shared/plugin-api",
     "plugins/password-manager",
     "plugins/auth-plugin",
     "tauri-app/src-tauri",
