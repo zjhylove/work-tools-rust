@@ -1,4 +1,5 @@
-import { For, Show, createSignal } from "solid-js";
+import { For, Show, createSignal, onMount } from "solid-js";
+import { invoke } from "@tauri-apps/api/core";
 import "./App.css";
 
 interface PluginInfo {
@@ -26,20 +27,37 @@ interface ViewSchema {
 }
 
 function App() {
-  const plugins: PluginInfo[] = [
-    {
-      id: "password-manager",
-      name: "密码管理器",
-      description: "本地安全存储和管理密码",
-      version: "1.0.0",
-      icon: "🔐",
-    },
-  ];
-
+  const [plugins, setPlugins] = createSignal<PluginInfo[]>([]);
+  const [loading, setLoading] = createSignal(true);
   const [selectedPlugin, setSelectedPlugin] = createSignal<string | null>(null);
   const [pluginView, setPluginView] = createSignal<ViewSchema | null>(null);
   const [formData, setFormData] = createSignal<Record<string, string>>({});
   const [formErrors, setFormErrors] = createSignal<Record<string, string>>({});
+
+  // 加载插件列表
+  onMount(async () => {
+    try {
+      const installedPlugins = await invoke<PluginInfo[]>(
+        "get_installed_plugins",
+      );
+      console.log("已安装插件:", installedPlugins);
+      setPlugins(installedPlugins);
+    } catch (error) {
+      console.error("加载插件失败:", error);
+      // 开发模式下使用模拟数据
+      setPlugins([
+        {
+          id: "password-manager",
+          name: "密码管理器",
+          description: "本地安全存储和管理密码",
+          version: "1.0.0",
+          icon: "🔐",
+        },
+      ]);
+    } finally {
+      setLoading(false);
+    }
+  });
 
   const openPlugin = async (pluginId: string) => {
     console.log("打开插件:", pluginId);
@@ -214,7 +232,7 @@ function App() {
                 ← 返回
               </button>
               <h1 style="color: #333; margin: 0; font-size: 28px;">
-                {plugins.find((p) => p.id === selectedPlugin())?.name}
+                {plugins().find((p) => p.id === selectedPlugin())?.name}
               </h1>
               <div style="width: 80px;"></div>
             </div>
@@ -226,21 +244,27 @@ function App() {
             </h1>
             <p style="color: #666; font-size: 18px; margin: 0;">Rust Edition</p>
             <div style="margin-top: 15px; padding: 10px 20px; background: #d4edda; color: #155724; border-radius: 8px; display: inline-block;">
-              ✅ 后端已启动 | 发现 {plugins.length} 个插件
+              ✅ 后端已启动 | 发现 {plugins().length} 个插件
             </div>
           </div>
         </Show>
 
         {/* 插件列表视图 */}
         <Show when={!selectedPlugin()}>
-          <div style="margin-top: 30px;">
-            <h2 style="color: #555; border-bottom: 3px solid #667eea; padding-bottom: 15px; font-size: 24px;">
-              🎯 已安装插件
-            </h2>
-            <For each={plugins}>
-              {(plugin) => (
-                <div
-                  style="
+          <Show when={loading()}>
+            <div style="text-align: center; padding: 60px 0;">
+              <div style="font-size: 18px; color: #666;">⏳ 加载插件中...</div>
+            </div>
+          </Show>
+          <Show when={!loading()}>
+            <div style="margin-top: 30px;">
+              <h2 style="color: #555; border-bottom: 3px solid #667eea; padding-bottom: 15px; font-size: 24px;">
+                🎯 已安装插件
+              </h2>
+              <For each={plugins()}>
+                {(plugin) => (
+                  <div
+                    style="
                   padding: 25px;
                   margin: 20px 0;
                   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
@@ -249,10 +273,10 @@ function App() {
                   box-shadow: 0 8px 16px rgba(102, 126, 234, 0.3);
                   transition: all 0.3s ease;
                 "
-                >
-                  <div style="display: flex; align-items: center; gap: 20px;">
-                    <div
-                      style="
+                  >
+                    <div style="display: flex; align-items: center; gap: 20px;">
+                      <div
+                        style="
                       font-size: 48px;
                       width: 80px;
                       height: 80px;
@@ -262,22 +286,22 @@ function App() {
                       background: rgba(255,255,255,0.2);
                       border-radius: 50%;
                     "
-                    >
-                      {plugin.icon}
-                    </div>
-                    <div style="flex: 1;">
-                      <h3 style="margin: 0 0 8px 0; font-size: 24px;">
-                        {plugin.name}
-                      </h3>
-                      <p style="margin: 8px 0; font-size: 16px; opacity: 0.95; line-height: 1.5;">
-                        {plugin.description}
-                      </p>
-                      <div style="margin-top: 12px; font-size: 13px; opacity: 0.8; font-family: monospace;">
-                        版本: {plugin.version} | ID: {plugin.id}
+                      >
+                        {plugin.icon}
                       </div>
-                    </div>
-                    <button
-                      style="
+                      <div style="flex: 1;">
+                        <h3 style="margin: 0 0 8px 0; font-size: 24px;">
+                          {plugin.name}
+                        </h3>
+                        <p style="margin: 8px 0; font-size: 16px; opacity: 0.95; line-height: 1.5;">
+                          {plugin.description}
+                        </p>
+                        <div style="margin-top: 12px; font-size: 13px; opacity: 0.8; font-family: monospace;">
+                          版本: {plugin.version} | ID: {plugin.id}
+                        </div>
+                      </div>
+                      <button
+                        style="
                         padding: 12px 24px;
                         background: white;
                         color: #667eea;
@@ -287,15 +311,16 @@ function App() {
                         cursor: pointer;
                         transition: all 0.2s;
                       "
-                      onClick={() => openPlugin(plugin.id)}
-                    >
-                      打开插件
-                    </button>
+                        onClick={() => openPlugin(plugin.id)}
+                      >
+                        打开插件
+                      </button>
+                    </div>
                   </div>
-                </div>
-              )}
-            </For>
-          </div>
+                )}
+              </For>
+            </div>
+          </Show>
         </Show>
 
         {/* 插件详情视图 */}
