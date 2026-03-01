@@ -38,17 +38,50 @@ work-tools-rust/
 
 ## 开发环境设置
 
+### 跨平台支持
+
+✅ **macOS** (Intel 和 Apple Silicon M1/M2/M3)
+✅ **Windows** (x64)
+✅ **Linux** (Ubuntu/Debian/Fedora)
+
+### 环境检查
+
+在开始之前,运行环境检查脚本:
+
+```bash
+# macOS/Linux
+./scripts/check-env.sh
+
+# Windows PowerShell
+.\scripts\check-env.ps1
+```
+
 ### 依赖
 
+**所有平台**:
 - Rust 1.70+
 - Node.js 20+
 - npm 或 yarn
+
+**macOS**:
+- Xcode Command Line Tools (`xcode-select --install`)
+
+**Windows**:
+- Visual Studio C++ Build Tools
+- WebView2 Runtime (Windows 10/11 通常已预装)
+
+**Linux** (Ubuntu/Debian):
+```bash
+sudo apt install libwebkit2gtk-4.1-dev build-essential curl wget \
+    libssl-dev libayatana-appindicator3-dev librsvg2-dev
+```
 
 ### 安装
 
 ```bash
 # 1. 克隆项目
-cd /Users/zj/Project/Rust/work-tools-rust
+git clone <repository-url>
+cd work-tools-rust
 
 # 2. 安装前端依赖
 cd tauri-app
@@ -60,13 +93,85 @@ npm run tauri dev
 
 ## 编译和发布
 
+### 本地构建
+
+#### macOS
+
 ```bash
-# 编译主应用
 cd tauri-app
 npm run tauri build
 
-# 编译插件
-cd ../plugins/password-manager
+# 当前架构会自动检测:
+# - Intel Mac → x86_64 二进制 (.app 和 .dmg)
+# - Apple Silicon → aarch64 二进制
+
+# 构建产物:
+# - target/release/bundle/macos/Work Tools.app
+# - target/release/bundle/dmg/Work Tools_<version>_x64.dmg
+```
+
+**创建通用二进制 (Universal Binary)**:
+```bash
+# 添加 Intel target
+rustup target add x86_64-apple-darwin
+
+# 构建双架构版本
+cd src-tauri
+cargo build --target x86_64-apple-darwin --release
+cargo build --target aarch64-apple-darwin --release
+
+# 合并
+lipo -create -output target/release/Work-Tools \
+    target/x86_64-apple-darwin/release/Work-Tools \
+    target/aarch64-apple-darwin/release/Work-Tools
+```
+
+#### Windows
+
+```powershell
+cd tauri-app
+npm run tauri build
+
+# 构建产物:
+# - target/release/bundle/msi/Work Tools_<version>_x64_en-US.msi
+# - target/release/bundle/nsis/Work Tools_<version>_x64-setup.exe
+```
+
+#### Linux
+
+```bash
+# 先安装依赖
+sudo apt install libwebkit2gtk-4.1-dev build-essential \
+    curl wget libssl-dev libayatana-appindicator3-dev librsvg2-dev
+
+# 构建
+cd tauri-app
+npm run tauri build
+
+# 构建产物:
+# - target/release/bundle/deb/work-tools_<version>_amd64.deb
+# - target/release/bundle/appimage/work-tools_<version>_amd64.AppImage
+```
+
+### CI/CD 自动化构建
+
+使用 GitHub Actions 自动构建所有平台:
+
+```bash
+# 推送 tag 触发构建
+git tag v1.0.0
+git push origin v1.0.0
+```
+
+构建完成后,所有平台的安装包会自动上传到 GitHub Releases。
+
+详见 [.github/workflows/build.yml](.github/workflows/build.yml)
+
+### 编译插件
+
+```bash
+# 编译单个插件
+cd plugins/password-manager
 cargo build --release
 
 # 安装插件

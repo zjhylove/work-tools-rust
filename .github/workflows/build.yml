@@ -1,0 +1,127 @@
+name: Build and Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version tag (e.g., v1.0.0)'
+        required: true
+        default: 'v1.0.0'
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # macOS - Universal Binary (Intel + Apple Silicon)
+          - platform: 'macos-latest'
+            os: 'macos'
+            target: 'universal-apple-darwin'
+            ext: 'dmg'
+
+          # macOS - Intel only
+          - platform: 'macos-13'
+            os: 'macos-intel'
+            target: 'x86_64-apple-darwin'
+            ext: 'dmg'
+
+          # macOS - Apple Silicon only
+          - platform: 'macos-latest'
+            os: 'macos-arm'
+            target: 'aarch64-apple-darwin'
+            ext: 'dmg'
+
+          # Windows - x64
+          - platform: 'windows-latest'
+            os: 'windows'
+            target: 'x86_64-pc-windows-msvc'
+            ext: 'msi'
+
+          # Linux - x64
+          - platform: 'ubuntu-latest'
+            os: 'linux'
+            target: 'x86_64-unknown-linux-gnu'
+            ext: 'deb'
+
+    runs-on: ${{ matrix.platform }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          target: ${{ matrix.target }}
+          cache: false
+
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: tauri-app/package-lock.json
+
+      - name: Install dependencies (Ubuntu)
+        if: matrix.os == 'linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev \
+            build-essential curl wget file libssl-dev \
+            libayatana-appindicator3-dev librsvg2-dev
+
+      - name: Install frontend dependencies
+        working-directory: tauri-app
+        run: npm ci
+
+      - name: Build frontend
+        working-directory: tauri-app
+        run: npm run build
+
+      - name: Build Tauri app
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tauriScript: npm run tauri
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        if: success()
+        with:
+          name: work-tools-${{ matrix.os }}-${{ matrix.target }}
+          path: |
+            tauri-app/src-tauri/target/release/bundle/*/
+          retention-days: 30
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/')
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Display structure of downloaded files
+        run: ls -R artifacts
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: artifacts/**/*.dmg
+          files: artifacts/**/*_x64_en-US.msi
+          files: artifacts/**/*.deb
+          files: artifacts/**/*.AppImage
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

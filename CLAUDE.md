@@ -30,6 +30,19 @@ work-tools-rust/
 
 ## 常用命令
 
+### 跨平台构建支持
+
+项目完全支持 macOS (Intel/Apple Silicon)、Windows 和 Linux 平台。
+
+**快速环境检查**:
+```bash
+# macOS/Linux
+./scripts/check-env.sh
+
+# Windows PowerShell
+.\scripts\check-env.ps1
+```
+
 ### 开发模式
 ```bash
 cd tauri-app
@@ -50,11 +63,89 @@ cargo run --bin test-plugins
 ```
 
 ### 生产构建
+
+#### macOS 构建
+
 ```bash
-# 编译主应用
 cd tauri-app
 npm run tauri build
 
+# 当前架构会自动检测:
+# - Intel Mac → x86_64 二进制
+# - Apple Silicon M1/M2/M3 → aarch64 二进制
+
+# 构建产物:
+# - src-tauri/target/release/bundle/macos/Work Tools.app
+# - src-tauri/target/release/bundle/dmg/Work Tools_<version>_x64.dmg
+```
+
+**创建通用二进制 (Universal Binary,支持 Intel + Apple Silicon)**:
+
+```bash
+# 添加 Intel target
+rustup target add x86_64-apple-darwin
+
+# 构建 Intel 版本
+cd tauri-app/src-tauri
+cargo build --target x86_64-apple-darwin --release
+
+# 构建 Apple Silicon 版本
+cargo build --target aarch64-apple-darwin --release
+
+# 合并为通用二进制
+lipo -create -output target/release/Work-Tools \
+    target/x86_64-apple-darwin/release/Work-Tools \
+    target/aarch64-apple-darwin/release/Work-Tools
+```
+
+#### Windows 构建
+
+```powershell
+cd tauri-app
+npm run tauri build
+
+# 构建产物:
+# - src-tauri/target/release/bundle/msi/Work Tools_<version>_x64_en-US.msi
+# - src-tauri/target/release/bundle/nsis/Work Tools_<version>_x64-setup.exe
+```
+
+**前置要求**:
+- Visual Studio C++ Build Tools
+- WebView2 Runtime (Windows 10/11 通常已预装)
+
+#### Linux 构建
+
+```bash
+# 安装依赖 (Ubuntu/Debian)
+sudo apt install libwebkit2gtk-4.1-dev build-essential curl wget \
+    libssl-dev libayatana-appindicator3-dev librsvg2-dev
+
+# 构建
+cd tauri-app
+npm run tauri build
+
+# 构建产物:
+# - src-tauri/target/release/bundle/deb/work-tools_<version>_amd64.deb
+# - src-tauri/target/release/bundle/appimage/work-tools_<version>_amd64.AppImage
+```
+
+#### CI/CD 自动化构建
+
+使用 GitHub Actions 自动构建所有平台版本:
+
+```bash
+# 创建 git tag 触发构建
+git tag v1.0.0
+git push origin v1.0.0
+
+# 或在 GitHub Actions 页面手动触发
+```
+
+详见 [.github/workflows/build.yml](.github/workflows/build.yml)
+
+### 插件编译
+
+```bash
 # 编译单个插件
 cd plugins/password-manager
 cargo build --release

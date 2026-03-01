@@ -278,14 +278,143 @@ npm run tauri dev
 ```
 
 ### 生产构建
+
+#### macOS 构建
+
 ```bash
+cd tauri-app
 npm run tauri build
+
+# 构建产物
+# - src-tauri/target/release/bundle/macos/Work Tools.app
+# - src-tauri/target/release/bundle/dmg/Work Tools_<version>_x64.dmg
 ```
 
-输出:
-- macOS: `target/release/bundle/macos/tauri-app.app`
-- Windows: `target/release/bundle/msi/`
-- Linux: `target/release/bundle/deb/`
+**macOS 通用二进制 (Universal Binary)**:
+```bash
+# 在 Apple Silicon Mac 上
+cd tauri-app/src-tauri
+cargo build --target x86_64-apple-darwin --release
+cargo build --target aarch64-apple-darwin --release
+
+# 创建通用二进制
+lipo -create -output target/release/Work-Tools \
+    target/x86_64-apple-darwin/release/Work-Tools \
+    target/aarch64-apple-darwin/release/Work-Tools
+```
+
+#### Windows 构建
+
+```powershell
+cd tauri-app
+npm run tauri build
+
+# 构建产物
+# - src-tauri/target/release/bundle/msi/Work Tools_<version>_x64_en-US.msi
+# - src-tauri/target/release/bundle/nsis/Work Tools_<version>_x64-setup.exe
+```
+
+#### Linux 构建
+
+```bash
+# 安装依赖 (Ubuntu/Debian)
+sudo apt install libwebkit2gtk-4.1-dev build-essential curl wget file \
+    libssl-dev libayatana-appindicator3-dev librsvg2-dev
+
+# 构建
+cd tauri-app
+npm run tauri build
+
+# 构建产物
+# - src-tauri/target/release/bundle/deb/work-tools_<version>_amd64.deb
+# - src-tauri/target/release/bundle/appimage/work-tools_<version>_amd64.AppImage
+```
+
+#### 跨平台交叉编译
+
+推荐使用 **GitHub Actions** 进行跨平台构建,避免本地配置复杂的交叉编译环境:
+
+```yaml
+# .github/workflows/build.yml
+name: Build and Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        include:
+          - platform: 'macos-latest'
+            target: 'universal-apple-darwin'
+          - platform: 'windows-latest'
+            target: 'x86_64-pc-windows-msvc'
+          - platform: 'ubuntu-latest'
+            target: 'x86_64-unknown-linux-gnu'
+
+    runs-on: ${{ matrix.platform }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          target: ${{ matrix.target }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Build
+        run: |
+          cd tauri-app
+          npm ci
+          npm run build
+          npm run tauri build
+```
+
+### 平台特定配置
+
+#### Windows 控制台配置
+
+`src-tauri/src/main.rs` 中已正确配置:
+```rust
+#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+```
+这可以防止在 Windows 发布版本中显示额外的控制台窗口。
+
+#### 跨平台文件路径
+
+使用 `dirs` crate 处理平台差异:
+```rust
+use dirs::home_dir;
+
+// macOS: ~/Library/Application Support/
+// Windows: ~\AppData\Roaming\
+// Linux: ~/.config/
+let data_dir = dirs::data_local_dir()?;
+```
+
+### 代码签名 (可选但推荐)
+
+#### macOS 代码签名
+```bash
+codesign --force --deep --sign "Developer ID Application: Your Name" \
+  "src-tauri/target/release/Work Tools.app"
+
+# 公证 (需要 Apple Developer 账号)
+xcrun notarytool submit "Work Tools_<version>.dmg" \
+  --apple-id "your@email.com" \
+  --password "app-specific-password" \
+  --team-id "TEAM_ID" --wait
+```
+
+#### Windows 代码签名
+```powershell
+signtool sign /f certificate.pfx /p password \
+  /t http://timestamp.digicert.com \
+  "src-tauri/target/release/Work-Tools.exe"
+```
 
 ## 剩余插件技术调研 (2026-03-01)
 
