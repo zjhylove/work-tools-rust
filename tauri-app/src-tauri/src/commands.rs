@@ -7,6 +7,18 @@ use tauri::State;
 /// 插件管理器状态
 pub type PluginManagerState = Arc<PluginManager>;
 
+/// 密码条目
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct PasswordEntry {
+    pub id: String,
+    pub url: Option<String>,
+    pub service: String,
+    pub username: String,
+    pub password: String,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
 /// 获取所有可用插件
 #[tauri::command]
 pub async fn get_available_plugins(
@@ -98,4 +110,68 @@ pub async fn get_app_config() -> Result<crate::config::AppConfig, String> {
 #[tauri::command]
 pub async fn set_app_config(config: crate::config::AppConfig) -> Result<(), String> {
     save_app_config(&config).map_err(|e| e.to_string())
+}
+
+/// ============= 密码管理器命令 =============
+
+/// 获取所有密码条目
+#[tauri::command]
+pub async fn get_password_entries() -> Result<Vec<PasswordEntry>, String> {
+    let config = load_plugin_config("password-manager")
+        .map_err(|e| e.to_string())?;
+
+    let entries: Vec<PasswordEntry> = config
+        .get("entries")
+        .and_then(|v| serde_json::from_value(v.clone()).ok())
+        .unwrap_or_default();
+
+    Ok(entries)
+}
+
+/// 保存密码条目
+#[tauri::command]
+pub async fn save_password_entry(entry: PasswordEntry) -> Result<(), String> {
+    let mut config = load_plugin_config("password-manager")
+        .map_err(|e| e.to_string())?;
+
+    let entries: Vec<PasswordEntry> = config
+        .get("entries")
+        .and_then(|v| serde_json::from_value(v.clone()).ok())
+        .unwrap_or_default();
+
+    // 查找并更新或添加新条目
+    let mut updated_entries: Vec<PasswordEntry> = entries
+        .into_iter()
+        .filter(|e| e.id != entry.id)
+        .collect();
+    updated_entries.push(entry);
+
+    config["entries"] = serde_json::to_value(&updated_entries)
+        .map_err(|e| e.to_string())?;
+
+    save_plugin_config("password-manager", &config)
+        .map_err(|e| e.to_string())
+}
+
+/// 删除密码条目
+#[tauri::command]
+pub async fn delete_password_entry(id: String) -> Result<(), String> {
+    let mut config = load_plugin_config("password-manager")
+        .map_err(|e| e.to_string())?;
+
+    let entries: Vec<PasswordEntry> = config
+        .get("entries")
+        .and_then(|v| serde_json::from_value(v.clone()).ok())
+        .unwrap_or_default();
+
+    let updated_entries: Vec<PasswordEntry> = entries
+        .into_iter()
+        .filter(|e| e.id != id)
+        .collect();
+
+    config["entries"] = serde_json::to_value(&updated_entries)
+        .map_err(|e| e.to_string())?;
+
+    save_plugin_config("password-manager", &config)
+        .map_err(|e| e.to_string())
 }
