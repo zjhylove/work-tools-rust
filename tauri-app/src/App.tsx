@@ -1,7 +1,6 @@
 import { For, Show, createSignal, onMount } from "solid-js";
 import { invoke } from "@tauri-apps/api/core";
-import AuthPlugin from "./components/AuthPlugin";
-import PasswordManager from "./components/PasswordManager";
+import PluginView from "./components/PluginView";
 import { devError, devLog, devWarn } from "./utils/logger";
 import "./App.css";
 
@@ -314,23 +313,15 @@ function App() {
           "flex-direction": "column",
         }}
       >
-        <Show when={selectedPlugin() === "password-manager"}>
-          <PasswordManager />
+        <Show when={selectedPlugin()}>
+          <PluginView
+            pluginId={selectedPlugin()!}
+            setSelectedPlugin={setSelectedPlugin}
+          />
         </Show>
 
-        {/* Auth Plugin 界面 */}
-        <Show when={selectedPlugin() === "auth"}>
-          <AuthPlugin />
-        </Show>
-
-        {/* 其他插件提示 */}
-        <Show
-          when={
-            selectedPlugin() &&
-            selectedPlugin() !== "password-manager" &&
-            selectedPlugin() !== "auth"
-          }
-        >
+        {/* 无插件选中时的提示 */}
+        <Show when={!selectedPlugin()}>
           <div
             style={{
               padding: "40px",
@@ -339,12 +330,12 @@ function App() {
             }}
           >
             <div style={{ "font-size": "64px", "margin-bottom": "20px" }}>
-              🚧
+              👋
             </div>
             <h2 style={{ "font-size": "24px", margin: "0 0 10px 0" }}>
-              插件开发中
+              欢迎使用 Work Tools
             </h2>
-            <p>该插件正在开发中,敬请期待...</p>
+            <p>请从左侧选择一个插件开始使用</p>
           </div>
         </Show>
       </div>
