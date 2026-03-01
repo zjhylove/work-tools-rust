@@ -107,14 +107,8 @@ function App() {
   const [viewMode, setViewMode] = createSignal<"list" | "form">("list");
 
   // 对话框状态
-  const [showSettings, setShowSettings] = createSignal(false);
   const [showLogs, setShowLogs] = createSignal(false);
   const [showPluginMarket, setShowPluginMarket] = createSignal(false);
-  const [showDiagnostics, setShowDiagnostics] = createSignal(false);
-  const [diagnostics, setDiagnostics] = createSignal<string[]>([]);
-  const [theme, setTheme] = createSignal("light");
-  const [autoStart, setAutoStart] = createSignal(false);
-  const [minimizeToTray, setMinimizeToTray] = createSignal(true);
 
   // 主密码验证状态
   const [showMasterPasswordDialog, setShowMasterPasswordDialog] =
@@ -206,19 +200,6 @@ function App() {
           });
         });
         setPlugins(installedPlugins);
-
-        // 加载配置
-        try {
-          const config = await safeInvoke<any>("get_app_config");
-          console.log("加载配置:", config);
-          if (config) {
-            setTheme(config.theme || "light");
-            setAutoStart(config.settings?.auto_start || false);
-            setMinimizeToTray(config.settings?.minimize_to_tray !== false);
-          }
-        } catch (configError) {
-          console.warn("加载配置失败:", configError);
-        }
 
         // 默认选中第一个插件
         if (installedPlugins.length > 0) {
@@ -691,32 +672,6 @@ function App() {
     }),
   );
 
-  const handleSaveSettings = async () => {
-    try {
-      await safeInvoke("set_app_config", {
-        config: {
-          theme: theme(),
-          window_state: {
-            width: 1200,
-            height: 800,
-            x: 100,
-            y: 100,
-            is_maximized: false,
-          },
-          settings: {
-            auto_start: autoStart(),
-            minimize_to_tray: minimizeToTray(),
-          },
-        },
-      });
-      alert("设置保存成功!");
-      setShowSettings(false);
-    } catch (error) {
-      console.error("保存设置失败:", error);
-      alert("保存设置失败: " + error);
-    }
-  };
-
   const filteredEntries = () => {
     const query = searchQuery().toLowerCase();
     if (!query) return passwordEntries();
@@ -726,51 +681,6 @@ function App() {
         entry.username.toLowerCase().includes(query) ||
         (entry.url && entry.url.toLowerCase().includes(query)),
     );
-  };
-
-  const runDiagnostics = async () => {
-    const results: string[] = [];
-    results.push("=== 开始诊断 ===");
-    results.push(`时间: ${new Date().toISOString()}`);
-
-    try {
-      results.push("\n1. 测试 get_installed_plugins:");
-      const installed = await safeInvoke<PluginInfo[]>("get_installed_plugins");
-      results.push(`   返回类型: ${typeof installed}`);
-      results.push(`   是否为数组: ${Array.isArray(installed)}`);
-      results.push(
-        `   数组长度: ${Array.isArray(installed) ? installed.length : "N/A"}`,
-      );
-
-      if (Array.isArray(installed)) {
-        installed.forEach((p, i) => {
-          results.push(
-            `   插件[${i}]: id=${p.id}, name=${p.name}, icon=${p.icon}`,
-          );
-        });
-      } else {
-        results.push(`   实际值: ${JSON.stringify(installed)}`);
-      }
-
-      results.push("\n2. 测试 get_available_plugins:");
-      const available = await safeInvoke<PluginInfo[]>("get_available_plugins");
-      results.push(`   可用插件数量: ${available.length}`);
-
-      results.push("\n3. 当前前端状态:");
-      results.push(`   plugins() 数量: ${plugins().length}`);
-      plugins().forEach((p, i) => {
-        results.push(`   前端插件[${i}]: id=${p.id}, name=${p.name}`);
-      });
-
-      results.push("\n4. 当前选中插件:");
-      results.push(`   selectedPlugin: ${selectedPlugin()}`);
-    } catch (error) {
-      results.push(`\n错误: ${error}`);
-    }
-
-    results.push("\n=== 诊断完成 ===");
-    setDiagnostics(results);
-    setShowDiagnostics(true);
   };
 
   return (
@@ -788,40 +698,19 @@ function App() {
       <div
         class="sidebar-container"
         style={{
-          width: "250px",
+          width: "260px",
           display: "flex",
           "flex-direction": "column",
           "flex-shrink": 0,
         }}
       >
-        {/* 标题 */}
-        <div
-          style={{
-            padding: "20px 15px",
-            "text-align": "center",
-            "border-bottom": "1px solid var(--border-color)",
-          }}
-        >
-          <h2
-            style={{
-              margin: 0,
-              "font-size": "18px",
-              "font-weight": "600",
-              color: "var(--text-primary)",
-              "letter-spacing": "0.5px",
-            }}
-          >
-            Work Tools
-          </h2>
-        </div>
-
         {/* 插件列表 */}
         <Show when={!loading()}>
           <div
             style={{
               flex: 1,
               overflow: "auto",
-              padding: "10px 0",
+              padding: "8px",
             }}
           >
             <For each={plugins()}>
@@ -834,17 +723,19 @@ function App() {
                     openPlugin(plugin.id);
                   }}
                   style={{
-                    padding: "12px 15px",
+                    padding: "12px 14px",
                     cursor: "pointer",
                     "user-select": "none",
+                    "border-radius": "8px",
+                    margin: "0 0 4px 0",
                     background:
                       selectedPlugin() === plugin.id
                         ? "var(--accent-light)"
                         : "transparent",
-                    "border-left":
+                    border:
                       selectedPlugin() === plugin.id
-                        ? "3px solid var(--accent)"
-                        : "3px solid transparent",
+                        ? "1px solid var(--accent)"
+                        : "1px solid transparent",
                     transition: "all 0.15s ease",
                     color:
                       selectedPlugin() === plugin.id
@@ -866,17 +757,22 @@ function App() {
                     style={{
                       display: "flex",
                       "align-items": "center",
-                      gap: "10px",
+                      gap: "12px",
                     }}
                   >
                     <span
                       style={{
-                        "font-size": "24px",
-                        width: "32px",
-                        height: "32px",
+                        "font-size": "28px",
+                        width: "40px",
+                        height: "40px",
                         display: "flex",
                         "align-items": "center",
                         "justify-content": "center",
+                        background:
+                          selectedPlugin() === plugin.id
+                            ? "var(--accent)"
+                            : "var(--bg-tertiary)",
+                        "border-radius": "8px",
                       }}
                     >
                       {plugin.icon}
@@ -885,15 +781,15 @@ function App() {
                       <div
                         style={{
                           "font-size": "14px",
-                          "font-weight": "500",
-                          "margin-bottom": "2px",
+                          "font-weight": "600",
+                          "margin-bottom": "3px",
                         }}
                       >
                         {plugin.name}
                       </div>
                       <div
                         style={{
-                          "font-size": "11px",
+                          "font-size": "12px",
                           color: "var(--text-secondary)",
                           overflow: "hidden",
                           "text-overflow": "ellipsis",
@@ -913,104 +809,68 @@ function App() {
         {/* 底部工具栏 */}
         <div
           style={{
-            padding: "10px",
+            padding: "12px 16px",
             "border-top": "1px solid var(--border-color)",
             display: "flex",
             "justify-content": "center",
-            gap: "15px",
+            gap: "12px",
           }}
         >
           <button
-            onClick={() => setShowSettings(true)}
-            title="设置"
-            style={{
-              width: "36px",
-              height: "36px",
-              background: "transparent",
-              border: "none",
-              color: "var(--text-secondary)",
-              cursor: "pointer",
-              "border-radius": "4px",
-              "font-size": "18px",
-              transition: "background 0.2s",
-            }}
-            onMouseEnter={(e) =>
-              (e.currentTarget.style.background = "var(--hover-bg)")
-            }
-            onMouseLeave={(e) =>
-              (e.currentTarget.style.background = "transparent")
-            }
-          >
-            ⚙️
-          </button>
-          <button
             onClick={() => setShowLogs(true)}
-            title="日志"
+            title="查看系统日志"
             style={{
-              width: "36px",
-              height: "36px",
-              background: "transparent",
-              border: "none",
-              color: "var(--text-secondary)",
+              width: "44px",
+              height: "44px",
+              background: "var(--bg-tertiary)",
+              border: "1px solid var(--border-color)",
+              color: "var(--text-primary)",
               cursor: "pointer",
-              "border-radius": "4px",
-              "font-size": "18px",
-              transition: "background 0.2s",
+              "border-radius": "10px",
+              "font-size": "20px",
+              transition: "all 0.2s",
+              display: "flex",
+              "align-items": "center",
+              "justify-content": "center",
             }}
-            onMouseEnter={(e) =>
-              (e.currentTarget.style.background = "var(--hover-bg)")
-            }
-            onMouseLeave={(e) =>
-              (e.currentTarget.style.background = "transparent")
-            }
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = "var(--hover-bg)";
+              e.currentTarget.style.transform = "scale(1.05)";
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = "var(--bg-tertiary)";
+              e.currentTarget.style.transform = "scale(1)";
+            }}
           >
             📋
           </button>
           <button
             onClick={() => setShowPluginMarket(true)}
-            title="插件市场"
+            title="打开插件市场"
             style={{
-              width: "36px",
-              height: "36px",
-              background: "transparent",
-              border: "none",
-              color: "var(--text-secondary)",
+              width: "44px",
+              height: "44px",
+              background: "var(--bg-tertiary)",
+              border: "1px solid var(--border-color)",
+              color: "var(--text-primary)",
               cursor: "pointer",
-              "border-radius": "4px",
-              "font-size": "18px",
-              transition: "background 0.2s",
+              "border-radius": "10px",
+              "font-size": "20px",
+              transition: "all 0.2s",
+              display: "flex",
+              "align-items": "center",
+              "justify-content": "center",
             }}
-            onMouseEnter={(e) =>
-              (e.currentTarget.style.background = "var(--hover-bg)")
-            }
-            onMouseLeave={(e) =>
-              (e.currentTarget.style.background = "transparent")
-            }
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = "var(--hover-bg)";
+              e.currentTarget.style.transform = "scale(1.05)";
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = "var(--bg-tertiary)";
+              e.currentTarget.style.transform = "scale(1)";
+            }}
           >
             🧩
-          </button>
-          <button
-            onClick={runDiagnostics}
-            title="诊断"
-            style={{
-              width: "36px",
-              height: "36px",
-              background: "transparent",
-              border: "none",
-              color: "var(--text-secondary)",
-              cursor: "pointer",
-              "border-radius": "4px",
-              "font-size": "18px",
-              transition: "background 0.2s",
-            }}
-            onMouseEnter={(e) =>
-              (e.currentTarget.style.background = "var(--hover-bg)")
-            }
-            onMouseLeave={(e) =>
-              (e.currentTarget.style.background = "transparent")
-            }
-          >
-            🔍
           </button>
         </div>
       </div>
@@ -1019,7 +879,7 @@ function App() {
       <div
         style={{
           flex: 1,
-          background: "#f5f5f5",
+          background: "var(--bg-tertiary)",
           overflow: "auto",
           display: "flex",
           "flex-direction": "column",
@@ -1029,7 +889,7 @@ function App() {
           <div
             style={{
               flex: 1,
-              padding: "20px",
+              padding: "24px",
               height: "100%",
               "box-sizing": "border-box",
               display: "flex",
@@ -1043,47 +903,51 @@ function App() {
                   flex: 1,
                   display: "flex",
                   "flex-direction": "column",
-                  background: "white",
-                  "border-radius": "6px",
+                  background: "var(--bg-primary)",
+                  "border-radius": "12px",
                   overflow: "hidden",
-                  "box-shadow": "0 1px 3px rgba(0,0,0,0.08)",
-                  border: "1px solid #e0e0e0",
+                  "box-shadow": "var(--shadow-sm)",
+                  border: "1px solid var(--border-color)",
                 }}
               >
                 {/* 工具栏 */}
                 <div
                   style={{
-                    padding: "15px",
-                    background: "#fafafa",
-                    "border-bottom": "1px solid #e0e0e0",
+                    padding: "16px 20px",
+                    background: "var(--bg-secondary)",
+                    "border-bottom": "1px solid var(--border-color)",
                   }}
                 >
                   <div
                     style={{
                       display: "flex",
                       gap: "10px",
-                      "margin-bottom": "10px",
+                      "margin-bottom": "12px",
                     }}
                   >
                     <button
                       onClick={handleAddNew}
                       style={{
-                        padding: "8px 16px",
-                        background: "#0078d4",
+                        padding: "9px 18px",
+                        background: "var(--accent)",
                         color: "white",
                         border: "none",
-                        "border-radius": "3px",
+                        "border-radius": "8px",
                         cursor: "pointer",
                         "font-size": "13px",
-                        "font-weight": "500",
-                        transition: "background 0.15s",
+                        "font-weight": "600",
+                        transition: "all 0.2s",
+                        "box-shadow": "var(--shadow-sm)",
                       }}
-                      onMouseEnter={(e) =>
-                        (e.currentTarget.style.background = "#106ebe")
-                      }
-                      onMouseLeave={(e) =>
-                        (e.currentTarget.style.background = "#0078d4")
-                      }
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.background =
+                          "var(--accent-hover)";
+                        e.currentTarget.style.transform = "translateY(-1px)";
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.background = "var(--accent)";
+                        e.currentTarget.style.transform = "translateY(0)";
+                      }}
                     >
                       ➕ 新建
                     </button>
@@ -1094,14 +958,21 @@ function App() {
                         handleImportPasswords();
                       }}
                       style={{
-                        padding: "8px 16px",
-                        background: "#6c757d",
-                        color: "white",
-                        border: "none",
-                        "border-radius": "3px",
+                        padding: "9px 18px",
+                        background: "var(--bg-primary)",
+                        color: "var(--text-primary)",
+                        border: "1px solid var(--border-color)",
+                        "border-radius": "8px",
                         cursor: "pointer",
                         "font-size": "13px",
                         "font-weight": "500",
+                        transition: "all 0.2s",
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.background = "var(--hover-bg)";
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.background = "var(--bg-primary)";
                       }}
                     >
                       📥 导入
@@ -1113,14 +984,21 @@ function App() {
                         handleExportPasswords();
                       }}
                       style={{
-                        padding: "8px 16px",
-                        background: "#6c757d",
-                        color: "white",
-                        border: "none",
-                        "border-radius": "3px",
+                        padding: "9px 18px",
+                        background: "var(--bg-primary)",
+                        color: "var(--text-primary)",
+                        border: "1px solid var(--border-color)",
+                        "border-radius": "8px",
                         cursor: "pointer",
                         "font-size": "13px",
                         "font-weight": "500",
+                        transition: "all 0.2s",
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.background = "var(--hover-bg)";
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.background = "var(--bg-primary)";
                       }}
                     >
                       📤 导出
@@ -1133,11 +1011,23 @@ function App() {
                     onInput={(e) => setSearchQuery(e.currentTarget.value)}
                     style={{
                       width: "100%",
-                      padding: "8px 12px",
-                      border: "1px solid #d0d0d0",
-                      "border-radius": "3px",
+                      padding: "10px 14px",
+                      border: "1px solid var(--border-color)",
+                      "border-radius": "8px",
                       "font-size": "13px",
                       "font-family": "inherit",
+                      background: "var(--bg-primary)",
+                      color: "var(--text-primary)",
+                      transition: "all 0.2s",
+                    }}
+                    onFocus={(e) => {
+                      e.currentTarget.style.borderColor = "var(--accent)";
+                      (e.currentTarget.style as any)["box-shadow"] =
+                        "0 0 0 3px var(--accent-light)";
+                    }}
+                    onBlur={(e) => {
+                      e.currentTarget.style.borderColor = "var(--border-color)";
+                      (e.currentTarget.style as any)["box-shadow"] = "none";
                     }}
                   />
                 </div>
@@ -1147,7 +1037,7 @@ function App() {
                   style={{
                     flex: 1,
                     overflow: "auto",
-                    padding: "10px",
+                    padding: "12px",
                   }}
                 >
                   <Show when={filteredEntries().length === 0}>
@@ -1155,15 +1045,15 @@ function App() {
                       style={{
                         "text-align": "center",
                         padding: "60px 20px",
-                        color: "#999",
+                        color: "var(--text-tertiary)",
                       }}
                     >
                       <div
-                        style={{ "font-size": "48px", "margin-bottom": "10px" }}
+                        style={{ "font-size": "56px", "margin-bottom": "12px" }}
                       >
                         📭
                       </div>
-                      <div>
+                      <div style={{ "font-size": "14px" }}>
                         {searchQuery()
                           ? "没有找到匹配的密码"
                           : "还没有保存的密码"}
@@ -1175,23 +1065,33 @@ function App() {
                       {(entry) => (
                         <div
                           style={{
-                            padding: "12px 15px",
+                            padding: "14px 16px",
                             margin: "0 0 8px 0",
-                            background: "white",
-                            color: "#333",
-                            "border-radius": "3px",
+                            background: "var(--bg-primary)",
+                            color: "var(--text-primary)",
+                            "border-radius": "10px",
                             "user-select": "none",
-                            border: "1px solid #e0e0e0",
-                            transition: "all 0.15s ease",
+                            border: "1px solid var(--border-color)",
+                            transition: "all 0.2s ease",
                             display: "flex",
                             "align-items": "center",
                             gap: "12px",
                           }}
                           onMouseEnter={(e) => {
-                            e.currentTarget.style.background = "#fafafa";
+                            e.currentTarget.style.background =
+                              "var(--bg-secondary)";
+                            (e.currentTarget.style as any)["transform"] =
+                              "translateY(-1px)";
+                            (e.currentTarget.style as any)["box-shadow"] =
+                              "var(--shadow-md)";
                           }}
                           onMouseLeave={(e) => {
-                            e.currentTarget.style.background = "white";
+                            e.currentTarget.style.background =
+                              "var(--bg-primary)";
+                            (e.currentTarget.style as any)["transform"] =
+                              "translateY(0)";
+                            (e.currentTarget.style as any)["box-shadow"] =
+                              "none";
                           }}
                         >
                           <div style={{ flex: 1, "min-width": 0 }}>
@@ -1398,11 +1298,12 @@ function App() {
                 {/* 底部统计 */}
                 <div
                   style={{
-                    padding: "10px 15px",
-                    background: "#fafafa",
-                    "border-top": "1px solid #e0e0e0",
+                    padding: "12px 20px",
+                    background: "var(--bg-secondary)",
+                    "border-top": "1px solid var(--border-color)",
                     "font-size": "12px",
-                    color: "#666",
+                    color: "var(--text-secondary)",
+                    "font-weight": "500",
                   }}
                 >
                   共 {passwordEntries().length} 个密码
@@ -1418,31 +1319,31 @@ function App() {
               <div
                 style={{
                   flex: 1,
-                  background: "white",
-                  "border-radius": "6px",
-                  border: "1px solid #e0e0e0",
+                  background: "var(--bg-primary)",
+                  "border-radius": "12px",
+                  border: "1px solid var(--border-color)",
                   overflow: "auto",
-                  "box-shadow": "0 1px 3px rgba(0,0,0,0.08)",
+                  "box-shadow": "var(--shadow-sm)",
                 }}
               >
-                <div style={{ padding: "20px" }}>
+                <div style={{ padding: "28px" }}>
                   {/* 标题栏 */}
                   <div
                     style={{
                       display: "flex",
                       "justify-content": "space-between",
                       "align-items": "center",
-                      "margin-bottom": "20px",
-                      "padding-bottom": "10px",
-                      "border-bottom": "2px solid #0078d4",
+                      "margin-bottom": "24px",
+                      "padding-bottom": "16px",
+                      "border-bottom": "2px solid var(--accent)",
                     }}
                   >
                     <h2
                       style={{
                         margin: 0,
-                        color: "#1e1e1e",
-                        "font-size": "18px",
-                        "font-weight": "600",
+                        color: "var(--text-primary)",
+                        "font-size": "20px",
+                        "font-weight": "700",
                       }}
                     >
                       {isEditMode() ? "编辑密码" : "新建密码"}
@@ -1458,14 +1359,22 @@ function App() {
                         setFormErrors({});
                       }}
                       style={{
-                        padding: "6px 12px",
-                        background: "#6c757d",
-                        color: "white",
-                        border: "none",
-                        "border-radius": "3px",
+                        padding: "8px 16px",
+                        background: "var(--bg-secondary)",
+                        color: "var(--text-primary)",
+                        border: "1px solid var(--border-color)",
+                        "border-radius": "8px",
                         cursor: "pointer",
-                        "font-size": "12px",
+                        "font-size": "13px",
                         "font-weight": "500",
+                        transition: "all 0.2s",
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.background = "var(--hover-bg)";
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.background =
+                          "var(--bg-secondary)";
                       }}
                     >
                       ✕ 返回列表
@@ -1481,9 +1390,9 @@ function App() {
                               <label
                                 style={{
                                   display: "block",
-                                  "margin-bottom": "6px",
-                                  "font-weight": "500",
-                                  color: "#1e1e1e",
+                                  "margin-bottom": "8px",
+                                  "font-weight": "600",
+                                  color: "var(--text-primary)",
                                   "font-size": "13px",
                                 }}
                               >
@@ -1495,14 +1404,34 @@ function App() {
                                 value={formData()[field.key] || ""}
                                 style={{
                                   width: "100%",
-                                  padding: "8px 10px",
+                                  padding: "11px 14px",
                                   border: formErrors()[field.key]
-                                    ? "2px solid #d13438"
-                                    : "1px solid #d0d0d0",
-                                  "border-radius": "3px",
-                                  "font-size": "13px",
+                                    ? "2px solid var(--error-color)"
+                                    : "1px solid var(--border-color)",
+                                  "border-radius": "8px",
+                                  "font-size": "14px",
                                   "font-family": "inherit",
-                                  transition: "border-color 0.15s",
+                                  transition: "all 0.2s",
+                                  background: "var(--bg-secondary)",
+                                  color: "var(--text-primary)",
+                                }}
+                                onFocus={(e) => {
+                                  if (!formErrors()[field.key]) {
+                                    e.currentTarget.style.borderColor =
+                                      "var(--accent)";
+                                    (e.currentTarget.style as any)[
+                                      "box-shadow"
+                                    ] = "0 0 0 3px var(--accent-light)";
+                                  }
+                                }}
+                                onBlur={(e) => {
+                                  if (!formErrors()[field.key]) {
+                                    e.currentTarget.style.borderColor =
+                                      "var(--border-color)";
+                                    (e.currentTarget.style as any)[
+                                      "box-shadow"
+                                    ] = "none";
+                                  }
                                 }}
                                 onInput={(e) =>
                                   handleFieldChange(
@@ -1515,9 +1444,10 @@ function App() {
                               <Show when={formErrors()[field.key]}>
                                 <div
                                   style={{
-                                    "margin-top": "4px",
-                                    color: "#d13438",
+                                    "margin-top": "6px",
+                                    color: "var(--error-color)",
                                     "font-size": "12px",
+                                    "font-weight": "500",
                                   }}
                                 >
                                   {formErrors()[field.key]}
@@ -1538,21 +1468,44 @@ function App() {
                               }}
                               disabled={!isFormValid()}
                               style={{
-                                padding: "10px 20px",
+                                padding: "12px 24px",
                                 background: isFormValid()
-                                  ? "#0078d4"
-                                  : "#a0a0a0",
+                                  ? "var(--accent)"
+                                  : "var(--text-tertiary)",
                                 color: "white",
                                 border: "none",
-                                "border-radius": "3px",
-                                "font-weight": "500",
+                                "border-radius": "10px",
+                                "font-weight": "600",
                                 cursor: isFormValid()
                                   ? "pointer"
                                   : "not-allowed",
-                                "font-size": "14px",
-                                transition: "all 0.15s",
-                                opacity: isFormValid() ? 1 : 0.6,
+                                "font-size": "15px",
+                                transition: "all 0.2s",
+                                opacity: isFormValid() ? 1 : 0.5,
                                 width: "100%",
+                                "box-shadow": isFormValid()
+                                  ? "var(--shadow-sm)"
+                                  : "none",
+                              }}
+                              onMouseEnter={(e) => {
+                                if (isFormValid()) {
+                                  e.currentTarget.style.background =
+                                    "var(--accent-hover)";
+                                  (e.currentTarget.style as any)["transform"] =
+                                    "translateY(-2px)";
+                                  (e.currentTarget.style as any)["box-shadow"] =
+                                    "var(--shadow-md)";
+                                }
+                              }}
+                              onMouseLeave={(e) => {
+                                if (isFormValid()) {
+                                  e.currentTarget.style.background =
+                                    "var(--accent)";
+                                  (e.currentTarget.style as any)["transform"] =
+                                    "translateY(0)";
+                                  (e.currentTarget.style as any)["box-shadow"] =
+                                    "var(--shadow-sm)";
+                                }
                               }}
                             >
                               {isEditMode() ? "💾 更新密码" : field.label}
@@ -1566,25 +1519,32 @@ function App() {
                   <Show when={selectedEntry()}>
                     <div
                       style={{
-                        "margin-top": "20px",
-                        padding: "12px",
-                        background: "#fafafa",
-                        "border-radius": "3px",
-                        border: "1px solid #e0e0e0",
+                        "margin-top": "24px",
+                        padding: "14px 18px",
+                        background: "var(--bg-secondary)",
+                        "border-radius": "10px",
+                        border: "1px solid var(--border-color)",
                       }}
                     >
                       <div
                         style={{
                           "font-size": "11px",
-                          color: "#666",
-                          "margin-bottom": "4px",
+                          color: "var(--text-secondary)",
+                          "margin-bottom": "6px",
                           "text-transform": "uppercase",
-                          "letter-spacing": "0.5px",
+                          "letter-spacing": "0.8px",
+                          "font-weight": "600",
                         }}
                       >
                         创建时间
                       </div>
-                      <div style={{ "font-size": "13px", color: "#333" }}>
+                      <div
+                        style={{
+                          "font-size": "13px",
+                          color: "var(--text-primary)",
+                          "font-weight": "500",
+                        }}
+                      >
                         {new Date(selectedEntry()!.created_at).toLocaleString()}
                       </div>
                     </div>
@@ -1669,144 +1629,6 @@ function App() {
           </div>
         </Show>
       </div>
-
-      {/* 设置对话框 */}
-      <Show when={showSettings()}>
-        <div
-          style={{
-            position: "fixed",
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            background: "rgba(0,0,0,0.5)",
-            display: "flex",
-            "align-items": "center",
-            "justify-content": "center",
-            "z-index": 1000,
-          }}
-        >
-          <div
-            style={{
-              background: "white",
-              "border-radius": "8px",
-              width: "500px",
-              "max-height": "400px",
-              "box-shadow": "0 4px 20px rgba(0,0,0,0.3)",
-            }}
-          >
-            <div
-              style={{
-                padding: "20px",
-                "border-bottom": "1px solid #dee2e6",
-                display: "flex",
-                "justify-content": "space-between",
-                "align-items": "center",
-              }}
-            >
-              <h3 style={{ margin: 0 }}>设置</h3>
-              <button
-                onClick={() => setShowSettings(false)}
-                style={{
-                  background: "transparent",
-                  border: "none",
-                  "font-size": "20px",
-                  cursor: "pointer",
-                  color: "#999",
-                }}
-              >
-                ✕
-              </button>
-            </div>
-            <div style={{ padding: "20px" }}>
-              <h4 style={{ margin: "0 0 15px 0", color: "#2c3e50" }}>外观</h4>
-              <div style={{ "margin-bottom": "20px" }}>
-                <label
-                  style={{
-                    display: "block",
-                    "margin-bottom": "5px",
-                    "font-weight": "600",
-                  }}
-                >
-                  主题
-                </label>
-                <select
-                  value={theme()}
-                  onChange={(e) => setTheme(e.currentTarget.value)}
-                  style={{
-                    width: "100%",
-                    padding: "8px",
-                    border: "1px solid #ced4da",
-                    "border-radius": "4px",
-                  }}
-                >
-                  <option value="light">浅色</option>
-                  <option value="dark">深色</option>
-                </select>
-              </div>
-
-              <h4 style={{ margin: "0 0 15px 0", color: "#2c3e50" }}>通用</h4>
-              <div style={{ "margin-bottom": "15px" }}>
-                <label
-                  style={{
-                    display: "flex",
-                    "align-items": "center",
-                    gap: "10px",
-                    cursor: "pointer",
-                  }}
-                >
-                  <input
-                    type="checkbox"
-                    checked={autoStart()}
-                    onChange={(e) => setAutoStart(e.currentTarget.checked)}
-                    style={{ width: "18px", height: "18px" }}
-                  />
-                  开机自动启动
-                </label>
-              </div>
-              <div style={{ "margin-bottom": "20px" }}>
-                <label
-                  style={{
-                    display: "flex",
-                    "align-items": "center",
-                    gap: "10px",
-                    cursor: "pointer",
-                  }}
-                >
-                  <input
-                    type="checkbox"
-                    checked={minimizeToTray()}
-                    onChange={(e) => setMinimizeToTray(e.currentTarget.checked)}
-                    style={{ width: "18px", height: "18px" }}
-                  />
-                  最小化到系统托盘
-                </label>
-              </div>
-            </div>
-            <div
-              style={{
-                padding: "15px 20px",
-                "border-top": "1px solid #dee2e6",
-                "text-align": "right",
-              }}
-            >
-              <button
-                onClick={handleSaveSettings}
-                style={{
-                  padding: "8px 20px",
-                  background: "#3498db",
-                  color: "white",
-                  border: "none",
-                  "border-radius": "4px",
-                  cursor: "pointer",
-                }}
-              >
-                保存
-              </button>
-            </div>
-          </div>
-        </div>
-      </Show>
 
       {/* 日志对话框 */}
       <Show when={showLogs()}>
@@ -1992,97 +1814,6 @@ function App() {
                   </div>
                 )}
               </For>
-            </div>
-          </div>
-        </div>
-      </Show>
-
-      {/* 诊断对话框 */}
-      <Show when={showDiagnostics()}>
-        <div
-          style={{
-            position: "fixed",
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            background: "rgba(0,0,0,0.5)",
-            display: "flex",
-            "align-items": "center",
-            "justify-content": "center",
-            "z-index": 1000,
-          }}
-        >
-          <div
-            style={{
-              background: "white",
-              "border-radius": "8px",
-              width: "700px",
-              height: "500px",
-              "box-shadow": "0 4px 20px rgba(0,0,0,0.3)",
-              display: "flex",
-              "flex-direction": "column",
-            }}
-          >
-            <div
-              style={{
-                padding: "20px",
-                "border-bottom": "1px solid #dee2e6",
-                display: "flex",
-                "justify-content": "space-between",
-                "align-items": "center",
-              }}
-            >
-              <h3 style={{ margin: 0 }}>诊断信息</h3>
-              <button
-                onClick={() => setShowDiagnostics(false)}
-                style={{
-                  background: "transparent",
-                  border: "none",
-                  "font-size": "20px",
-                  cursor: "pointer",
-                  color: "#999",
-                }}
-              >
-                ✕
-              </button>
-            </div>
-            <div
-              style={{
-                flex: 1,
-                padding: "20px",
-                overflow: "auto",
-                background: "#1e1e1e",
-                color: "#d4d4d4",
-                "font-family": "monospace",
-                "font-size": "12px",
-                "line-height": "1.6",
-                "white-space": "pre-wrap",
-              }}
-            >
-              {diagnostics().join("\n")}
-            </div>
-            <div
-              style={{
-                padding: "15px 20px",
-                "border-top": "1px solid #dee2e6",
-                "text-align": "right",
-              }}
-            >
-              <button
-                onClick={runDiagnostics}
-                style={{
-                  padding: "8px 20px",
-                  background: "#0078d4",
-                  color: "white",
-                  border: "none",
-                  "border-radius": "3px",
-                  cursor: "pointer",
-                  "font-size": "13px",
-                }}
-              >
-                重新运行
-              </button>
             </div>
           </div>
         </div>

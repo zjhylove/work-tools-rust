@@ -1,12 +1,11 @@
-import { Component, createSignal, onMount, For, Show } from 'solid-js';
-import { invoke } from '@tauri-apps/api/core';
-import Sidebar from './Sidebar';
-import ContentArea from './ContentArea';
-import Toolbar from './Toolbar';
-import PluginMarket from './PluginMarket';
-import LogViewer from './LogViewer';
-import Settings from './Settings';
-import './Layout.css';
+import { Component, createSignal, onMount, Show } from "solid-js";
+import { invoke } from "@tauri-apps/api/core";
+import Sidebar from "./Sidebar";
+import ContentArea from "./ContentArea";
+import Toolbar from "./Toolbar";
+import PluginMarket from "./PluginMarket";
+import LogViewer from "./LogViewer";
+import "./Layout.css";
 
 interface PluginInfo {
   id: string;
@@ -19,10 +18,11 @@ interface PluginInfo {
 const Layout: Component = () => {
   const [plugins, setPlugins] = createSignal<PluginInfo[]>([]);
   const [selectedPlugin, setSelectedPlugin] = createSignal<string | null>(null);
-  const [currentView, setCurrentView] = createSignal<'plugin' | 'market' | 'log' | 'settings'>('plugin');
+  const [currentView, setCurrentView] = createSignal<
+    "plugin" | "market" | "log"
+  >("plugin");
   const [showMarket, setShowMarket] = createSignal(false);
   const [showLog, setShowLog] = createSignal(false);
-  const [showSettings, setShowSettings] = createSignal(false);
 
   onMount(async () => {
     await loadPlugins();
@@ -30,7 +30,7 @@ const Layout: Component = () => {
 
   const loadPlugins = async () => {
     try {
-      const installed = await invoke<PluginInfo[]>('get_installed_plugins');
+      const installed = await invoke<PluginInfo[]>("get_installed_plugins");
       setPlugins(installed);
 
       // 自动选择第一个插件
@@ -38,13 +38,13 @@ const Layout: Component = () => {
         setSelectedPlugin(installed[0].id);
       }
     } catch (error) {
-      console.error('Failed to load plugins:', error);
+      console.error("Failed to load plugins:", error);
     }
   };
 
   const handlePluginSelect = (pluginId: string) => {
     setSelectedPlugin(pluginId);
-    setCurrentView('plugin');
+    setCurrentView("plugin");
   };
 
   const handleMarketClose = async () => {
@@ -63,9 +63,8 @@ const Layout: Component = () => {
         <Toolbar
           onOpenMarket={() => setShowMarket(true)}
           onOpenLog={() => setShowLog(true)}
-          onOpenSettings={() => setShowSettings(true)}
         />
-        <Show when={currentView() === 'plugin' && selectedPlugin()}>
+        <Show when={currentView() === "plugin" && selectedPlugin()}>
           <ContentArea pluginId={selectedPlugin()!} />
         </Show>
       </div>
@@ -77,10 +76,6 @@ const Layout: Component = () => {
 
       <Show when={showLog()}>
         <LogViewer onClose={() => setShowLog(false)} />
-      </Show>
-
-      <Show when={showSettings()}>
-        <Settings onClose={() => setShowSettings(false)} />
       </Show>
     </div>
   );

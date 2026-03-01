@@ -1,10 +1,9 @@
-import { Component } from 'solid-js';
-import './Toolbar.css';
+import { Component } from "solid-js";
+import "./Toolbar.css";
 
 interface ToolbarProps {
   onOpenMarket: () => void;
   onOpenLog: () => void;
-  onOpenSettings: () => void;
 }
 
 const Toolbar: Component<ToolbarProps> = (props) => {
@@ -17,19 +16,8 @@ const Toolbar: Component<ToolbarProps> = (props) => {
       >
         🧩 插件市场
       </button>
-      <button
-        class="toolbar-button"
-        onClick={props.onOpenLog}
-        title="日志"
-      >
+      <button class="toolbar-button" onClick={props.onOpenLog} title="日志">
         📋 日志
-      </button>
-      <button
-        class="toolbar-button"
-        onClick={props.onOpenSettings}
-        title="设置"
-      >
-        ⚙️ 设置
       </button>
     </div>
   );
