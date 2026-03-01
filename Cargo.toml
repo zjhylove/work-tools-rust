@@ -3,6 +3,7 @@ members = [
     "shared/types",
     "shared/rpc-protocol",
     "plugins/password-manager",
+    "plugins/auth-plugin",
     "tauri-app/src-tauri",
 ]
 resolver = "2"
