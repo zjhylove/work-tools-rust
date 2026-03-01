@@ -1,5 +1,5 @@
-import { Component, For, Switch, Match, createSignal } from 'solid-js';
-import './UiRenderer.css';
+import { Component, For, Switch, Match, createSignal } from "solid-js";
+import "./UiRenderer.css";
 
 interface UiField {
   type: string;
@@ -13,6 +13,7 @@ interface UiField {
   data_binding?: string;
   options?: Array<{ label: string; value: string }>;
   action?: string;
+  actions?: Array<{ label: string; icon: string; action: string }>;
 }
 
 interface ViewSchema {
@@ -31,7 +32,7 @@ const UiRenderer: Component<UiRendererProps> = (props) => {
   };
 
   const handleAction = (action: string) => {
-    console.log('Action:', action, 'Values:', values());
+    console.log("Action:", action, "Values:", values());
     // TODO: 调用插件方法
   };
 
@@ -41,34 +42,34 @@ const UiRenderer: Component<UiRendererProps> = (props) => {
         {(field) => (
           <div class="field-container">
             <Switch fallback={<div>Unknown field type: {field.type}</div>}>
-              <Match when={field.type === 'input'}>
+              <Match when={field.type === "input"}>
                 <label class="field-label">{field.label}</label>
                 <input
                   type="text"
                   class="field-input"
                   placeholder={field.placeholder}
-                  value={values()[field.key] || field.default || ''}
+                  value={values()[field.key] || field.default || ""}
                   onInput={(e) =>
                     handleChange(field.key, e.currentTarget.value)
                   }
                 />
               </Match>
 
-              <Match when={field.type === 'number'}>
+              <Match when={field.type === "number"}>
                 <label class="field-label">{field.label}</label>
                 <input
                   type="number"
                   class="field-input"
                   min={field.min}
                   max={field.max}
-                  value={values()[field.key] || field.default || ''}
+                  value={values()[field.key] || field.default || ""}
                   onInput={(e) =>
                     handleChange(field.key, parseInt(e.currentTarget.value))
                   }
                 />
               </Match>
 
-              <Match when={field.type === 'checkbox'}>
+              <Match when={field.type === "checkbox"}>
                 <label class="field-checkbox-label">
                   <input
                     type="checkbox"
@@ -81,11 +82,11 @@ const UiRenderer: Component<UiRendererProps> = (props) => {
                 </label>
               </Match>
 
-              <Match when={field.type === 'select'}>
+              <Match when={field.type === "select"}>
                 <label class="field-label">{field.label}</label>
                 <select
                   class="field-select"
-                  value={values()[field.key] || field.default || ''}
+                  value={values()[field.key] || field.default || ""}
                   onChange={(e) =>
                     handleChange(field.key, e.currentTarget.value)
                   }
@@ -98,16 +99,16 @@ const UiRenderer: Component<UiRendererProps> = (props) => {
                 </select>
               </Match>
 
-              <Match when={field.type === 'button'}>
+              <Match when={field.type === "button"}>
                 <button
                   class="field-button"
-                  onClick={() => handleAction(field.action || '')}
+                  onClick={() => handleAction(field.action || "")}
                 >
                   {field.label}
                 </button>
               </Match>
 
-              <Match when={field.type === 'table'}>
+              <Match when={field.type === "table"}>
                 <label class="field-label">{field.label}</label>
                 <div class="field-table">
                   <table>

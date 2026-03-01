@@ -31,8 +31,10 @@ pub enum UiField {
     },
     #[serde(rename = "table")]
     Table {
+        label: String,
         columns: Vec<String>,
         data_binding: String,
+        actions: Option<Vec<TableAction>>,
     },
     #[serde(rename = "button")]
     Button {
@@ -53,6 +55,14 @@ pub enum UiField {
         options: Vec<SelectOption>,
         default: Option<String>,
     },
+}
+
+/// 表格操作按钮
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TableAction {
+    pub label: String,
+    pub icon: String,
+    pub action: String,
 }
 
 /// 下拉选择选项

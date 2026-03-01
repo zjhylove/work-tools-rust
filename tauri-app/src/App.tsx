@@ -3,6 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { openUrl as openUrlTauri } from "@tauri-apps/plugin-opener";
 import { save, open } from "@tauri-apps/plugin-dialog";
 import { writeTextFile, readTextFile } from "@tauri-apps/plugin-fs";
+import AuthPlugin from "./components/AuthPlugin";
 import "./App.css";
 
 // 安全的 invoke 包装函数 - Tauri 2.x 的 invoke 函数会自动处理环境检测
@@ -1154,21 +1155,27 @@ function App() {
                               }
                               style={{
                                 padding: "6px 10px",
-                                background: "#6c757d",
-                                color: "white",
+                                background: "transparent",
                                 border: "none",
-                                "border-radius": "3px",
+                                "border-radius": "6px",
                                 cursor: "pointer",
-                                "font-size": "12px",
-                                "font-weight": "500",
-                                transition: "background 0.15s",
+                                "font-size": "16px",
+                                transition: "all 0.2s ease",
+                                "user-select": "none",
+                                display: "inline-flex",
+                                "align-items": "center",
+                                "justify-content": "center",
                               }}
-                              onMouseEnter={(e) =>
-                                (e.currentTarget.style.background = "#5a6268")
-                              }
-                              onMouseLeave={(e) =>
-                                (e.currentTarget.style.background = "#6c757d")
-                              }
+                              onMouseEnter={(e) => {
+                                e.currentTarget.style.background =
+                                  "rgba(0, 0, 0, 0.05)";
+                                e.currentTarget.style.transform = "scale(1.1)";
+                              }}
+                              onMouseLeave={(e) => {
+                                e.currentTarget.style.background =
+                                  "transparent";
+                                e.currentTarget.style.transform = "scale(1)";
+                              }}
                             >
                               {visiblePasswords()[entry.id] ? "🙈" : "👁️"}
                             </button>
@@ -1182,21 +1189,27 @@ function App() {
                               title="复制密码"
                               style={{
                                 padding: "6px 10px",
-                                background: "#28a745",
-                                color: "white",
+                                background: "transparent",
                                 border: "none",
-                                "border-radius": "3px",
+                                "border-radius": "6px",
                                 cursor: "pointer",
-                                "font-size": "12px",
-                                "font-weight": "500",
-                                transition: "background 0.15s",
+                                "font-size": "16px",
+                                transition: "all 0.2s ease",
+                                "user-select": "none",
+                                display: "inline-flex",
+                                "align-items": "center",
+                                "justify-content": "center",
                               }}
-                              onMouseEnter={(e) =>
-                                (e.currentTarget.style.background = "#218838")
-                              }
-                              onMouseLeave={(e) =>
-                                (e.currentTarget.style.background = "#28a745")
-                              }
+                              onMouseEnter={(e) => {
+                                e.currentTarget.style.background =
+                                  "rgba(0, 0, 0, 0.05)";
+                                e.currentTarget.style.transform = "scale(1.1)";
+                              }}
+                              onMouseLeave={(e) => {
+                                e.currentTarget.style.background =
+                                  "transparent";
+                                e.currentTarget.style.transform = "scale(1)";
+                              }}
                             >
                               📋
                             </button>
@@ -1211,21 +1224,28 @@ function App() {
                                 title="打开链接"
                                 style={{
                                   padding: "6px 10px",
-                                  background: "#17a2b8",
-                                  color: "white",
+                                  background: "transparent",
                                   border: "none",
-                                  "border-radius": "3px",
+                                  "border-radius": "6px",
                                   cursor: "pointer",
-                                  "font-size": "12px",
-                                  "font-weight": "500",
-                                  transition: "background 0.15s",
+                                  "font-size": "16px",
+                                  transition: "all 0.2s ease",
+                                  "user-select": "none",
+                                  display: "inline-flex",
+                                  "align-items": "center",
+                                  "justify-content": "center",
                                 }}
-                                onMouseEnter={(e) =>
-                                  (e.currentTarget.style.background = "#138496")
-                                }
-                                onMouseLeave={(e) =>
-                                  (e.currentTarget.style.background = "#17a2b8")
-                                }
+                                onMouseEnter={(e) => {
+                                  e.currentTarget.style.background =
+                                    "rgba(0, 0, 0, 0.05)";
+                                  e.currentTarget.style.transform =
+                                    "scale(1.1)";
+                                }}
+                                onMouseLeave={(e) => {
+                                  e.currentTarget.style.background =
+                                    "transparent";
+                                  e.currentTarget.style.transform = "scale(1)";
+                                }}
                               >
                                 🔗
                               </button>
@@ -1239,23 +1259,29 @@ function App() {
                               title="编辑"
                               style={{
                                 padding: "6px 10px",
-                                background: "#0078d4",
-                                color: "white",
+                                background: "transparent",
                                 border: "none",
-                                "border-radius": "3px",
+                                "border-radius": "6px",
                                 cursor: "pointer",
-                                "font-size": "12px",
-                                "font-weight": "500",
-                                transition: "background 0.15s",
+                                "font-size": "16px",
+                                transition: "all 0.2s ease",
+                                "user-select": "none",
+                                display: "inline-flex",
+                                "align-items": "center",
+                                "justify-content": "center",
                               }}
-                              onMouseEnter={(e) =>
-                                (e.currentTarget.style.background = "#106ebe")
-                              }
-                              onMouseLeave={(e) =>
-                                (e.currentTarget.style.background = "#0078d4")
-                              }
+                              onMouseEnter={(e) => {
+                                e.currentTarget.style.background =
+                                  "rgba(0, 0, 0, 0.05)";
+                                e.currentTarget.style.transform = "scale(1.1)";
+                              }}
+                              onMouseLeave={(e) => {
+                                e.currentTarget.style.background =
+                                  "transparent";
+                                e.currentTarget.style.transform = "scale(1)";
+                              }}
                             >
-                              ✏️ 编辑
+                              ✏️
                             </button>
                             <button
                               onClick={(e) => {
@@ -1270,23 +1296,29 @@ function App() {
                               title="删除"
                               style={{
                                 padding: "6px 10px",
-                                background: "#d13438",
-                                color: "white",
+                                background: "transparent",
                                 border: "none",
-                                "border-radius": "3px",
+                                "border-radius": "6px",
                                 cursor: "pointer",
-                                "font-size": "12px",
-                                "font-weight": "500",
-                                transition: "background 0.15s",
+                                "font-size": "16px",
+                                transition: "all 0.2s ease",
+                                "user-select": "none",
+                                display: "inline-flex",
+                                "align-items": "center",
+                                "justify-content": "center",
                               }}
-                              onMouseEnter={(e) =>
-                                (e.currentTarget.style.background = "#a52a2a")
-                              }
-                              onMouseLeave={(e) =>
-                                (e.currentTarget.style.background = "#d13438")
-                              }
+                              onMouseEnter={(e) => {
+                                e.currentTarget.style.background =
+                                  "rgba(0, 0, 0, 0.05)";
+                                e.currentTarget.style.transform = "scale(1.1)";
+                              }}
+                              onMouseLeave={(e) => {
+                                e.currentTarget.style.background =
+                                  "transparent";
+                                e.currentTarget.style.transform = "scale(1)";
+                              }}
                             >
-                              🗑️ 删除
+                              🗑️
                             </button>
                           </div>
                         </div>
@@ -1557,51 +1589,7 @@ function App() {
 
         {/* Auth Plugin 界面 */}
         <Show when={selectedPlugin() === "auth"}>
-          <div
-            style={{
-              padding: "40px",
-              "text-align": "center",
-              color: "#666",
-            }}
-          >
-            <div style={{ "font-size": "64px", "margin-bottom": "20px" }}>
-              🔐
-            </div>
-            <h2
-              style={{
-                "font-size": "24px",
-                margin: "0 0 10px 0",
-                color: "#1e1e1e",
-              }}
-            >
-              双因素验证
-            </h2>
-            <p>该插件正在开发中,敬请期待...</p>
-            <div
-              style={{
-                "margin-top": "20px",
-                padding: "15px",
-                background: "#fff3cd",
-                "border-radius": "4px",
-                "border-left": "4px solid #ffc107",
-                "text-align": "left",
-                "max-width": "600px",
-                "margin-left": "auto",
-                "margin-right": "auto",
-              }}
-            >
-              <div style={{ "font-weight": "600", "margin-bottom": "8px" }}>
-                功能特性:
-              </div>
-              <ul style={{ margin: 0, "padding-left": "20px" }}>
-                <li>支持 TOTP (Time-based One-Time Password)</li>
-                <li>兼容 Google Authenticator、Authy 等</li>
-                <li>自动更新验证码</li>
-                <li>点击复制功能</li>
-                <li>QR 码导入</li>
-              </ul>
-            </div>
-          </div>
+          <AuthPlugin />
         </Show>
 
         {/* 其他插件提示 */}
@@ -2062,20 +2050,8 @@ function App() {
       {/* Toast 提示 */}
       <Show when={showToast()}>
         <div
-          style={{
-            position: "fixed",
-            bottom: "20px",
-            left: "50%",
-            transform: "translateX(-50%)",
-            background: "#333",
-            color: "white",
-            padding: "12px 24px",
-            "border-radius": "4px",
-            "box-shadow": "0 2px 8px rgba(0,0,0,0.2)",
-            "font-size": "14px",
-            "z-index": 2000,
-            animation: "fadeIn 0.3s, fadeOut 0.3s 1.7s",
-          }}
+          class="toast-message"
+          classList={{ success: toastMessage().startsWith("✓") }}
         >
           {toastMessage()}
         </div>

@@ -143,3 +143,34 @@
   padding: var(--space-2xl);
   font-style: italic;
 }
+
+/* 表格操作按钮 */
+.field-table .table-actions {
+  display: flex;
+  gap: 6px;
+  justify-content: flex-end;
+}
+
+.field-table .table-action-btn {
+  padding: 6px 10px;
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  font-size: 16px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  user-select: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.field-table .table-action-btn:hover {
+  background: rgba(0, 0, 0, 0.05);
+  transform: scale(1.1);
+}
+
+.field-table .table-action-btn:active {
+  transform: scale(0.95);
+}
+
