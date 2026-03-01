@@ -1,5 +1,6 @@
 import { createSignal, onMount, Show, Setter } from "solid-js";
 import { invoke } from "@tauri-apps/api/core";
+import { createPluginBridge } from "../utils/pluginBridge";
 import "./PluginView.css";
 
 interface PluginViewProps {
@@ -22,6 +23,11 @@ export default (props: PluginViewProps) => {
       });
 
       setHtml(viewHtml);
+
+      // 创建插件桥并暴露到 window
+      const bridge = createPluginBridge(props.pluginId);
+      bridge.exposeToWindow();
+
       setLoading(false);
     } catch (err) {
       setError(err as string);
