@@ -1070,8 +1070,62 @@ function App() {
           </div>
         </Show>
 
+        {/* Auth Plugin 界面 */}
+        <Show when={selectedPlugin() === "auth"}>
+          <div
+            style={{
+              padding: "40px",
+              "text-align": "center",
+              color: "#666",
+            }}
+          >
+            <div style={{ "font-size": "64px", "margin-bottom": "20px" }}>
+              🔐
+            </div>
+            <h2
+              style={{
+                "font-size": "24px",
+                margin: "0 0 10px 0",
+                color: "#1e1e1e",
+              }}
+            >
+              双因素验证
+            </h2>
+            <p>该插件正在开发中,敬请期待...</p>
+            <div
+              style={{
+                "margin-top": "20px",
+                padding: "15px",
+                background: "#fff3cd",
+                "border-radius": "4px",
+                "border-left": "4px solid #ffc107",
+                "text-align": "left",
+                "max-width": "600px",
+                "margin-left": "auto",
+                "margin-right": "auto",
+              }}
+            >
+              <div style={{ "font-weight": "600", "margin-bottom": "8px" }}>
+                功能特性:
+              </div>
+              <ul style={{ margin: 0, "padding-left": "20px" }}>
+                <li>支持 TOTP (Time-based One-Time Password)</li>
+                <li>兼容 Google Authenticator、Authy 等</li>
+                <li>自动更新验证码</li>
+                <li>点击复制功能</li>
+                <li>QR 码导入</li>
+              </ul>
+            </div>
+          </div>
+        </Show>
+
+        {/* 其他插件提示 */}
         <Show
-          when={selectedPlugin() && selectedPlugin() !== "password-manager"}
+          when={
+            selectedPlugin() &&
+            selectedPlugin() !== "password-manager" &&
+            selectedPlugin() !== "auth"
+          }
         >
           <div
             style={{
