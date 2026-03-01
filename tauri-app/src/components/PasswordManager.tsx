@@ -73,6 +73,8 @@ export default function PasswordManager() {
       key: "url",
       placeholder: "https://example.com (可选)",
       required: false,
+      pattern:
+        "^$|^https?://[\\w\\-]+(\\.[\\w\\-]+)+([\\w\\-\\.,@?^=%&:/~\\+#]*[\\w\\-\\@?^=%&/~\\+#])?$",
     },
     {
       type: "button",
