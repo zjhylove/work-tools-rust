@@ -1,0 +1,32 @@
+[package]
+name = "work-tools"
+version = "1.0.0"
+description = "Work Tools Platform - Rust Edition"
+authors = ["zjhy"]
+edition = "2021"
+
+[lib]
+name = "work_tools_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = ["tray-icon"] }
+tauri-plugin-opener = "2"
+tauri-plugin-shell = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tokio = { version = "1", features = ["full"] }
+anyhow = "1.0"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["fmt", "json"] }
+tracing-appender = "0.2"
+directories = "5.0"
+dirs = "5.0"
+notify = "6.0"
+
+# 本地依赖
+worktools-shared-types = { path = "../../shared/types" }
+worktools-rpc-protocol = { path = "../../shared/rpc-protocol" }

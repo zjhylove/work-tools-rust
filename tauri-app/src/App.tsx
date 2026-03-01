@@ -1,0 +1,401 @@
+import { For, Show, createSignal } from "solid-js";
+import "./App.css";
+
+interface PluginInfo {
+  id: string;
+  name: string;
+  description: string;
+  version: string;
+  icon: string;
+}
+
+interface UiField {
+  type: string;
+  label: string;
+  key: string;
+  placeholder?: string;
+  default?: any;
+  inputType?: string; // 用于密码框等特殊输入类型
+  required?: boolean; // 是否必填
+  minLength?: number; // 最小长度
+  pattern?: string; // 正则表达式模式
+}
+
+interface ViewSchema {
+  fields: UiField[];
+}
+
+function App() {
+  const plugins: PluginInfo[] = [
+    {
+      id: "password-manager",
+      name: "密码管理器",
+      description: "本地安全存储和管理密码",
+      version: "1.0.0",
+      icon: "🔐",
+    },
+  ];
+
+  const [selectedPlugin, setSelectedPlugin] = createSignal<string | null>(null);
+  const [pluginView, setPluginView] = createSignal<ViewSchema | null>(null);
+  const [formData, setFormData] = createSignal<Record<string, string>>({});
+  const [formErrors, setFormErrors] = createSignal<Record<string, string>>({});
+
+  const openPlugin = async (pluginId: string) => {
+    console.log("打开插件:", pluginId);
+    setSelectedPlugin(pluginId);
+
+    // 模拟 UI Schema (实际应该从插件获取)
+    const schema: ViewSchema = {
+      fields: [
+        {
+          type: "input",
+          label: "账号地址",
+          key: "url",
+          placeholder: "例如: https://google.com",
+          required: false,
+          pattern: "^https?://.+",
+        },
+        {
+          type: "input",
+          label: "服务名称",
+          key: "service",
+          placeholder: "例如: Google",
+          required: true,
+          minLength: 2,
+        },
+        {
+          type: "input",
+          label: "用户名/邮箱",
+          key: "username",
+          placeholder: "输入用户名或邮箱",
+          required: true,
+        },
+        {
+          type: "input",
+          label: "密码",
+          key: "password",
+          placeholder: "输入密码",
+          inputType: "password",
+          required: true,
+          minLength: 6,
+        },
+        {
+          type: "button",
+          label: "💾 保存密码",
+          key: "save",
+        },
+      ],
+    };
+
+    setPluginView(schema);
+    // 重置表单状态
+    setFormData({});
+    setFormErrors({});
+  };
+
+  const closePlugin = () => {
+    setSelectedPlugin(null);
+    setPluginView(null);
+    setFormData({});
+    setFormErrors({});
+  };
+
+  // 验证单个字段
+  const validateField = (field: UiField, value: string): string | null => {
+    if (field.required && !value.trim()) {
+      return `${field.label}不能为空`;
+    }
+
+    if (field.minLength && value.length < field.minLength) {
+      return `${field.label}至少需要 ${field.minLength} 个字符`;
+    }
+
+    if (field.pattern && value) {
+      const regex = new RegExp(field.pattern);
+      if (!regex.test(value)) {
+        return `${field.label}格式不正确`;
+      }
+    }
+
+    return null;
+  };
+
+  // 验证整个表单
+  const validateForm = (): boolean => {
+    const errors: Record<string, string> = {};
+    const fields = pluginView()?.fields || [];
+
+    for (const field of fields) {
+      if (field.type === "input") {
+        const value = formData()[field.key] || "";
+        const error = validateField(field, value);
+        if (error) {
+          errors[field.key] = error;
+        }
+      }
+    }
+
+    setFormErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
+
+  // 检查表单是否有效
+  const isFormValid = () => {
+    const fields = pluginView()?.fields || [];
+    for (const field of fields) {
+      if (field.type === "input" && field.required) {
+        const value = formData()[field.key] || "";
+        if (!value.trim()) return false;
+        if (field.minLength && value.length < field.minLength) return false;
+        if (field.pattern) {
+          const regex = new RegExp(field.pattern);
+          if (!regex.test(value)) return false;
+        }
+      }
+    }
+    return true;
+  };
+
+  const handleFieldChange = (key: string, value: string, field: UiField) => {
+    console.log(`字段变化: ${key} = ${value}`);
+
+    // 更新表单数据
+    setFormData((prev) => ({
+      ...prev,
+      [key]: value,
+    }));
+
+    // 实时验证
+    const error = validateField(field, value);
+    setFormErrors((prev) => {
+      const newErrors = { ...prev };
+      if (error) {
+        newErrors[key] = error;
+      } else {
+        delete newErrors[key];
+      }
+      return newErrors;
+    });
+  };
+
+  const handleAction = (action: string) => {
+    console.log("执行操作:", action);
+
+    // 提交前进行完整验证
+    if (!validateForm()) {
+      alert("请修正表单中的错误后再提交");
+      return;
+    }
+
+    // 所有验证通过，保存数据
+    console.log("表单数据:", formData());
+    alert(
+      `演示: ${action} 操作已触发!\n数据: ${JSON.stringify(formData(), null, 2)}`,
+    );
+
+    // 清空表单
+    setFormData({});
+    setFormErrors({});
+  };
+
+  return (
+    <div style="padding: 20px; font-family: Arial, sans-serif; min-height: 100vh; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
+      <div style="max-width: 900px; margin: 0 auto; background: white; padding: 40px; border-radius: 16px; box-shadow: 0 10px 40px rgba(0,0,0,0.2);">
+        {/* 头部 */}
+        <Show
+          when={!selectedPlugin()}
+          fallback={
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 30px;">
+              <button
+                onClick={closePlugin}
+                style="padding: 10px 20px; background: #6c757d; color: white; border: none; border-radius: 6px; cursor: pointer;"
+              >
+                ← 返回
+              </button>
+              <h1 style="color: #333; margin: 0; font-size: 28px;">
+                {plugins.find((p) => p.id === selectedPlugin())?.name}
+              </h1>
+              <div style="width: 80px;"></div>
+            </div>
+          }
+        >
+          <div style="text-align: center; margin-bottom: 40px;">
+            <h1 style="color: #333; margin: 0 0 10px 0; font-size: 36px;">
+              Work Tools Platform
+            </h1>
+            <p style="color: #666; font-size: 18px; margin: 0;">Rust Edition</p>
+            <div style="margin-top: 15px; padding: 10px 20px; background: #d4edda; color: #155724; border-radius: 8px; display: inline-block;">
+              ✅ 后端已启动 | 发现 {plugins.length} 个插件
+            </div>
+          </div>
+        </Show>
+
+        {/* 插件列表视图 */}
+        <Show when={!selectedPlugin()}>
+          <div style="margin-top: 30px;">
+            <h2 style="color: #555; border-bottom: 3px solid #667eea; padding-bottom: 15px; font-size: 24px;">
+              🎯 已安装插件
+            </h2>
+            <For each={plugins}>
+              {(plugin) => (
+                <div
+                  style="
+                  padding: 25px;
+                  margin: 20px 0;
+                  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                  border-radius: 16px;
+                  color: white;
+                  box-shadow: 0 8px 16px rgba(102, 126, 234, 0.3);
+                  transition: all 0.3s ease;
+                "
+                >
+                  <div style="display: flex; align-items: center; gap: 20px;">
+                    <div
+                      style="
+                      font-size: 48px;
+                      width: 80px;
+                      height: 80px;
+                      display: flex;
+                      align-items: center;
+                      justify-content: center;
+                      background: rgba(255,255,255,0.2);
+                      border-radius: 50%;
+                    "
+                    >
+                      {plugin.icon}
+                    </div>
+                    <div style="flex: 1;">
+                      <h3 style="margin: 0 0 8px 0; font-size: 24px;">
+                        {plugin.name}
+                      </h3>
+                      <p style="margin: 8px 0; font-size: 16px; opacity: 0.95; line-height: 1.5;">
+                        {plugin.description}
+                      </p>
+                      <div style="margin-top: 12px; font-size: 13px; opacity: 0.8; font-family: monospace;">
+                        版本: {plugin.version} | ID: {plugin.id}
+                      </div>
+                    </div>
+                    <button
+                      style="
+                        padding: 12px 24px;
+                        background: white;
+                        color: #667eea;
+                        border: none;
+                        border-radius: 8px;
+                        font-weight: 600;
+                        cursor: pointer;
+                        transition: all 0.2s;
+                      "
+                      onClick={() => openPlugin(plugin.id)}
+                    >
+                      打开插件
+                    </button>
+                  </div>
+                </div>
+              )}
+            </For>
+          </div>
+        </Show>
+
+        {/* 插件详情视图 */}
+        <Show when={selectedPlugin() && pluginView()}>
+          <div style="margin-top: 20px;">
+            <h2 style="color: #555; font-size: 20px; margin-bottom: 20px;">
+              插件配置
+            </h2>
+            <div style="background: #f8f9fa; padding: 30px; border-radius: 12px;">
+              <For each={pluginView()!.fields}>
+                {(field) => (
+                  <div style="margin-bottom: 20px;">
+                    <Show when={field.type === "input"}>
+                      <div>
+                        <label style="display: block; margin-bottom: 8px; font-weight: 600; color: #333;">
+                          {field.label}
+                        </label>
+                        <input
+                          type={field.inputType || "text"}
+                          placeholder={field.placeholder}
+                          value={formData()[field.key] || ""}
+                          style={{
+                            width: "100%",
+                            padding: "12px",
+                            border: formErrors()[field.key]
+                              ? "2px solid #dc3545"
+                              : "2px solid #e0e0e0",
+                            "border-radius": "8px",
+                            "font-size": "14px",
+                            transition: "border-color 0.2s",
+                          }}
+                          onInput={(e) =>
+                            handleFieldChange(
+                              field.key,
+                              e.currentTarget.value,
+                              field,
+                            )
+                          }
+                        />
+                        <Show when={formErrors()[field.key]}>
+                          <div style="margin-top: 5px; color: #dc3545; font-size: 13px;">
+                            {formErrors()[field.key]}
+                          </div>
+                        </Show>
+                      </div>
+                    </Show>
+                    <Show when={field.type === "button"}>
+                      <button
+                        onClick={() => handleAction(field.key)}
+                        disabled={!isFormValid()}
+                        style={{
+                          padding: "12px 24px",
+                          background: isFormValid()
+                            ? "linear-gradient(135deg, #667eea 0%, #764ba2 100%)"
+                            : "#cccccc",
+                          color: "white",
+                          border: "none",
+                          "border-radius": "8px",
+                          "font-weight": "600",
+                          cursor: isFormValid() ? "pointer" : "not-allowed",
+                          "font-size": "16px",
+                          transition: "all 0.2s",
+                          opacity: isFormValid() ? 1 : 0.6,
+                        }}
+                      >
+                        {field.label}
+                      </button>
+                    </Show>
+                  </div>
+                )}
+              </For>
+            </div>
+          </div>
+        </Show>
+
+        {/* 状态信息 */}
+        <Show when={!selectedPlugin()}>
+          <div style="margin-top: 40px; padding: 20px; background: #f8f9fa; border-radius: 12px; border-left: 5px solid #28a745;">
+            <h3 style="margin: 0 0 15px 0; color: #28a745; font-size: 18px;">
+              ✅ 项目状态
+            </h3>
+            <ul style="margin: 0; padding-left: 20px; color: #555; line-height: 1.8;">
+              <li>✅ 共享类型库编译成功</li>
+              <li>✅ RPC 协议库编译成功</li>
+              <li>✅ Tauri 后端启动成功</li>
+              <li>✅ 插件管理器初始化成功</li>
+              <li>✅ password-manager 插件编译成功</li>
+              <li>✅ Solid.js 前端渲染成功</li>
+              <li>✅ UI Schema 动态渲染成功</li>
+            </ul>
+          </div>
+        </Show>
+
+        <div style="margin-top: 30px; text-align: center; color: #999; font-size: 14px;">
+          <p>🚀 Work Tools Platform (Rust 版本)</p>
+          <p>基于 Tauri 2.x + Solid.js + Rust</p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export default App;

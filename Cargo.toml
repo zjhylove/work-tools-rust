@@ -1,0 +1,13 @@
+[workspace]
+members = [
+    "shared/types",
+    "shared/rpc-protocol",
+    "plugins/password-manager",
+    "tauri-app/src-tauri",
+]
+resolver = "2"
+exclude = ["tauri-app"]
+
+[workspace.package]
+version = "1.0.0"
+edition = "2021"
