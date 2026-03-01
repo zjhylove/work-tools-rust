@@ -111,9 +111,15 @@ export default function AuthPlugin() {
   };
 
   // 生成 TOTP 验证码
-  const generateTotp = async (entry: AuthEntry) => {
+  const generateTotp = async (entry: AuthEntry, forceRefresh = false) => {
     try {
       console.log("生成 TOTP:", entry.issuer, entry.secret);
+
+      // 如果是强制刷新，添加小延迟确保时间步已经更新
+      if (forceRefresh) {
+        await new Promise((resolve) => setTimeout(resolve, 100));
+      }
+
       const code = await invoke<string>("generate_totp_code", {
         secret: entry.secret,
         digits: entry.digits,
@@ -129,8 +135,15 @@ export default function AuthPlugin() {
         ...prev,
         [entry.id]: { code, remaining_seconds: remaining },
       }));
+
+      // 如果是强制刷新，显示反馈
+      if (forceRefresh) {
+        setError("✓ 验证码已刷新");
+        setTimeout(() => setError(""), 1500);
+      }
     } catch (err) {
       console.error("生成验证码失败:", entry.issuer, err);
+      setError("生成验证码失败");
     }
   };
 
@@ -359,7 +372,7 @@ export default function AuthPlugin() {
                     </button>
                     <button
                       class="btn-icon"
-                      onClick={() => generateTotp(entry)}
+                      onClick={() => generateTotp(entry, true)}
                       title="刷新验证码"
                     >
                       🔄
