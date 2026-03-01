@@ -65,6 +65,14 @@ fn load_data() -> Result<PasswordData> {
 fn save_data(data: &PasswordData) -> Result<()> {
     let data_path = get_data_file_path()?;
 
+    // 读取现有配置以保留 salt 和 validation_token
+    let existing_config = if data_path.exists() {
+        let file = File::open(&data_path)?;
+        serde_json::from_reader::<_, serde_json::Value>(file).ok()
+    } else {
+        None
+    };
+
     // 使用临时文件模式确保原子性写入
     let temp_path = data_path.with_extension("tmp");
     let file = OpenOptions::new()
@@ -73,7 +81,19 @@ fn save_data(data: &PasswordData) -> Result<()> {
         .truncate(true)
         .open(&temp_path)?;
 
-    serde_json::to_writer_pretty(&file, data)?;
+    // 合并数据:保留 salt 和 validation_token,更新 entries
+    let mut output = serde_json::to_value(data)?;
+    if let Some(config) = existing_config {
+        // 保留 salt 和 validation_token
+        if let Some(salt) = config.get("salt") {
+            output["salt"] = salt.clone();
+        }
+        if let Some(validation_token) = config.get("validation_token") {
+            output["validation_token"] = validation_token.clone();
+        }
+    }
+
+    serde_json::to_writer_pretty(&file, &output)?;
     file.sync_all()?;
 
     // 原子性替换文件

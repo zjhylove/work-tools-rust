@@ -3,105 +3,46 @@ use aes::cipher::{KeyInit, BlockEncrypt, BlockDecrypt, generic_array::GenericArr
 use sha2::{Sha256, Digest};
 use anyhow::Result;
 
-/// 加密配置
+/// 加密配置（简化版本，不再需要 salt 和 validation_token）
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct CryptoConfig {
-    /// 盐值
-    pub salt: Option<String>,
-    /// 验证令牌(用于验证主密码是否正确)
-    pub validation_token: Option<String>,
+    // 预留扩展字段
 }
 
 impl Default for CryptoConfig {
     fn default() -> Self {
-        Self {
-            salt: None,
-            validation_token: None,
-        }
+        Self {}
     }
 }
 
-/// 密码加密器
+/// 密码加密器（使用固定密钥）
 pub struct PasswordEncryptor {
-    cipher: Option<Aes256>,
-    config: CryptoConfig,
+    cipher: Aes256,
 }
 
 impl PasswordEncryptor {
-    /// 创建新的加密器实例
-    pub fn new(config: CryptoConfig) -> Self {
-        Self {
-            cipher: None,
-            config,
-        }
-    }
-
-    /// 生成随机盐值
-    pub fn generate_salt() -> String {
-        use rand::Rng;
-        const CHARSET: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
-        let mut rng = rand::thread_rng();
-        let salt: String = (0..32)
-            .map(|_| {
-                let idx = rng.gen_range(0..CHARSET.len());
-                CHARSET[idx] as char
-            })
-            .collect();
-        salt
-    }
-
-    /// 从密码和盐值生成 AES-256 密钥
-    fn derive_key(password: &str, salt: &str) -> [u8; 32] {
+    /// 固定的内部密钥（基于应用标识符生成）
+    fn get_internal_key() -> [u8; 32] {
+        // 使用固定的应用密钥（在实际应用中应该使用更安全的方式，如操作系统的密钥库）
+        let app_secret = "WorkToolsPasswordManager2024InternalKey";
         let mut hasher = Sha256::new();
-        hasher.update(password.as_bytes());
-        hasher.update(salt.as_bytes());
+        hasher.update(app_secret.as_bytes());
+        hasher.update(b"SALT_FIX_FOR_LOCAL_ENCRYPTION");
         let result = hasher.finalize();
         let mut key = [0u8; 32];
         key.copy_from_slice(&result[..32]);
         key
     }
 
-    /// 初始化或验证主密码
-    pub fn init_or_verify_master_password(&mut self, password: &str) -> Result<bool> {
-        // 首次设置主密码(salt 不存在)
-        if self.config.salt.is_none() {
-            let salt = Self::generate_salt();
-            let key = Self::derive_key(password, &salt);
-
-            // 使用 AES 创建 cipher
-            let cipher = Aes256::new(&GenericArray::from(key));
-
-            // 创建验证令牌:加密一个已知字符串用于后续验证
-            let validation_token = Self::encrypt_with_cipher(&cipher, "VALIDATE_PASSWORD")?;
-
-            self.config.salt = Some(salt);
-            self.config.validation_token = Some(validation_token);
-            self.cipher = Some(cipher);
-
-            return Ok(true);
-        }
-
-        // 验证主密码(salt 已存在)
-        let salt = self.config.salt.as_ref().ok_or_else(|| anyhow::anyhow!("盐值不存在"))?;
-        let key = Self::derive_key(password, salt);
+    /// 创建新的加密器实例（自动初始化）
+    pub fn new(_config: CryptoConfig) -> Self {
+        let key = Self::get_internal_key();
         let cipher = Aes256::new(&GenericArray::from(key));
-
-        // 验证令牌是否存在
-        let stored_token = self.config.validation_token.as_ref()
-            .ok_or_else(|| anyhow::anyhow!("验证令牌不存在"))?;
-
-        // 用输入的密码加密相同的字符串,比较结果
-        let test_token = Self::encrypt_with_cipher(&cipher, "VALIDATE_PASSWORD")?;
-
-        if test_token == *stored_token {
-            // 验证成功,创建 cipher
-            self.cipher = Some(cipher);
-            Ok(true)
-        } else {
-            // 验证失败,密码错误
-            Ok(false)
+        Self {
+            cipher,
         }
     }
+
 
     /// 使用指定 cipher 加密文本
     fn encrypt_with_cipher(cipher: &Aes256, plaintext: &str) -> Result<String> {
@@ -179,31 +120,14 @@ impl PasswordEncryptor {
         String::from_utf8(decrypted_data).map_err(|e| anyhow::anyhow!("UTF-8 解码失败: {}", e))
     }
 
-    /// 加密密码 (必须在验证主密码后调用)
+    /// 加密密码
     pub fn encrypt_password(&self, password: &str) -> Result<String> {
-        let cipher = self.cipher.as_ref().ok_or_else(|| anyhow::anyhow!("未验证主密码"))?;
-        Self::encrypt_with_cipher(cipher, password)
+        Self::encrypt_with_cipher(&self.cipher, password)
     }
 
-    /// 解密密码 (必须在验证主密码后调用)
+    /// 解密密码
     pub fn decrypt_password(&self, encrypted_password: &str) -> Result<String> {
-        let cipher = self.cipher.as_ref().ok_or_else(|| anyhow::anyhow!("未验证主密码"))?;
-        Self::decrypt_with_cipher(cipher, encrypted_password)
-    }
-
-    /// 获取加密配置 (用于持久化)
-    pub fn get_config(&self) -> CryptoConfig {
-        self.config.clone()
-    }
-
-    /// 检查是否已设置主密码
-    pub fn has_master_password(&self) -> bool {
-        self.config.salt.is_some()
-    }
-
-    /// 检查是否已验证主密码(cipher 是否存在)
-    pub fn has_cipher(&self) -> bool {
-        self.cipher.is_some()
+        Self::decrypt_with_cipher(&self.cipher, encrypted_password)
     }
 }
 
@@ -214,12 +138,7 @@ mod tests {
     #[test]
     fn test_encrypt_decrypt() {
         let config = CryptoConfig::default();
-        let mut encryptor = PasswordEncryptor::new(config);
-
-        // 设置主密码
-        let result = encryptor.init_or_verify_master_password("test123");
-        assert!(result.is_ok());
-        assert!(result.unwrap());
+        let encryptor = PasswordEncryptor::new(config);
 
         // 加密测试密码
         let encrypted = encryptor.encrypt_password("mypassword").unwrap();
@@ -228,26 +147,5 @@ mod tests {
         // 解密测试密码
         let decrypted = encryptor.decrypt_password(&encrypted).unwrap();
         assert_eq!(decrypted, "mypassword");
-    }
-
-    #[test]
-    fn test_verify_master_password() {
-        let config = CryptoConfig::default();
-        let mut encryptor = PasswordEncryptor::new(config);
-
-        // 设置主密码
-        encryptor.init_or_verify_master_password("test123").unwrap();
-
-        // 创建新的加密器实例并验证
-        let config = encryptor.get_config();
-        let mut encryptor2 = PasswordEncryptor::new(config);
-
-        // 正确的密码
-        let result = encryptor2.init_or_verify_master_password("test123").unwrap();
-        assert!(result);
-
-        // 错误的密码
-        let result = encryptor2.init_or_verify_master_password("wrong").unwrap();
-        assert!(!result);
     }
 }

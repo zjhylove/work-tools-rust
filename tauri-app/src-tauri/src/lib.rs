@@ -38,26 +38,9 @@ pub fn run() {
         PluginManager::new().expect("无法创建插件管理器")
     );
 
-    // 尝试加载已保存的加密配置(加载 salt 和 validation_token)
-    // 每次会话都需要重新验证主密码以提高安全性
-    let crypto_config = if let Ok(config) = config::load_plugin_config("password-manager") {
-        let salt = config.get("salt")
-            .and_then(|v| v.as_str())
-            .map(|s| s.to_string());
-        let validation_token = config.get("validation_token")
-            .and_then(|v| v.as_str())
-            .map(|s| s.to_string());
-        crypto::CryptoConfig {
-            salt,
-            validation_token,
-        }
-    } else {
-        crypto::CryptoConfig::default()
-    };
-
-    // 创建密码加密器
+    // 创建密码加密器（使用固定密钥，无需主密码）
     let password_encryptor = Arc::new(std::sync::Mutex::new(
-        PasswordEncryptor::new(crypto_config)
+        PasswordEncryptor::new(crypto::CryptoConfig::default())
     ));
 
     tauri::Builder::default()
@@ -104,10 +87,6 @@ pub fn run() {
             commands::save_auth_entry,
             commands::delete_auth_entry,
             commands::generate_secret,
-            commands::init_or_verify_master_password,
-            commands::has_master_password,
-            commands::get_crypto_config,
-            commands::load_crypto_config,
             commands::encrypt_password,
             commands::decrypt_password,
             // Auth Plugin 命令

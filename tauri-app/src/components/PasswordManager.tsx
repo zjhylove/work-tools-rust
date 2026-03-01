@@ -26,7 +26,6 @@ interface UiField {
 
 export default function PasswordManager() {
   const [entries, setEntries] = createSignal<PasswordEntry[]>([]);
-  const [loading, setLoading] = createSignal(true);
   const [viewMode, setViewMode] = createSignal<"list" | "form">("list");
   const [selectedEntry, setSelectedEntry] = createSignal<PasswordEntry | null>(
     null,
@@ -86,118 +85,27 @@ export default function PasswordManager() {
   const [error, setError] = createSignal("");
   const [showDeleteConfirm, setShowDeleteConfirm] = createSignal(false);
 
-  // 主密码验证状态
-  const [isAuthenticated, setIsAuthenticated] = createSignal(false);
-  const [showMasterPasswordPrompt, setShowMasterPasswordPrompt] =
-    createSignal(false);
-  const [masterPassword, setMasterPassword] = createSignal("");
-  const [masterPasswordError, setMasterPasswordError] = createSignal("");
-  const [isFirstTimeSetup, setIsFirstTimeSetup] = createSignal(false);
-
-  // 检查主密码状态
-  const checkMasterPasswordStatus = async () => {
-    try {
-      const hasPassword = await invoke<boolean>("has_master_password");
-      setIsFirstTimeSetup(!hasPassword);
-      return hasPassword;
-    } catch (err) {
-      console.error("检查主密码状态失败:", err);
-      return false;
-    }
-  };
-
-  // 验证主密码
-  const verifyMasterPassword = async () => {
-    try {
-      const password = masterPassword();
-      if (!password || password.length < 6) {
-        setMasterPasswordError("主密码至少需要 6 个字符");
-        return false;
-      }
-
-      console.log("开始验证主密码...");
-      const result = await invoke<boolean>("init_or_verify_master_password", {
-        password,
-      });
-
-      if (result) {
-        console.log("主密码验证成功,设置认证状态并加载密码列表");
-        setIsAuthenticated(true);
-        setShowMasterPasswordPrompt(false);
-        setMasterPassword("");
-        setMasterPasswordError("");
-        setError(""); // 清除之前的错误信息
-
-        // 验证成功后自动加载密码列表
-        const loadSuccess = await loadPasswords();
-        console.log(
-          "密码列表加载",
-          loadSuccess ? "成功" : "失败",
-          "当前条目数:",
-          entries().length,
-        );
-
-        return true;
-      } else {
-        setMasterPasswordError("密码错误");
-        return false;
-      }
-    } catch (err) {
-      console.error("主密码验证失败:", err);
-      setMasterPasswordError("验证失败: " + err);
-      return false;
-    }
-  };
-
   // 加载密码列表
   const loadPasswords = async () => {
     try {
       console.log("开始加载密码列表...");
-      setLoading(true);
       const result = await invoke<PasswordEntry[]>("get_password_entries");
       console.log("密码列表加载成功,条目数:", result.length);
       setEntries(result);
       setError("");
-      // 如果密码列表加载成功,说明后端已验证,设置前端认证状态
-      if (!isAuthenticated()) {
-        console.log("密码列表加载成功,设置前端认证状态为已验证");
-        setIsAuthenticated(true);
-      }
-      return true; // 返回成功标志
+      return true;
     } catch (err) {
       console.error("加载密码失败:", err);
-      const errorMsg = String(err).includes("主密码验证失败")
-        ? "请输入主密码以访问密码管理器"
-        : "加载密码列表失败";
-      setError(errorMsg);
-      // 如果是主密码验证失败,显示验证对话框
-      if (String(err).includes("主密码验证失败")) {
-        console.log("主密码验证失败,显示验证对话框");
-        setShowMasterPasswordPrompt(true);
-      }
-      return false; // 返回失败标志
-    } finally {
-      setLoading(false);
+      setError("加载密码列表失败");
+      return false;
     }
   };
 
   // 初始化
   onMount(async () => {
     console.log("PasswordManager 组件挂载,开始初始化...");
-    // 检查是否已设置主密码
-    const hasPassword = await checkMasterPasswordStatus();
-    console.log("主密码状态检查结果:", hasPassword);
-    if (!hasPassword) {
-      console.log("首次使用,显示设置主密码对话框");
-      setShowMasterPasswordPrompt(true);
-      return;
-    }
-
-    console.log("主密码已设置,尝试加载密码列表...");
-    // 尝试加载密码列表,如果失败则提示验证
     await loadPasswords();
     console.log("PasswordManager 初始化完成");
-    console.log("当前认证状态:", isAuthenticated());
     console.log("当前条目数:", entries().length);
   });
 
@@ -216,12 +124,6 @@ export default function PasswordManager() {
 
   // 添加新密码
   const handleAddNew = async () => {
-    // 检查是否已验证主密码
-    if (!isAuthenticated()) {
-      setShowMasterPasswordPrompt(true);
-      return;
-    }
-
     setSelectedEntry(null);
     setIsEditMode(false);
     setFormData({});
@@ -231,12 +133,6 @@ export default function PasswordManager() {
 
   // 选择条目编辑
   const handleSelectEntry = async (entry: PasswordEntry) => {
-    // 检查是否已验证主密码
-    if (!isAuthenticated()) {
-      setShowMasterPasswordPrompt(true);
-      return;
-    }
-
     setSelectedEntry(entry);
     setIsEditMode(true);
     setFormData({
@@ -251,12 +147,6 @@ export default function PasswordManager() {
 
   // 删除密码
   const handleDeletePassword = async (id: string) => {
-    // 检查是否已验证主密码
-    if (!isAuthenticated()) {
-      setShowMasterPasswordPrompt(true);
-      return;
-    }
-
     try {
       await invoke("delete_password_entry", { id });
       await loadPasswords();
@@ -640,60 +530,6 @@ export default function PasswordManager() {
                 onClick={() => {
                   setShowDeleteConfirm(false);
                   setSelectedEntry(null);
-                }}
-              >
-                取消
-              </button>
-            </div>
-          </div>
-        </div>
-      </Show>
-
-      {/* 主密码验证对话框 */}
-      <Show when={showMasterPasswordPrompt()}>
-        <div class="modal-overlay">
-          <div class="modal">
-            <h3>{isFirstTimeSetup() ? "设置主密码" : "输入主密码"}</h3>
-            <p>
-              {isFirstTimeSetup()
-                ? "首次使用需要设置主密码,主密码将用于加密所有密码数据。"
-                : "请输入主密码以访问密码管理器。"}
-            </p>
-            <div class="form-group">
-              <input
-                type="password"
-                placeholder="请输入主密码 (至少 6 个字符)"
-                value={masterPassword()}
-                onInput={(e) => {
-                  setMasterPassword(e.currentTarget.value);
-                  setMasterPasswordError("");
-                }}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    verifyMasterPassword();
-                  }
-                }}
-                classList={{ "input-error": !!masterPasswordError() }}
-              />
-              <Show when={masterPasswordError()}>
-                <div class="field-error">{masterPasswordError()}</div>
-              </Show>
-            </div>
-            <div class="modal-actions">
-              <button
-                class="btn-primary"
-                onClick={async () => {
-                  await verifyMasterPassword();
-                }}
-              >
-                {isFirstTimeSetup() ? "设置主密码" : "验证"}
-              </button>
-              <button
-                class="btn-secondary"
-                onClick={() => {
-                  setShowMasterPasswordPrompt(false);
-                  setMasterPassword("");
-                  setMasterPasswordError("");
                 }}
               >
                 取消
