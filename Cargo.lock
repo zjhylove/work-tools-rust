@@ -5553,6 +5553,7 @@ dependencies = [
  "directories",
  "dirs 5.0.1",
  "notify",
+ "rand 0.8.5",
  "serde",
  "serde_json",
  "tauri",

@@ -26,6 +26,7 @@ tracing-appender = "0.2"
 directories = "5.0"
 dirs = "5.0"
 notify = "6.0"
+rand = "0.8"
 
 # 本地依赖
 worktools-shared-types = { path = "../../shared/types" }
