@@ -41,7 +41,6 @@ libloading = "0.8"
 
 # 本地依赖
 worktools-shared-types = { path = "../../shared/types" }
-worktools-rpc-protocol = { path = "../../shared/rpc-protocol" }
 worktools-plugin-api = { path = "../../shared/plugin-api" }
 
 [[bin]]
