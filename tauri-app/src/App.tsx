@@ -15,6 +15,40 @@ const safeInvoke = async <T,>(command: string, args?: any): Promise<T> => {
   }
 };
 
+// 常量定义
+const JSON_FILE_FILTER = { name: "JSON", extensions: ["json"] };
+const DEFAULT_EXPORT_PATH = "passwords.json";
+
+// 高阶函数:认证检查包装器
+const withAuthCheck = (
+  authCheck: () => boolean,
+  authPrompt: () => Promise<void>,
+) => {
+  return <T extends any[], R>(fn: (...args: T) => Promise<R>) => {
+    return async (...args: T): Promise<R> => {
+      if (!authCheck()) {
+        await authPrompt();
+        throw new Error("未认证");
+      }
+      return fn(...args);
+    };
+  };
+};
+
+// 高阶函数:错误处理包装器
+const withErrorToast = (toastFn: (message: string) => void) => {
+  return <T extends any[]>(fn: (...args: T) => Promise<void>) => {
+    return async (...args: T): Promise<void> => {
+      try {
+        await fn(...args);
+      } catch (error) {
+        console.error("操作失败:", error);
+        toastFn("✗ 操作失败");
+      }
+    };
+  };
+};
+
 interface PasswordEntry {
   id: string;
   url: string | null;
@@ -612,62 +646,38 @@ function App() {
     }
   };
 
-  // 导出密码
-  const handleExportPasswords = async () => {
-    if (!isAuthenticated()) {
-      await showMasterPasswordPrompt();
-      return;
-    }
-
-    try {
+  // 导出密码 (优化版本 - 使用高阶函数组合)
+  const handleExportPasswords = withErrorToast(showToastMessage)(
+    withAuthCheck(
+      isAuthenticated,
+      showMasterPasswordPrompt,
+    )(async () => {
       const jsonData = await safeInvoke<string>("export_passwords");
-
-      // 使用 Tauri 的 dialog API 保存文件
       const filePath = await save({
-        filters: [
-          {
-            name: "JSON",
-            extensions: ["json"],
-          },
-        ],
-        defaultPath: "passwords.json",
+        filters: [JSON_FILE_FILTER],
+        defaultPath: DEFAULT_EXPORT_PATH,
       });
 
       if (filePath) {
-        // 写入文件
         await writeTextFile(filePath, jsonData);
         showToastMessage("✓ 导出成功!");
       }
-    } catch (error) {
-      console.error("导出失败:", error);
-      showToastMessage("✗ 导出失败");
-    }
-  };
+    }),
+  );
 
-  // 导入密码
-  const handleImportPasswords = async () => {
-    if (!isAuthenticated()) {
-      await showMasterPasswordPrompt();
-      return;
-    }
-
-    try {
-      // 使用 Tauri 的 dialog API 选择文件
+  // 导入密码 (优化版本 - 使用高阶函数组合)
+  const handleImportPasswords = withErrorToast(showToastMessage)(
+    withAuthCheck(
+      isAuthenticated,
+      showMasterPasswordPrompt,
+    )(async () => {
       const filePath = await open({
-        filters: [
-          {
-            name: "JSON",
-            extensions: ["json"],
-          },
-        ],
+        filters: [JSON_FILE_FILTER],
         multiple: false,
       });
 
       if (filePath) {
-        // 读取文件
         const jsonData = await readTextFile(filePath);
-
-        // 导入数据
         await safeInvoke("import_passwords", { jsonData });
 
         // 刷新密码列表
@@ -678,11 +688,8 @@ function App() {
 
         showToastMessage("✓ 导入成功!");
       }
-    } catch (error) {
-      console.error("导入失败:", error);
-      showToastMessage("✗ 导入失败");
-    }
-  };
+    }),
+  );
 
   const handleSaveSettings = async () => {
     try {

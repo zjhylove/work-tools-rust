@@ -11,6 +11,25 @@ pub type PluginManagerState = Arc<PluginManager>;
 /// 密码加密器状态 (使用 Arc<Mutex<>> 以支持跨线程共享)
 pub type CryptoState = Arc<std::sync::Mutex<PasswordEncryptor>>;
 
+/// 辅助函数: 从配置中加载密码条目列表
+fn load_password_entries_from_config(config: &Value) -> Vec<PasswordEntry> {
+    config
+        .get("entries")
+        .and_then(|v| serde_json::from_value(v.clone()).ok())
+        .unwrap_or_default()
+}
+
+/// 辅助函数: 将密码条目列表保存到配置
+fn save_password_entries_to_config(
+    entries: &[PasswordEntry],
+    config: &mut Value,
+) -> Result<(), String> {
+    config["entries"] = serde_json::to_value(entries)
+        .map_err(|e| format!("序列化条目失败: {}", e))?;
+    Ok(())
+}
+
+
 /// 密码条目 (加密版本,存储在磁盘上)
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct PasswordEntry {
@@ -214,20 +233,15 @@ pub async fn save_password_entry(
     let mut config = load_plugin_config("password-manager")
         .map_err(|e| e.to_string())?;
 
-    let entries: Vec<PasswordEntry> = config
-        .get("entries")
-        .and_then(|v| serde_json::from_value(v.clone()).ok())
-        .unwrap_or_default();
+    // 使用辅助函数加载条目
+    let mut entries = load_password_entries_from_config(&config);
 
-    // 查找并更新或添加新条目
-    let mut updated_entries: Vec<PasswordEntry> = entries
-        .into_iter()
-        .filter(|e| e.id != encrypted_entry.id)
-        .collect();
-    updated_entries.push(encrypted_entry);
+    // 查找并更新或添加新条目 (使用 filter)
+    entries.retain(|e| e.id != encrypted_entry.id);
+    entries.push(encrypted_entry);
 
-    config["entries"] = serde_json::to_value(&updated_entries)
-        .map_err(|e| e.to_string())?;
+    // 使用辅助函数保存条目
+    save_password_entries_to_config(&entries, &mut config)?;
 
     // 保存加密配置 (master_password 和 salt)
     let crypto_config = encryptor.get_config();
@@ -246,18 +260,12 @@ pub async fn delete_password_entry(id: String) -> Result<(), String> {
     let mut config = load_plugin_config("password-manager")
         .map_err(|e| e.to_string())?;
 
-    let entries: Vec<PasswordEntry> = config
-        .get("entries")
-        .and_then(|v| serde_json::from_value(v.clone()).ok())
-        .unwrap_or_default();
+    // 使用辅助函数加载和过滤条目
+    let mut entries = load_password_entries_from_config(&config);
+    entries.retain(|e| e.id != id);
 
-    let updated_entries: Vec<PasswordEntry> = entries
-        .into_iter()
-        .filter(|e| e.id != id)
-        .collect();
-
-    config["entries"] = serde_json::to_value(&updated_entries)
-        .map_err(|e| e.to_string())?;
+    // 使用辅助函数保存
+    save_password_entries_to_config(&entries, &mut config)?;
 
     save_plugin_config("password-manager", &config)
         .map_err(|e| e.to_string())
@@ -269,8 +277,7 @@ pub async fn clear_all_password_entries() -> Result<(), String> {
     let mut config = load_plugin_config("password-manager")
         .map_err(|e| e.to_string())?;
 
-    config["entries"] = serde_json::to_value(&Vec::<PasswordEntry>::new())
-        .map_err(|e| e.to_string())?;
+    save_password_entries_to_config(&[], &mut config)?;
 
     save_plugin_config("password-manager", &config)
         .map_err(|e| e.to_string())
@@ -472,33 +479,23 @@ pub async fn import_passwords(json_data: String) -> Result<(), String> {
     let mut current_config = load_plugin_config("password-manager")
         .map_err(|e| e.to_string())?;
 
-    // 合并 entries
-    let current_entries: Vec<PasswordEntry> = current_config
-        .get("entries")
-        .and_then(|v| serde_json::from_value(v.clone()).ok())
-        .unwrap_or_default();
+    // 使用辅助函数加载条目
+    let current_entries = load_password_entries_from_config(&current_config);
+    let imported_entries = load_password_entries_from_config(&imported_config);
 
-    let imported_entries: Vec<PasswordEntry> = imported_config
-        .get("entries")
-        .and_then(|v| serde_json::from_value(v.clone()).ok())
-        .unwrap_or_default();
-
-    // 合并条目,避免 ID 重复
-    let mut merged_entries: Vec<PasswordEntry> = current_entries.clone();
+    // 使用 HashSet 优化 ID 查找,合并条目避免 ID 重复
     let existing_ids: std::collections::HashSet<String> = current_entries
         .iter()
         .map(|e| e.id.clone())
         .collect();
 
-    for entry in imported_entries {
-        if !existing_ids.contains(&entry.id) {
-            merged_entries.push(entry);
-        }
-    }
+    let merged_entries: Vec<PasswordEntry> = current_entries
+        .into_iter()
+        .chain(imported_entries.into_iter().filter(|e| !existing_ids.contains(&e.id)))
+        .collect();
 
-    // 更新配置
-    current_config["entries"] = serde_json::to_value(&merged_entries)
-        .map_err(|e| e.to_string())?;
+    // 使用辅助函数保存
+    save_password_entries_to_config(&merged_entries, &mut current_config)?;
 
     // 保存配置
     save_plugin_config("password-manager", &current_config)
