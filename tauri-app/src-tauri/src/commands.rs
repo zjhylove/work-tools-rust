@@ -1,5 +1,6 @@
 use crate::config::{load_app_config, save_app_config, load_plugin_config, save_plugin_config};
 use crate::plugin_manager::PluginManager;
+use crate::crypto::{PasswordEncryptor, CryptoConfig};
 use serde_json::Value;
 use std::sync::Arc;
 use tauri::State;
@@ -7,13 +8,30 @@ use tauri::State;
 /// 插件管理器状态
 pub type PluginManagerState = Arc<PluginManager>;
 
-/// 密码条目
+/// 密码加密器状态 (使用 Arc<Mutex<>> 以支持跨线程共享)
+pub type CryptoState = Arc<std::sync::Mutex<PasswordEncryptor>>;
+
+/// 密码条目 (加密版本,存储在磁盘上)
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct PasswordEntry {
     pub id: String,
     pub url: Option<String>,
     pub service: String,
     pub username: String,
+    /// 存储的是加密后的密码
+    pub password: String,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+/// 密码条目 (解密版本,返回给前端)
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct DecryptedPasswordEntry {
+    pub id: String,
+    pub url: Option<String>,
+    pub service: String,
+    pub username: String,
+    /// 解密后的明文密码
     pub password: String,
     pub created_at: String,
     pub updated_at: String,
@@ -128,9 +146,11 @@ pub async fn set_app_config(config: crate::config::AppConfig) -> Result<(), Stri
 
 /// ============= 密码管理器命令 =============
 
-/// 获取所有密码条目
+/// 获取所有密码条目 (解密版本)
 #[tauri::command]
-pub async fn get_password_entries() -> Result<Vec<PasswordEntry>, String> {
+pub async fn get_password_entries(
+    crypto_state: State<'_, CryptoState>,
+) -> Result<Vec<DecryptedPasswordEntry>, String> {
     let config = load_plugin_config("password-manager")
         .map_err(|e| e.to_string())?;
 
@@ -139,12 +159,58 @@ pub async fn get_password_entries() -> Result<Vec<PasswordEntry>, String> {
         .and_then(|v| serde_json::from_value(v.clone()).ok())
         .unwrap_or_default();
 
-    Ok(entries)
+    // 解密所有密码
+    let encryptor = crypto_state.lock()
+        .map_err(|e| format!("获取加密器失败: {}", e))?;
+
+    let mut decrypted_entries = Vec::new();
+    for entry in entries {
+        match encryptor.decrypt_password(&entry.password) {
+            Ok(decrypted_password) => {
+                decrypted_entries.push(DecryptedPasswordEntry {
+                    id: entry.id,
+                    url: entry.url,
+                    service: entry.service,
+                    username: entry.username,
+                    password: decrypted_password,
+                    created_at: entry.created_at,
+                    updated_at: entry.updated_at,
+                });
+            }
+            Err(e) => {
+                // 旧格式的数据解密失败,跳过该条目
+                continue;
+            }
+        }
+    }
+
+    Ok(decrypted_entries)
 }
 
-/// 保存密码条目
+/// 保存密码条目 (加密密码后存储)
 #[tauri::command]
-pub async fn save_password_entry(entry: PasswordEntry) -> Result<(), String> {
+pub async fn save_password_entry(
+    entry: DecryptedPasswordEntry,
+    crypto_state: State<'_, CryptoState>,
+) -> Result<(), String> {
+    // 加密密码
+    let encryptor = crypto_state.lock()
+        .map_err(|e| format!("获取加密器失败: {}", e))?;
+
+    let encrypted_password = encryptor.encrypt_password(&entry.password)
+        .map_err(|e| format!("加密密码失败: {}", e))?;
+
+    // 创建加密后的条目用于存储
+    let encrypted_entry = PasswordEntry {
+        id: entry.id,
+        url: entry.url,
+        service: entry.service,
+        username: entry.username,
+        password: encrypted_password,
+        created_at: entry.created_at,
+        updated_at: entry.updated_at,
+    };
+
     let mut config = load_plugin_config("password-manager")
         .map_err(|e| e.to_string())?;
 
@@ -156,11 +222,18 @@ pub async fn save_password_entry(entry: PasswordEntry) -> Result<(), String> {
     // 查找并更新或添加新条目
     let mut updated_entries: Vec<PasswordEntry> = entries
         .into_iter()
-        .filter(|e| e.id != entry.id)
+        .filter(|e| e.id != encrypted_entry.id)
         .collect();
-    updated_entries.push(entry);
+    updated_entries.push(encrypted_entry);
 
     config["entries"] = serde_json::to_value(&updated_entries)
+        .map_err(|e| e.to_string())?;
+
+    // 保存加密配置 (master_password 和 salt)
+    let crypto_config = encryptor.get_config();
+    config["master_password"] = serde_json::to_value(&crypto_config.master_password)
+        .map_err(|e| e.to_string())?;
+    config["salt"] = serde_json::to_value(&crypto_config.salt)
         .map_err(|e| e.to_string())?;
 
     save_plugin_config("password-manager", &config)
@@ -184,6 +257,19 @@ pub async fn delete_password_entry(id: String) -> Result<(), String> {
         .collect();
 
     config["entries"] = serde_json::to_value(&updated_entries)
+        .map_err(|e| e.to_string())?;
+
+    save_plugin_config("password-manager", &config)
+        .map_err(|e| e.to_string())
+}
+
+/// 清空所有密码条目 (用于重置)
+#[tauri::command]
+pub async fn clear_all_password_entries() -> Result<(), String> {
+    let mut config = load_plugin_config("password-manager")
+        .map_err(|e| e.to_string())?;
+
+    config["entries"] = serde_json::to_value(&Vec::<PasswordEntry>::new())
         .map_err(|e| e.to_string())?;
 
     save_plugin_config("password-manager", &config)
@@ -281,4 +367,83 @@ pub async fn generate_secret() -> Result<String, String> {
         .collect();
 
     Ok(secret)
+}
+
+/// ============= 主密码管理命令 =============
+
+/// 初始化或验证主密码
+#[tauri::command]
+pub async fn init_or_verify_master_password(
+    password: String,
+    crypto_state: State<'_, CryptoState>,
+) -> Result<bool, String> {
+    let mut encryptor = crypto_state.lock()
+        .map_err(|e| format!("获取加密器失败: {}", e))?;
+
+    encryptor.init_or_verify_master_password(&password)
+        .map_err(|e| format!("主密码验证失败: {}", e))
+}
+
+/// 检查是否已设置主密码
+#[tauri::command]
+pub async fn has_master_password(
+    crypto_state: State<'_, CryptoState>,
+) -> Result<bool, String> {
+    let encryptor = crypto_state.lock()
+        .map_err(|e| format!("获取加密器失败: {}", e))?;
+
+    Ok(encryptor.has_master_password())
+}
+
+/// 获取加密配置 (用于持久化)
+#[tauri::command]
+pub async fn get_crypto_config(
+    crypto_state: State<'_, CryptoState>,
+) -> Result<CryptoConfig, String> {
+    let encryptor = crypto_state.lock()
+        .map_err(|e| format!("获取加密器失败: {}", e))?;
+
+    Ok(encryptor.get_config())
+}
+
+/// 从配置加载加密器
+#[tauri::command]
+pub async fn load_crypto_config(
+    config: CryptoConfig,
+    crypto_state: State<'_, CryptoState>,
+) -> Result<(), String> {
+    let mut encryptor = crypto_state.lock()
+        .map_err(|e| format!("获取加密器失败: {}", e))?;
+
+    // 创建新的加密器实例
+    let new_encryptor = PasswordEncryptor::new(config);
+    *encryptor = new_encryptor;
+
+    Ok(())
+}
+
+/// 加密密码
+#[tauri::command]
+pub async fn encrypt_password(
+    password: String,
+    crypto_state: State<'_, CryptoState>,
+) -> Result<String, String> {
+    let encryptor = crypto_state.lock()
+        .map_err(|e| format!("获取加密器失败: {}", e))?;
+
+    encryptor.encrypt_password(&password)
+        .map_err(|e| format!("加密失败: {}", e))
+}
+
+/// 解密密码
+#[tauri::command]
+pub async fn decrypt_password(
+    encrypted_password: String,
+    crypto_state: State<'_, CryptoState>,
+) -> Result<String, String> {
+    let encryptor = crypto_state.lock()
+        .map_err(|e| format!("获取加密器失败: {}", e))?;
+
+    encryptor.decrypt_password(&encrypted_password)
+        .map_err(|e| format!("解密失败: {}", e))
 }

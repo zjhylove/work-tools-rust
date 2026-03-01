@@ -1,10 +1,11 @@
 pub mod plugin_manager;
 mod config;
 mod commands;
+mod crypto;
 
 use anyhow::Result;
 use plugin_manager::PluginManager;
-use std::path::PathBuf;
+use crypto::PasswordEncryptor;
 use std::sync::Arc;
 use tauri::Manager;
 
@@ -37,6 +38,27 @@ pub fn run() {
         PluginManager::new().expect("无法创建插件管理器")
     );
 
+    // 尝试加载已保存的加密配置
+    let crypto_config = if let Ok(config) = config::load_plugin_config("password-manager") {
+        let master_password = config.get("master_password")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string());
+        let salt = config.get("salt")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string());
+        crypto::CryptoConfig {
+            master_password,
+            salt,
+        }
+    } else {
+        crypto::CryptoConfig::default()
+    };
+
+    // 创建密码加密器
+    let password_encryptor = Arc::new(std::sync::Mutex::new(
+        PasswordEncryptor::new(crypto_config)
+    ));
+
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_shell::init())
@@ -51,6 +73,8 @@ pub fn run() {
 
             // 设置插件管理器状态
             app.manage(plugin_manager);
+            // 设置密码加密器状态
+            app.manage(password_encryptor);
 
             println!("Work Tools 应用启动成功");
             Ok(())
@@ -67,11 +91,18 @@ pub fn run() {
             commands::get_password_entries,
             commands::save_password_entry,
             commands::delete_password_entry,
+            commands::clear_all_password_entries,
             commands::get_auth_entries,
             commands::save_auth_entry,
             commands::delete_auth_entry,
             commands::generate_totp,
             commands::generate_secret,
+            commands::init_or_verify_master_password,
+            commands::has_master_password,
+            commands::get_crypto_config,
+            commands::load_crypto_config,
+            commands::encrypt_password,
+            commands::decrypt_password,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

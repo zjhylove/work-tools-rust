@@ -5551,13 +5551,16 @@ dependencies = [
 name = "work-tools"
 version = "1.0.0"
 dependencies = [
+ "aes",
  "anyhow",
  "directories",
  "dirs 5.0.1",
+ "hex",
  "notify",
  "rand 0.8.5",
  "serde",
  "serde_json",
+ "sha2",
  "tauri",
  "tauri-build",
  "tauri-plugin-opener",

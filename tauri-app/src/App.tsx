@@ -1,6 +1,16 @@
-import { For, Show, createSignal, onMount } from "solid-js";
+import { For, Show, createSignal, onMount, createMemo } from "solid-js";
 import { invoke } from "@tauri-apps/api/core";
 import "./App.css";
+
+// 安全的 invoke 包装函数 - Tauri 2.x 的 invoke 函数会自动处理环境检测
+const safeInvoke = async <T,>(command: string, args?: any): Promise<T> => {
+  try {
+    return await invoke<T>(command, args);
+  } catch (error) {
+    console.error("Invoke error:", error);
+    throw error;
+  }
+};
 
 interface PasswordEntry {
   id: string;
@@ -52,6 +62,9 @@ function App() {
   const [searchQuery, setSearchQuery] = createSignal("");
   const [isEditMode, setIsEditMode] = createSignal(false);
 
+  // 视图模式: 'list' 显示密码列表, 'form' 显示添加/编辑表单
+  const [viewMode, setViewMode] = createSignal<"list" | "form">("list");
+
   // 对话框状态
   const [showSettings, setShowSettings] = createSignal(false);
   const [showLogs, setShowLogs] = createSignal(false);
@@ -62,18 +75,82 @@ function App() {
   const [autoStart, setAutoStart] = createSignal(false);
   const [minimizeToTray, setMinimizeToTray] = createSignal(true);
 
+  // 主密码验证状态
+  const [showMasterPasswordDialog, setShowMasterPasswordDialog] =
+    createSignal(false);
+  const [masterPassword, setMasterPassword] = createSignal("");
+  const [isFirstTimeSetup, setIsFirstTimeSetup] = createSignal(false);
+  const [masterPasswordError, setMasterPasswordError] = createSignal("");
+  const [isAuthenticated, setIsAuthenticated] = createSignal(false);
+
+  // 删除确认对话框状态
+  const [showDeleteConfirm, setShowDeleteConfirm] = createSignal(false);
+  const [entryToDelete, setEntryToDelete] = createSignal<string | null>(null);
+
   // 加载插件列表
   onMount(async () => {
     console.log("=== App onMount 开始 ===");
+    console.log("当前时间:", new Date().toISOString());
+
+    // 检查是否在 Tauri 环境中
+    const tauriAvailable =
+      typeof window !== "undefined" && "__TAURI__" in window;
+    console.log("Tauri 环境检查:", tauriAvailable);
+    console.log("window.__TAURI__ 存在:", "__TAURI__" in window);
+    console.log(
+      "window.__TAURI__.core 存在:",
+      (window as any).__TAURI__?.core ? "true" : "false",
+    );
+
+    // 检查 CSS 变量是否加载
+    const rootElement = document.documentElement;
+    const computedStyle = getComputedStyle(rootElement);
+    console.log("=== CSS 变量诊断 ===");
+    console.log(
+      "--bg-secondary:",
+      computedStyle.getPropertyValue("--bg-secondary"),
+    );
+    console.log(
+      "--bg-primary:",
+      computedStyle.getPropertyValue("--bg-primary"),
+    );
+    console.log("--accent:", computedStyle.getPropertyValue("--accent"));
+
+    // 如果不在 Tauri 环境,使用模拟数据
+    if (!tauriAvailable) {
+      console.warn("⚠️ 不在 Tauri 环境,使用模拟数据");
+      const mockPlugins: PluginInfo[] = [
+        {
+          id: "password-manager",
+          name: "密码管理器",
+          description: "本地安全存储和管理密码",
+          version: "1.0.0",
+          icon: "🔐",
+        },
+        {
+          id: "auth",
+          name: "双因素验证",
+          description: "TOTP 双因素认证",
+          version: "1.0.0",
+          icon: "🔐",
+        },
+      ];
+      setPlugins(mockPlugins);
+      setSelectedPlugin(mockPlugins[0].id);
+      setLoading(false);
+      return;
+    }
+
     try {
       console.log("调用 get_installed_plugins...");
-      const installedPlugins = await invoke<PluginInfo[]>(
+      const installedPlugins = await safeInvoke<PluginInfo[]>(
         "get_installed_plugins",
       );
       console.log("已安装插件 (原始):", installedPlugins);
       console.log("已安装插件数量:", installedPlugins.length);
 
       if (Array.isArray(installedPlugins)) {
+        console.log("✅ 插件数据是数组，数量:", installedPlugins.length);
         installedPlugins.forEach((plugin, index) => {
           console.log(`插件 ${index}:`, {
             id: plugin.id,
@@ -87,7 +164,7 @@ function App() {
 
         // 加载配置
         try {
-          const config = await invoke<any>("get_app_config");
+          const config = await safeInvoke<any>("get_app_config");
           console.log("加载配置:", config);
           if (config) {
             setTheme(config.theme || "light");
@@ -132,34 +209,65 @@ function App() {
     }
   });
 
+  // 检查主密码状态
+  const checkMasterPasswordStatus = async () => {
+    try {
+      const hasPassword = await safeInvoke<boolean>("has_master_password");
+      if (!hasPassword) {
+        setIsFirstTimeSetup(true);
+      }
+      return hasPassword;
+    } catch (error) {
+      console.error("检查主密码状态失败:", error);
+      return false;
+    }
+  };
+
+  // 显示主密码验证对话框
+  const showMasterPasswordPrompt = async () => {
+    const hasPassword = await checkMasterPasswordStatus();
+    setIsFirstTimeSetup(!hasPassword);
+    setShowMasterPasswordDialog(true);
+  };
+
+  // 验证主密码
+  const verifyMasterPassword = async () => {
+    try {
+      const password = masterPassword();
+      if (!password || password.length < 6) {
+        setMasterPasswordError("主密码至少需要 6 个字符");
+        return false;
+      }
+
+      const result = await safeInvoke<boolean>(
+        "init_or_verify_master_password",
+        {
+          password,
+        },
+      );
+
+      if (result) {
+        setIsAuthenticated(true);
+        setShowMasterPasswordDialog(false);
+        setMasterPassword("");
+        setMasterPasswordError("");
+        return true;
+      } else {
+        setMasterPasswordError(isFirstTimeSetup() ? "设置失败" : "密码错误");
+        return false;
+      }
+    } catch (error) {
+      console.error("主密码验证失败:", error);
+      setMasterPasswordError("验证失败: " + error);
+      return false;
+    }
+  };
+
   const openPlugin = async (pluginId: string) => {
     console.log("打开插件:", pluginId);
     setSelectedPlugin(pluginId);
 
-    if (pluginId === "password-manager") {
-      try {
-        const entries = await invoke<PasswordEntry[]>("get_password_entries");
-        console.log("加载到的密码条目:", entries);
-        setPasswordEntries(entries);
-        setSelectedEntry(null);
-        setIsEditMode(false);
-        setFormData({});
-        setFormErrors({});
-      } catch (error) {
-        console.error("加载密码列表失败:", error);
-        setPasswordEntries([]);
-      }
-    } else if (pluginId === "auth") {
-      // Auth plugin 处理
-      try {
-        const entries = await invoke<any[]>("get_auth_entries");
-        console.log("加载到的认证条目:", entries);
-      } catch (error) {
-        console.error("加载认证列表失败:", error);
-      }
-    }
-
-    // 模拟 UI Schema
+    // 先设置 UI Schema (无论是否验证主密码都需要)
     const schema: ViewSchema = {
       fields: [
         {
@@ -189,8 +297,8 @@ function App() {
           type: "input",
           label: "密码",
           key: "password",
-          placeholder: "输入密码",
           inputType: "password",
+          placeholder: "输入密码",
           required: true,
           minLength: 6,
         },
@@ -201,8 +309,38 @@ function App() {
         },
       ],
     };
-
     setPluginView(schema);
+
+    if (pluginId === "password-manager") {
+      // 检查是否已通过主密码验证
+      if (!isAuthenticated()) {
+        await showMasterPasswordPrompt();
+        return;
+      }
+
+      try {
+        const entries = await safeInvoke<PasswordEntry[]>(
+          "get_password_entries",
+        );
+        console.log("加载到的密码条目:", entries);
+        setPasswordEntries(entries);
+        setSelectedEntry(null);
+        setIsEditMode(false);
+        setFormData({});
+        setFormErrors({});
+      } catch (error) {
+        console.error("加载密码列表失败:", error);
+        setPasswordEntries([]);
+      }
+    } else if (pluginId === "auth") {
+      // Auth plugin 处理
+      try {
+        const entries = await safeInvoke<any[]>("get_auth_entries");
+        console.log("加载到的认证条目:", entries);
+      } catch (error) {
+        console.error("加载认证列表失败:", error);
+      }
+    }
   };
 
   const validateField = (field: UiField, value: string): string | null => {
@@ -239,21 +377,36 @@ function App() {
     return Object.keys(errors).length === 0;
   };
 
-  const isFormValid = () => {
+  // 使用 createMemo 创建响应式的表单验证状态
+  const isFormValid = createMemo(() => {
     const fields = pluginView()?.fields || [];
+
     for (const field of fields) {
       if (field.type === "input" && field.required) {
         const value = formData()[field.key] || "";
-        if (!value.trim()) return false;
-        if (field.minLength && value.length < field.minLength) return false;
+        console.log(
+          `检查字段 ${field.key}, value: "${value}", trim: "${value.trim()}"`,
+        );
+        if (!value.trim()) {
+          console.log(`字段 ${field.key} 为空,返回 false`);
+          return false;
+        }
+        if (field.minLength && value.length < field.minLength) {
+          console.log(`字段 ${field.key} 长度不足,返回 false`);
+          return false;
+        }
         if (field.pattern) {
           const regex = new RegExp(field.pattern);
-          if (!regex.test(value)) return false;
+          if (!regex.test(value)) {
+            console.log(`字段 ${field.key} 格式不匹配,返回 false`);
+            return false;
+          }
         }
       }
     }
+    console.log("表单验证通过,返回 true");
     return true;
-  };
+  });
 
   const handleFieldChange = (key: string, value: string, field: UiField) => {
     setFormData((prev) => ({ ...prev, [key]: value }));
@@ -272,7 +425,17 @@ function App() {
 
   const handleAction = async (action: string) => {
     if (action === "save") {
+
+      // 检查是否已通过主密码验证
+      if (!isAuthenticated()) {
+        console.log("未验证主密码,显示提示");
+        alert("请先验证主密码");
+        await showMasterPasswordPrompt();
+        return;
+      }
+
       if (!validateForm()) {
+        console.log("表单验证失败");
         alert("请修正表单中的错误后再提交");
         return;
       }
@@ -294,15 +457,19 @@ function App() {
         updated_at: new Date().toISOString(),
       };
 
+
       try {
-        await invoke("save_password_entry", { entry });
-        const entries = await invoke<PasswordEntry[]>("get_password_entries");
+        await safeInvoke("save_password_entry", { entry });
+        const entries = await safeInvoke<PasswordEntry[]>(
+          "get_password_entries",
+        );
         setPasswordEntries(entries);
         alert(isEditMode() ? "密码更新成功!" : "密码保存成功!");
         setFormData({});
         setFormErrors({});
         setSelectedEntry(null);
         setIsEditMode(false);
+        setViewMode("list"); // 返回到列表视图
       } catch (error) {
         console.error("保存密码失败:", error);
         alert("保存密码失败: " + error);
@@ -310,7 +477,13 @@ function App() {
     }
   };
 
-  const handleSelectEntry = (entry: PasswordEntry) => {
+  const handleSelectEntry = async (entry: PasswordEntry) => {
+    // 检查是否已通过主密码验证
+    if (!isAuthenticated()) {
+      await showMasterPasswordPrompt();
+      return;
+    }
+
     setSelectedEntry(entry);
     setIsEditMode(true);
     setFormData({
@@ -320,31 +493,55 @@ function App() {
       password: entry.password,
     });
     setFormErrors({});
+    setViewMode("form"); // 切换到表单视图进行编辑
   };
 
-  const handleAddNew = () => {
+  const handleAddNew = async () => {
+    // 检查是否已通过主密码验证
+    if (!isAuthenticated()) {
+      await showMasterPasswordPrompt();
+      return;
+    }
+
     setSelectedEntry(null);
     setIsEditMode(false);
     setFormData({});
     setFormErrors({});
+    setViewMode("form"); // 切换到表单视图
   };
 
   const handleDeletePassword = async (id: string) => {
-    if (!confirm("确定要删除这条密码记录吗?")) {
+
+    // 检查是否已通过主密码验证
+    if (!isAuthenticated()) {
+      await showMasterPasswordPrompt();
       return;
     }
 
+    // 使用自定义确认对话框
+    setEntryToDelete(id);
+    setShowDeleteConfirm(true);
+  };
+
+  const confirmDeletePassword = async () => {
+    const id = entryToDelete();
+    if (!id) return;
+
     try {
-      await invoke("delete_password_entry", { id });
-      const entries = await invoke<PasswordEntry[]>("get_password_entries");
+      await safeInvoke("delete_password_entry", { id });
+      const entries = await safeInvoke<PasswordEntry[]>("get_password_entries");
       setPasswordEntries(entries);
 
-      if (selectedEntry()?.id === id) {
-        setSelectedEntry(null);
-        setIsEditMode(false);
-        setFormData({});
-        setFormErrors({});
-      }
+      // 删除后返回列表视图
+      setSelectedEntry(null);
+      setIsEditMode(false);
+      setFormData({});
+      setFormErrors({});
+      setViewMode("list");
+
+      // 关闭确认对话框
+      setShowDeleteConfirm(false);
+      setEntryToDelete(null);
 
       alert("删除成功!");
     } catch (error) {
@@ -353,9 +550,14 @@ function App() {
     }
   };
 
+  const cancelDeletePassword = () => {
+    setShowDeleteConfirm(false);
+    setEntryToDelete(null);
+  };
+
   const handleSaveSettings = async () => {
     try {
-      await invoke("set_app_config", {
+      await safeInvoke("set_app_config", {
         config: {
           theme: theme(),
           window_state: {
@@ -397,7 +599,7 @@ function App() {
 
     try {
       results.push("\n1. 测试 get_installed_plugins:");
-      const installed = await invoke<PluginInfo[]>("get_installed_plugins");
+      const installed = await safeInvoke<PluginInfo[]>("get_installed_plugins");
       results.push(`   返回类型: ${typeof installed}`);
       results.push(`   是否为数组: ${Array.isArray(installed)}`);
       results.push(
@@ -415,7 +617,7 @@ function App() {
       }
 
       results.push("\n2. 测试 get_available_plugins:");
-      const available = await invoke<PluginInfo[]>("get_available_plugins");
+      const available = await safeInvoke<PluginInfo[]>("get_available_plugins");
       results.push(`   可用插件数量: ${available.length}`);
 
       results.push("\n3. 当前前端状态:");
@@ -448,12 +650,11 @@ function App() {
     >
       {/* 左侧侧边栏 */}
       <div
+        class="sidebar-container"
         style={{
           width: "250px",
           display: "flex",
           "flex-direction": "column",
-          background: "#1e1e1e",
-          color: "white",
           "flex-shrink": 0,
         }}
       >
@@ -462,7 +663,7 @@ function App() {
           style={{
             padding: "20px 15px",
             "text-align": "center",
-            "border-bottom": "1px solid #333",
+            "border-bottom": "1px solid var(--border-color)",
           }}
         >
           <h2
@@ -470,7 +671,7 @@ function App() {
               margin: 0,
               "font-size": "18px",
               "font-weight": "600",
-              color: "#ffffff",
+              color: "var(--text-primary)",
               "letter-spacing": "0.5px",
             }}
           >
@@ -502,17 +703,21 @@ function App() {
                     "user-select": "none",
                     background:
                       selectedPlugin() === plugin.id
-                        ? "#2d2d2d"
+                        ? "var(--accent-light)"
                         : "transparent",
                     "border-left":
                       selectedPlugin() === plugin.id
-                        ? "3px solid #0078d4"
+                        ? "3px solid var(--accent)"
                         : "3px solid transparent",
                     transition: "all 0.15s ease",
+                    color:
+                      selectedPlugin() === plugin.id
+                        ? "var(--accent)"
+                        : "var(--text-primary)",
                   }}
                   onMouseEnter={(e) => {
                     if (selectedPlugin() !== plugin.id) {
-                      e.currentTarget.style.background = "#2a2a2a";
+                      e.currentTarget.style.background = "var(--hover-bg)";
                     }
                   }}
                   onMouseLeave={(e) => {
@@ -553,7 +758,7 @@ function App() {
                       <div
                         style={{
                           "font-size": "11px",
-                          opacity: 0.7,
+                          color: "var(--text-secondary)",
                           overflow: "hidden",
                           "text-overflow": "ellipsis",
                           "white-space": "nowrap",
@@ -573,7 +778,7 @@ function App() {
         <div
           style={{
             padding: "10px",
-            "border-top": "1px solid #333",
+            "border-top": "1px solid var(--border-color)",
             display: "flex",
             "justify-content": "center",
             gap: "15px",
@@ -587,14 +792,14 @@ function App() {
               height: "36px",
               background: "transparent",
               border: "none",
-              color: "white",
+              color: "var(--text-secondary)",
               cursor: "pointer",
               "border-radius": "4px",
               "font-size": "18px",
               transition: "background 0.2s",
             }}
             onMouseEnter={(e) =>
-              (e.currentTarget.style.background = "rgba(255,255,255,0.1)")
+              (e.currentTarget.style.background = "var(--hover-bg)")
             }
             onMouseLeave={(e) =>
               (e.currentTarget.style.background = "transparent")
@@ -610,14 +815,14 @@ function App() {
               height: "36px",
               background: "transparent",
               border: "none",
-              color: "white",
+              color: "var(--text-secondary)",
               cursor: "pointer",
               "border-radius": "4px",
               "font-size": "18px",
               transition: "background 0.2s",
             }}
             onMouseEnter={(e) =>
-              (e.currentTarget.style.background = "rgba(255,255,255,0.1)")
+              (e.currentTarget.style.background = "var(--hover-bg)")
             }
             onMouseLeave={(e) =>
               (e.currentTarget.style.background = "transparent")
@@ -633,14 +838,14 @@ function App() {
               height: "36px",
               background: "transparent",
               border: "none",
-              color: "white",
+              color: "var(--text-secondary)",
               cursor: "pointer",
               "border-radius": "4px",
               "font-size": "18px",
               transition: "background 0.2s",
             }}
             onMouseEnter={(e) =>
-              (e.currentTarget.style.background = "rgba(255,255,255,0.1)")
+              (e.currentTarget.style.background = "var(--hover-bg)")
             }
             onMouseLeave={(e) =>
               (e.currentTarget.style.background = "transparent")
@@ -656,14 +861,14 @@ function App() {
               height: "36px",
               background: "transparent",
               border: "none",
-              color: "white",
+              color: "var(--text-secondary)",
               cursor: "pointer",
               "border-radius": "4px",
               "font-size": "18px",
               transition: "background 0.2s",
             }}
             onMouseEnter={(e) =>
-              (e.currentTarget.style.background = "rgba(255,255,255,0.1)")
+              (e.currentTarget.style.background = "var(--hover-bg)")
             }
             onMouseLeave={(e) =>
               (e.currentTarget.style.background = "transparent")
@@ -688,385 +893,497 @@ function App() {
           <div
             style={{
               flex: 1,
-              display: "flex",
-              gap: "20px",
               padding: "20px",
               height: "100%",
               "box-sizing": "border-box",
+              display: "flex",
+              "flex-direction": "column",
             }}
           >
-            {/* 左侧:密码列表 */}
-            <div
-              style={{
-                flex: 1,
-                display: "flex",
-                "flex-direction": "column",
-                background: "white",
-                "border-radius": "6px",
-                overflow: "hidden",
-                "box-shadow": "0 1px 3px rgba(0,0,0,0.08)",
-                border: "1px solid #e0e0e0",
-              }}
-            >
-              {/* 工具栏 */}
-              <div
-                style={{
-                  padding: "15px",
-                  background: "#fafafa",
-                  "border-bottom": "1px solid #e0e0e0",
-                }}
-              >
-                <div
-                  style={{
-                    display: "flex",
-                    gap: "10px",
-                    "margin-bottom": "10px",
-                  }}
-                >
-                  <button
-                    onClick={handleAddNew}
-                    style={{
-                      padding: "8px 16px",
-                      background: "#0078d4",
-                      color: "white",
-                      border: "none",
-                      "border-radius": "3px",
-                      cursor: "pointer",
-                      "font-size": "13px",
-                      "font-weight": "500",
-                      transition: "background 0.15s",
-                    }}
-                    onMouseEnter={(e) =>
-                      (e.currentTarget.style.background = "#106ebe")
-                    }
-                    onMouseLeave={(e) =>
-                      (e.currentTarget.style.background = "#0078d4")
-                    }
-                  >
-                    ➕ 新建
-                  </button>
-                  <button
-                    style={{
-                      padding: "8px 16px",
-                      background: "#6c757d",
-                      color: "white",
-                      border: "none",
-                      "border-radius": "3px",
-                      cursor: "pointer",
-                      "font-size": "13px",
-                      "font-weight": "500",
-                    }}
-                  >
-                    📥 导入
-                  </button>
-                  <button
-                    style={{
-                      padding: "8px 16px",
-                      background: "#6c757d",
-                      color: "white",
-                      border: "none",
-                      "border-radius": "3px",
-                      cursor: "pointer",
-                      "font-size": "13px",
-                      "font-weight": "500",
-                    }}
-                  >
-                    📤 导出
-                  </button>
-                </div>
-                <input
-                  type="text"
-                  placeholder="🔍 搜索密码..."
-                  value={searchQuery()}
-                  onInput={(e) => setSearchQuery(e.currentTarget.value)}
-                  style={{
-                    width: "100%",
-                    padding: "8px 12px",
-                    border: "1px solid #d0d0d0",
-                    "border-radius": "3px",
-                    "font-size": "13px",
-                    "font-family": "inherit",
-                  }}
-                />
-              </div>
-
-              {/* 密码列表 */}
+            {/* 列表视图 */}
+            <Show when={viewMode() === "list"}>
               <div
                 style={{
                   flex: 1,
-                  overflow: "auto",
-                  padding: "10px",
+                  display: "flex",
+                  "flex-direction": "column",
+                  background: "white",
+                  "border-radius": "6px",
+                  overflow: "hidden",
+                  "box-shadow": "0 1px 3px rgba(0,0,0,0.08)",
+                  border: "1px solid #e0e0e0",
                 }}
               >
-                <Show when={filteredEntries().length === 0}>
-                  <div
-                    style={{
-                      "text-align": "center",
-                      padding: "60px 20px",
-                      color: "#999",
-                    }}
-                  >
-                    <div
-                      style={{ "font-size": "48px", "margin-bottom": "10px" }}
-                    >
-                      📭
-                    </div>
-                    <div>
-                      {searchQuery()
-                        ? "没有找到匹配的密码"
-                        : "还没有保存的密码"}
-                    </div>
-                  </div>
-                </Show>
-                <Show when={filteredEntries().length > 0}>
-                  <For each={filteredEntries()}>
-                    {(entry) => (
-                      <div
-                        onClick={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          handleSelectEntry(entry);
-                        }}
-                        style={{
-                          padding: "12px 15px",
-                          margin: "0 0 8px 0",
-                          background:
-                            selectedEntry()?.id === entry.id
-                              ? "#0078d4"
-                              : "white",
-                          color:
-                            selectedEntry()?.id === entry.id ? "white" : "#333",
-                          "border-radius": "3px",
-                          cursor: "pointer",
-                          "user-select": "none",
-                          border:
-                            selectedEntry()?.id === entry.id
-                              ? "1px solid #0078d4"
-                              : "1px solid #e0e0e0",
-                          transition: "all 0.15s ease",
-                        }}
-                        onMouseEnter={(e) => {
-                          if (selectedEntry()?.id !== entry.id) {
-                            e.currentTarget.style.background = "#fafafa";
-                          }
-                        }}
-                        onMouseLeave={(e) => {
-                          if (selectedEntry()?.id !== entry.id) {
-                            e.currentTarget.style.background = "white";
-                          }
-                        }}
-                      >
-                        <div
-                          style={{
-                            "font-weight": "600",
-                            "margin-bottom": "4px",
-                          }}
-                        >
-                          {entry.service}
-                        </div>
-                        <div style={{ "font-size": "13px", opacity: 0.8 }}>
-                          {entry.username}
-                        </div>
-                      </div>
-                    )}
-                  </For>
-                </Show>
-              </div>
-
-              {/* 底部统计 */}
-              <div
-                style={{
-                  padding: "10px 15px",
-                  background: "#fafafa",
-                  "border-top": "1px solid #e0e0e0",
-                  "font-size": "12px",
-                  color: "#666",
-                }}
-              >
-                共 {passwordEntries().length} 个密码
-                <Show when={searchQuery() !== ""}>
-                  <span> / 显示 {filteredEntries().length} 个结果</span>
-                </Show>
-              </div>
-            </div>
-
-            {/* 右侧:表单详情 */}
-            <div
-              style={{
-                flex: 1,
-                background: "white",
-                "border-radius": "6px",
-                border: "1px solid #e0e0e0",
-                overflow: "auto",
-                "box-shadow": "0 1px 3px rgba(0,0,0,0.08)",
-              }}
-            >
-              <div style={{ padding: "20px" }}>
-                <h2
+                {/* 工具栏 */}
+                <div
                   style={{
-                    margin: "0 0 20px 0",
-                    color: "#1e1e1e",
-                    "font-size": "18px",
-                    "font-weight": "600",
-                    "border-bottom": "2px solid #0078d4",
-                    "padding-bottom": "8px",
+                    padding: "15px",
+                    background: "#fafafa",
+                    "border-bottom": "1px solid #e0e0e0",
                   }}
                 >
-                  {isEditMode() ? "编辑密码" : "新建密码"}
-                </h2>
-
-                <Show when={selectedEntry()}>
                   <div
                     style={{
-                      margin: "0 0 20px 0",
-                      padding: "12px",
-                      background: "#fff8e1",
-                      "border-left": "4px solid #ffc107",
-                      "border-radius": "3px",
+                      display: "flex",
+                      gap: "10px",
+                      "margin-bottom": "10px",
                     }}
                   >
-                    <div
+                    <button
+                      onClick={handleAddNew}
                       style={{
-                        display: "flex",
-                        "justify-content": "space-between",
-                        "align-items": "center",
+                        padding: "8px 16px",
+                        background: "#0078d4",
+                        color: "white",
+                        border: "none",
+                        "border-radius": "3px",
+                        cursor: "pointer",
+                        "font-size": "13px",
+                        "font-weight": "500",
+                        transition: "background 0.15s",
+                      }}
+                      onMouseEnter={(e) =>
+                        (e.currentTarget.style.background = "#106ebe")
+                      }
+                      onMouseLeave={(e) =>
+                        (e.currentTarget.style.background = "#0078d4")
+                      }
+                    >
+                      ➕ 新建
+                    </button>
+                    <button
+                      style={{
+                        padding: "8px 16px",
+                        background: "#6c757d",
+                        color: "white",
+                        border: "none",
+                        "border-radius": "3px",
+                        cursor: "pointer",
+                        "font-size": "13px",
+                        "font-weight": "500",
                       }}
                     >
-                      <span style={{ color: "#856404", "font-size": "14px" }}>
-                        正在编辑密码
-                      </span>
-                      <button
-                        onClick={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          handleDeletePassword(selectedEntry()!.id);
-                        }}
-                        style={{
-                          padding: "6px 12px",
-                          background: "#d13438",
-                          color: "white",
-                          border: "none",
-                          "border-radius": "3px",
-                          cursor: "pointer",
-                          "font-size": "12px",
-                          "font-weight": "500",
-                        }}
-                      >
-                        🗑️ 删除
-                      </button>
-                    </div>
+                      📥 导入
+                    </button>
+                    <button
+                      style={{
+                        padding: "8px 16px",
+                        background: "#6c757d",
+                        color: "white",
+                        border: "none",
+                        "border-radius": "3px",
+                        cursor: "pointer",
+                        "font-size": "13px",
+                        "font-weight": "500",
+                      }}
+                    >
+                      📤 导出
+                    </button>
                   </div>
-                </Show>
+                  <input
+                    type="text"
+                    placeholder="🔍 搜索密码..."
+                    value={searchQuery()}
+                    onInput={(e) => setSearchQuery(e.currentTarget.value)}
+                    style={{
+                      width: "100%",
+                      padding: "8px 12px",
+                      border: "1px solid #d0d0d0",
+                      "border-radius": "3px",
+                      "font-size": "13px",
+                      "font-family": "inherit",
+                    }}
+                  />
+                </div>
 
-                <For each={pluginView()!.fields}>
-                  {(field) => (
-                    <div style={{ "margin-bottom": "20px" }}>
-                      <Show when={field.type === "input"}>
-                        <div>
-                          <label
-                            style={{
-                              display: "block",
-                              "margin-bottom": "6px",
-                              "font-weight": "500",
-                              color: "#1e1e1e",
-                              "font-size": "13px",
-                            }}
-                          >
-                            {field.label}
-                          </label>
-                          <input
-                            type={field.inputType || "text"}
-                            placeholder={field.placeholder}
-                            value={formData()[field.key] || ""}
-                            style={{
-                              width: "100%",
-                              padding: "8px 10px",
-                              border: formErrors()[field.key]
-                                ? "2px solid #d13438"
-                                : "1px solid #d0d0d0",
-                              "border-radius": "3px",
-                              "font-size": "13px",
-                              "font-family": "inherit",
-                              transition: "border-color 0.15s",
-                            }}
-                            onInput={(e) =>
-                              handleFieldChange(
-                                field.key,
-                                e.currentTarget.value,
-                                field,
-                              )
-                            }
-                          />
-                          <Show when={formErrors()[field.key]}>
+                {/* 密码列表 */}
+                <div
+                  style={{
+                    flex: 1,
+                    overflow: "auto",
+                    padding: "10px",
+                  }}
+                >
+                  <Show when={filteredEntries().length === 0}>
+                    <div
+                      style={{
+                        "text-align": "center",
+                        padding: "60px 20px",
+                        color: "#999",
+                      }}
+                    >
+                      <div
+                        style={{ "font-size": "48px", "margin-bottom": "10px" }}
+                      >
+                        📭
+                      </div>
+                      <div>
+                        {searchQuery()
+                          ? "没有找到匹配的密码"
+                          : "还没有保存的密码"}
+                      </div>
+                    </div>
+                  </Show>
+                  <Show when={filteredEntries().length > 0}>
+                    <For each={filteredEntries()}>
+                      {(entry) => (
+                        <div
+                          style={{
+                            padding: "12px 15px",
+                            margin: "0 0 8px 0",
+                            background: "white",
+                            color: "#333",
+                            "border-radius": "3px",
+                            "user-select": "none",
+                            border: "1px solid #e0e0e0",
+                            transition: "all 0.15s ease",
+                            display: "flex",
+                            "align-items": "center",
+                            gap: "12px",
+                          }}
+                          onMouseEnter={(e) => {
+                            e.currentTarget.style.background = "#fafafa";
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.background = "white";
+                          }}
+                        >
+                          <div style={{ flex: 1, "min-width": 0 }}>
                             <div
                               style={{
-                                "margin-top": "4px",
-                                color: "#d13438",
-                                "font-size": "12px",
+                                "font-weight": "600",
+                                "margin-bottom": "4px",
+                                overflow: "hidden",
+                                "text-overflow": "ellipsis",
+                                "white-space": "nowrap",
                               }}
                             >
-                              {formErrors()[field.key]}
+                              {entry.service}
                             </div>
-                          </Show>
+                            <div
+                              style={{
+                                "font-size": "13px",
+                                opacity: 0.8,
+                                overflow: "hidden",
+                                "text-overflow": "ellipsis",
+                                "white-space": "nowrap",
+                              }}
+                            >
+                              {entry.username}
+                            </div>
+                          </div>
+                          <div
+                            style={{
+                              display: "flex",
+                              gap: "6px",
+                              "flex-shrink": 0,
+                            }}
+                          >
+                            <button
+                              onClick={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                handleSelectEntry(entry);
+                              }}
+                              title="编辑"
+                              style={{
+                                padding: "6px 10px",
+                                background: "#0078d4",
+                                color: "white",
+                                border: "none",
+                                "border-radius": "3px",
+                                cursor: "pointer",
+                                "font-size": "12px",
+                                "font-weight": "500",
+                                transition: "background 0.15s",
+                              }}
+                              onMouseEnter={(e) =>
+                                (e.currentTarget.style.background = "#106ebe")
+                              }
+                              onMouseLeave={(e) =>
+                                (e.currentTarget.style.background = "#0078d4")
+                              }
+                            >
+                              ✏️ 编辑
+                            </button>
+                            <button
+                              onClick={(e) => {
+                                console.log(
+                                  "删除按钮被点击, entry.id:",
+                                  entry.id,
+                                );
+                                e.preventDefault();
+                                e.stopPropagation();
+                                handleDeletePassword(entry.id);
+                              }}
+                              title="删除"
+                              style={{
+                                padding: "6px 10px",
+                                background: "#d13438",
+                                color: "white",
+                                border: "none",
+                                "border-radius": "3px",
+                                cursor: "pointer",
+                                "font-size": "12px",
+                                "font-weight": "500",
+                                transition: "background 0.15s",
+                              }}
+                              onMouseEnter={(e) =>
+                                (e.currentTarget.style.background = "#a52a2a")
+                              }
+                              onMouseLeave={(e) =>
+                                (e.currentTarget.style.background = "#d13438")
+                              }
+                            >
+                              🗑️ 删除
+                            </button>
+                          </div>
                         </div>
-                      </Show>
-                      <Show when={field.type === "button"}>
+                      )}
+                    </For>
+                  </Show>
+                </div>
+
+                {/* 底部统计 */}
+                <div
+                  style={{
+                    padding: "10px 15px",
+                    background: "#fafafa",
+                    "border-top": "1px solid #e0e0e0",
+                    "font-size": "12px",
+                    color: "#666",
+                  }}
+                >
+                  共 {passwordEntries().length} 个密码
+                  <Show when={searchQuery() !== ""}>
+                    <span> / 显示 {filteredEntries().length} 个结果</span>
+                  </Show>
+                </div>
+              </div>
+            </Show>
+
+            {/* 表单视图 */}
+            <Show when={viewMode() === "form"}>
+              <div
+                style={{
+                  flex: 1,
+                  background: "white",
+                  "border-radius": "6px",
+                  border: "1px solid #e0e0e0",
+                  overflow: "auto",
+                  "box-shadow": "0 1px 3px rgba(0,0,0,0.08)",
+                }}
+              >
+                <div style={{ padding: "20px" }}>
+                  {/* 标题栏 */}
+                  <div
+                    style={{
+                      display: "flex",
+                      "justify-content": "space-between",
+                      "align-items": "center",
+                      "margin-bottom": "20px",
+                      "padding-bottom": "10px",
+                      "border-bottom": "2px solid #0078d4",
+                    }}
+                  >
+                    <h2
+                      style={{
+                        margin: 0,
+                        color: "#1e1e1e",
+                        "font-size": "18px",
+                        "font-weight": "600",
+                      }}
+                    >
+                      {isEditMode() ? "编辑密码" : "新建密码"}
+                    </h2>
+                    <button
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        setViewMode("list");
+                        setSelectedEntry(null);
+                        setIsEditMode(false);
+                        setFormData({});
+                        setFormErrors({});
+                      }}
+                      style={{
+                        padding: "6px 12px",
+                        background: "#6c757d",
+                        color: "white",
+                        border: "none",
+                        "border-radius": "3px",
+                        cursor: "pointer",
+                        "font-size": "12px",
+                        "font-weight": "500",
+                      }}
+                    >
+                      ✕ 返回列表
+                    </button>
+                  </div>
+
+                  <Show when={selectedEntry()}>
+                    <div
+                      style={{
+                        margin: "0 0 20px 0",
+                        padding: "12px",
+                        background: "#fff8e1",
+                        "border-left": "4px solid #ffc107",
+                        "border-radius": "3px",
+                      }}
+                    >
+                      <div
+                        style={{
+                          display: "flex",
+                          "justify-content": "space-between",
+                          "align-items": "center",
+                        }}
+                      >
+                        <span style={{ color: "#856404", "font-size": "14px" }}>
+                          正在编辑密码
+                        </span>
                         <button
                           onClick={(e) => {
                             e.preventDefault();
                             e.stopPropagation();
-                            handleAction(field.key);
+                            handleDeletePassword(selectedEntry()!.id);
                           }}
-                          disabled={!isFormValid()}
                           style={{
-                            padding: "10px 20px",
-                            background: isFormValid() ? "#0078d4" : "#a0a0a0",
+                            padding: "6px 12px",
+                            background: "#d13438",
                             color: "white",
                             border: "none",
                             "border-radius": "3px",
+                            cursor: "pointer",
+                            "font-size": "12px",
                             "font-weight": "500",
-                            cursor: isFormValid() ? "pointer" : "not-allowed",
-                            "font-size": "14px",
-                            transition: "all 0.15s",
-                            opacity: isFormValid() ? 1 : 0.6,
-                            width: "100%",
                           }}
                         >
-                          {isEditMode() ? "💾 更新密码" : field.label}
+                          🗑️ 删除
                         </button>
-                      </Show>
+                      </div>
                     </div>
-                  )}
-                </For>
+                  </Show>
 
-                <Show when={selectedEntry()}>
-                  <div
-                    style={{
-                      "margin-top": "20px",
-                      padding: "12px",
-                      background: "#fafafa",
-                      "border-radius": "3px",
-                      border: "1px solid #e0e0e0",
-                    }}
-                  >
+                  <Show when={pluginView()}>
+                    <For each={pluginView()!.fields}>
+                      {(field) => (
+                        <div style={{ "margin-bottom": "20px" }}>
+                          <Show when={field.type === "input"}>
+                            <div>
+                              <label
+                                style={{
+                                  display: "block",
+                                  "margin-bottom": "6px",
+                                  "font-weight": "500",
+                                  color: "#1e1e1e",
+                                  "font-size": "13px",
+                                }}
+                              >
+                                {field.label}
+                              </label>
+                              <input
+                                type={field.inputType || "text"}
+                                placeholder={field.placeholder}
+                                value={formData()[field.key] || ""}
+                                style={{
+                                  width: "100%",
+                                  padding: "8px 10px",
+                                  border: formErrors()[field.key]
+                                    ? "2px solid #d13438"
+                                    : "1px solid #d0d0d0",
+                                  "border-radius": "3px",
+                                  "font-size": "13px",
+                                  "font-family": "inherit",
+                                  transition: "border-color 0.15s",
+                                }}
+                                onInput={(e) =>
+                                  handleFieldChange(
+                                    field.key,
+                                    e.currentTarget.value,
+                                    field,
+                                  )
+                                }
+                              />
+                              <Show when={formErrors()[field.key]}>
+                                <div
+                                  style={{
+                                    "margin-top": "4px",
+                                    color: "#d13438",
+                                    "font-size": "12px",
+                                  }}
+                                >
+                                  {formErrors()[field.key]}
+                                </div>
+                              </Show>
+                            </div>
+                          </Show>
+                          <Show when={field.type === "button"}>
+                            <button
+                              onClick={(e) => {
+                                console.log(
+                                  "按钮被点击, field.key:",
+                                  field.key,
+                                );
+                                e.preventDefault();
+                                e.stopPropagation();
+                                handleAction(field.key);
+                              }}
+                              disabled={!isFormValid()}
+                              style={{
+                                padding: "10px 20px",
+                                background: isFormValid()
+                                  ? "#0078d4"
+                                  : "#a0a0a0",
+                                color: "white",
+                                border: "none",
+                                "border-radius": "3px",
+                                "font-weight": "500",
+                                cursor: isFormValid()
+                                  ? "pointer"
+                                  : "not-allowed",
+                                "font-size": "14px",
+                                transition: "all 0.15s",
+                                opacity: isFormValid() ? 1 : 0.6,
+                                width: "100%",
+                              }}
+                            >
+                              {isEditMode() ? "💾 更新密码" : field.label}
+                            </button>
+                          </Show>
+                        </div>
+                      )}
+                    </For>
+                  </Show>
+
+                  <Show when={selectedEntry()}>
                     <div
                       style={{
-                        "font-size": "11px",
-                        color: "#666",
-                        "margin-bottom": "4px",
-                        "text-transform": "uppercase",
-                        "letter-spacing": "0.5px",
+                        "margin-top": "20px",
+                        padding: "12px",
+                        background: "#fafafa",
+                        "border-radius": "3px",
+                        border: "1px solid #e0e0e0",
                       }}
                     >
-                      创建时间
+                      <div
+                        style={{
+                          "font-size": "11px",
+                          color: "#666",
+                          "margin-bottom": "4px",
+                          "text-transform": "uppercase",
+                          "letter-spacing": "0.5px",
+                        }}
+                      >
+                        创建时间
+                      </div>
+                      <div style={{ "font-size": "13px", color: "#333" }}>
+                        {new Date(selectedEntry()!.created_at).toLocaleString()}
+                      </div>
                     </div>
-                    <div style={{ "font-size": "13px", color: "#333" }}>
-                      {new Date(selectedEntry()!.created_at).toLocaleString()}
-                    </div>
-                  </div>
-                </Show>
+                  </Show>
+                </div>
               </div>
-            </div>
+            </Show>
           </div>
         </Show>
 
@@ -1558,6 +1875,246 @@ function App() {
               >
                 重新运行
               </button>
+            </div>
+          </div>
+        </div>
+      </Show>
+
+      {/* 主密码验证对话框 */}
+      <Show when={showMasterPasswordDialog()}>
+        <div
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: "rgba(0,0,0,0.5)",
+            display: "flex",
+            "align-items": "center",
+            "justify-content": "center",
+            "z-index": 1000,
+          }}
+        >
+          <div
+            style={{
+              background: "white",
+              "border-radius": "8px",
+              width: "400px",
+              "box-shadow": "0 4px 20px rgba(0,0,0,0.3)",
+            }}
+          >
+            <div
+              style={{
+                padding: "20px",
+                "border-bottom": "1px solid #dee2e6",
+                display: "flex",
+                "justify-content": "space-between",
+                "align-items": "center",
+              }}
+            >
+              <h2
+                style={{
+                  margin: 0,
+                  "font-size": "18px",
+                  "font-weight": "600",
+                  color: "#333",
+                }}
+              >
+                {isFirstTimeSetup() ? "设置主密码" : "输入主密码"}
+              </h2>
+            </div>
+
+            <div style={{ padding: "20px" }}>
+              <p
+                style={{
+                  margin: "0 0 15px 0",
+                  "font-size": "14px",
+                  color: "#666",
+                  "line-height": "1.5",
+                }}
+              >
+                {isFirstTimeSetup()
+                  ? "首次使用需要设置主密码,主密码将用于加密所有密码数据。"
+                  : "请输入主密码以访问密码管理器。"}
+              </p>
+
+              <div style={{ "margin-bottom": "15px" }}>
+                <input
+                  type="password"
+                  placeholder="请输入主密码 (至少 6 个字符)"
+                  value={masterPassword()}
+                  onInput={(e) => {
+                    setMasterPassword(e.currentTarget.value);
+                    setMasterPasswordError("");
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      verifyMasterPassword();
+                    }
+                  }}
+                  style={{
+                    width: "100%",
+                    padding: "10px 12px",
+                    border: masterPasswordError()
+                      ? "1px solid #d13438"
+                      : "1px solid #ccc",
+                    "border-radius": "3px",
+                    "font-size": "14px",
+                    "box-sizing": "border-box",
+                    outline: "none",
+                  }}
+                  autofocus={true}
+                />
+                <Show when={masterPasswordError()}>
+                  <div
+                    style={{
+                      color: "#d13438",
+                      "font-size": "12px",
+                      "margin-top": "5px",
+                    }}
+                  >
+                    {masterPasswordError()}
+                  </div>
+                </Show>
+              </div>
+
+              <div
+                style={{
+                  display: "flex",
+                  gap: "10px",
+                  "justify-content": "flex-end",
+                }}
+              >
+                <button
+                  onClick={() => {
+                    setShowMasterPasswordDialog(false);
+                    setMasterPassword("");
+                    setMasterPasswordError("");
+                    setSelectedPlugin(null);
+                  }}
+                  style={{
+                    padding: "8px 20px",
+                    background: "white",
+                    color: "#666",
+                    border: "1px solid #ccc",
+                    "border-radius": "3px",
+                    cursor: "pointer",
+                    "font-size": "13px",
+                  }}
+                >
+                  取消
+                </button>
+                <button
+                  onClick={verifyMasterPassword}
+                  style={{
+                    padding: "8px 20px",
+                    background: "#0078d4",
+                    color: "white",
+                    border: "none",
+                    "border-radius": "3px",
+                    cursor: "pointer",
+                    "font-size": "13px",
+                  }}
+                >
+                  {isFirstTimeSetup() ? "设置主密码" : "验证"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </Show>
+
+      {/* 删除确认对话框 */}
+      <Show when={showDeleteConfirm()}>
+        <div
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: "rgba(0,0,0,0.5)",
+            display: "flex",
+            "align-items": "center",
+            "justify-content": "center",
+            "z-index": 1000,
+          }}
+        >
+          <div
+            style={{
+              background: "white",
+              "border-radius": "8px",
+              width: "400px",
+              "box-shadow": "0 4px 20px rgba(0,0,0,0.3)",
+            }}
+          >
+            <div
+              style={{
+                padding: "20px",
+                "border-bottom": "1px solid #dee2e6",
+              }}
+            >
+              <h2
+                style={{
+                  margin: 0,
+                  "font-size": "18px",
+                  "font-weight": "600",
+                  color: "#333",
+                }}
+              >
+                确认删除
+              </h2>
+            </div>
+
+            <div style={{ padding: "20px" }}>
+              <p
+                style={{
+                  margin: "0 0 20px 0",
+                  "font-size": "14px",
+                  color: "#666",
+                  "line-height": "1.5",
+                }}
+              >
+                确定要删除这条密码记录吗?此操作不可恢复!
+              </p>
+
+              <div
+                style={{
+                  display: "flex",
+                  gap: "10px",
+                  "justify-content": "flex-end",
+                }}
+              >
+                <button
+                  onClick={cancelDeletePassword}
+                  style={{
+                    padding: "8px 20px",
+                    background: "white",
+                    color: "#666",
+                    border: "1px solid #ccc",
+                    "border-radius": "3px",
+                    cursor: "pointer",
+                    "font-size": "13px",
+                  }}
+                >
+                  取消
+                </button>
+                <button
+                  onClick={confirmDeletePassword}
+                  style={{
+                    padding: "8px 20px",
+                    background: "#d13438",
+                    color: "white",
+                    border: "none",
+                    "border-radius": "3px",
+                    cursor: "pointer",
+                    "font-size": "13px",
+                  }}
+                >
+                  确认删除
+                </button>
+              </div>
             </div>
           </div>
         </div>

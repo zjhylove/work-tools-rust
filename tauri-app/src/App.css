@@ -68,6 +68,13 @@ body {
   line-height: 1.5;
 }
 
+/* 侧边栏容器 */
+.sidebar-container {
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  border-right: 1px solid var(--border-color);
+}
+
 #root {
   width: 100%;
   height: 100vh;
