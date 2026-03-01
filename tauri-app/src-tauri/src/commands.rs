@@ -67,7 +67,8 @@ pub struct AuthEntry {
     pub digits: u32,
     pub period: u64,
     pub created_at: String,
-    pub updated_at: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub updated_at: Option<String>,
 }
 
 /// 获取所有可用插件
@@ -502,4 +503,130 @@ pub async fn import_passwords(json_data: String) -> Result<(), String> {
         .map_err(|e| e.to_string())?;
 
     Ok(())
+}
+
+/// ============= Auth Plugin 命令 (通过插件 Manager 调用) =============
+
+/// 获取所有双因素认证条目
+#[tauri::command]
+pub async fn list_auth_entries(
+    manager: State<'_, PluginManagerState>,
+) -> Result<Vec<AuthEntry>, String> {
+    let manager = manager.inner();
+    let result = manager
+        .call_plugin_method("auth", "list_entries", serde_json::json!({}))
+        .await
+        .map_err(|e| format!("调用插件失败: {}", e))?;
+
+    let entries = result
+        .get("entries")
+        .and_then(|v: &serde_json::Value| serde_json::from_value::<Vec<AuthEntry>>(v.clone()).ok())
+        .ok_or_else(|| format!("解析插件响应失败"))?;
+
+    Ok(entries)
+}
+
+/// 添加双因素认证条目
+#[tauri::command]
+pub async fn add_auth_entry(
+    entry: AuthEntry,
+    manager: State<'_, PluginManagerState>,
+) -> Result<AuthEntry, String> {
+    let manager = manager.inner();
+    let result = manager
+        .call_plugin_method("auth", "add_entry", serde_json::to_value(entry).unwrap())
+        .await
+        .map_err(|e| format!("调用插件失败: {}", e))?;
+
+    let added_entry = serde_json::from_value(result)
+        .map_err(|e| format!("解析插件响应失败: {}", e))?;
+
+    Ok(added_entry)
+}
+
+/// 更新双因素认证条目
+#[tauri::command]
+pub async fn update_auth_entry(
+    entry: AuthEntry,
+    manager: State<'_, PluginManagerState>,
+) -> Result<AuthEntry, String> {
+    let manager = manager.inner();
+    let result = manager
+        .call_plugin_method("auth", "update_entry", serde_json::to_value(entry).unwrap())
+        .await
+        .map_err(|e| format!("调用插件失败: {}", e))?;
+
+    let updated_entry = serde_json::from_value(result)
+        .map_err(|e| format!("解析插件响应失败: {}", e))?;
+
+    Ok(updated_entry)
+}
+
+/// 删除双因素认证条目
+#[tauri::command]
+pub async fn delete_auth_entry_plugin(
+    id: String,
+    manager: State<'_, PluginManagerState>,
+) -> Result<(), String> {
+    let manager = manager.inner();
+    manager
+        .call_plugin_method("auth", "delete_entry", serde_json::json!({ "id": id }))
+        .await
+        .map_err(|e| format!("调用插件失败: {}", e))?;
+
+    Ok(())
+}
+
+/// 通过插件生成 TOTP 验证码
+#[tauri::command]
+pub async fn generate_totp_code(
+    secret: String,
+    digits: u32,
+    period: u64,
+    manager: State<'_, PluginManagerState>,
+) -> Result<String, String> {
+    let manager = manager.inner();
+    let result = manager
+        .call_plugin_method(
+            "auth",
+            "generate_totp",
+            serde_json::json!({
+                "secret": secret,
+                "digits": digits,
+                "period": period
+            }),
+        )
+        .await
+        .map_err(|e| format!("调用插件失败: {}", e))?;
+
+    let code = result
+        .get("code")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| format!("解析验证码失败"))?;
+
+    Ok(code.to_string())
+}
+
+/// 通过插件生成 QR 码
+#[tauri::command]
+pub async fn generate_qr_code_url(
+    entry: AuthEntry,
+    manager: State<'_, PluginManagerState>,
+) -> Result<String, String> {
+    let manager = manager.inner();
+    let result = manager
+        .call_plugin_method(
+            "auth",
+            "generate_qr_code",
+            serde_json::to_value(entry).unwrap(),
+        )
+        .await
+        .map_err(|e| format!("调用插件失败: {}", e))?;
+
+    let qr_url = result
+        .get("qr_url")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| format!("解析 QR 码失败"))?;
+
+    Ok(qr_url.to_string())
 }

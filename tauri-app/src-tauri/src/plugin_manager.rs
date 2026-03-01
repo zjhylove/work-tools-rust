@@ -189,6 +189,68 @@ impl PluginManager {
             .get(plugin_id)
             .map(|p| p.info.clone())
     }
+
+    /// 调用插件方法
+    pub async fn call_plugin_method(&self, plugin_id: &str, method: &str, params: Value) -> Result<Value> {
+        // 查找插件可执行文件
+        let plugin_path = self.plugin_dir.join(plugin_id).join(plugin_id);
+
+        if !plugin_path.exists() {
+            anyhow::bail!("插件不存在: {}", plugin_id);
+        }
+
+        // 启动插件进程
+        let mut child = Command::new(&plugin_path)
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .context("启动插件进程失败")?;
+
+        // 构建请求
+        let request = serde_json::json!({
+            "jsonrpc": "2.0",
+            "method": method,
+            "params": params,
+            "id": 1
+        });
+
+        // 发送请求
+        if let Some(mut stdin) = child.stdin.take() {
+            stdin.write_all(request.to_string().as_bytes()).await?;
+            stdin.write_all(b"\n").await?;
+            stdin.flush().await?;
+        }
+
+        // 读取响应
+        if let Some(stdout) = child.stdout.take() {
+            let reader = BufReader::new(stdout);
+            let mut lines = reader.lines();
+
+            if let Some(line_result) = lines.next_line().await? {
+                let response: Value = serde_json::from_str(&line_result)?;
+
+                // 关闭插件进程
+                child.kill().await.ok();
+
+                // 检查响应
+                if let Some(error) = response.get("error") {
+                    if !error.is_null() {
+                        anyhow::bail!("插件返回错误: {}", error);
+                    }
+                }
+
+                if let Some(result) = response.get("result") {
+                    return Ok(result.clone());
+                }
+
+                anyhow::bail!("插件响应格式错误");
+            }
+        }
+
+        child.kill().await.ok();
+        anyhow::bail!("读取插件响应失败")
+    }
 }
 
 impl Default for PluginManager {
