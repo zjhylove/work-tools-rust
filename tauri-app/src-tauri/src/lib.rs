@@ -62,6 +62,8 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_shell::init())
+        .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_fs::init())
         .setup(|app| {
             // 初始化插件管理器
             let manager = plugin_manager.clone();
@@ -92,6 +94,8 @@ pub fn run() {
             commands::save_password_entry,
             commands::delete_password_entry,
             commands::clear_all_password_entries,
+            commands::export_passwords,
+            commands::import_passwords,
             commands::get_auth_entries,
             commands::save_auth_entry,
             commands::delete_auth_entry,

@@ -1,6 +1,8 @@
 import { For, Show, createSignal, onMount, createMemo } from "solid-js";
 import { invoke } from "@tauri-apps/api/core";
 import { openUrl as openUrlTauri } from "@tauri-apps/plugin-opener";
+import { save, open } from "@tauri-apps/plugin-dialog";
+import { writeTextFile, readTextFile } from "@tauri-apps/plugin-fs";
 import "./App.css";
 
 // 安全的 invoke 包装函数 - Tauri 2.x 的 invoke 函数会自动处理环境检测
@@ -610,6 +612,78 @@ function App() {
     }
   };
 
+  // 导出密码
+  const handleExportPasswords = async () => {
+    if (!isAuthenticated()) {
+      await showMasterPasswordPrompt();
+      return;
+    }
+
+    try {
+      const jsonData = await safeInvoke<string>("export_passwords");
+
+      // 使用 Tauri 的 dialog API 保存文件
+      const filePath = await save({
+        filters: [
+          {
+            name: "JSON",
+            extensions: ["json"],
+          },
+        ],
+        defaultPath: "passwords.json",
+      });
+
+      if (filePath) {
+        // 写入文件
+        await writeTextFile(filePath, jsonData);
+        showToastMessage("✓ 导出成功!");
+      }
+    } catch (error) {
+      console.error("导出失败:", error);
+      showToastMessage("✗ 导出失败");
+    }
+  };
+
+  // 导入密码
+  const handleImportPasswords = async () => {
+    if (!isAuthenticated()) {
+      await showMasterPasswordPrompt();
+      return;
+    }
+
+    try {
+      // 使用 Tauri 的 dialog API 选择文件
+      const filePath = await open({
+        filters: [
+          {
+            name: "JSON",
+            extensions: ["json"],
+          },
+        ],
+        multiple: false,
+      });
+
+      if (filePath) {
+        // 读取文件
+        const jsonData = await readTextFile(filePath);
+
+        // 导入数据
+        await safeInvoke("import_passwords", { jsonData });
+
+        // 刷新密码列表
+        const entries = await safeInvoke<PasswordEntry[]>(
+          "get_password_entries",
+        );
+        setPasswordEntries(entries);
+
+        showToastMessage("✓ 导入成功!");
+      }
+    } catch (error) {
+      console.error("导入失败:", error);
+      showToastMessage("✗ 导入失败");
+    }
+  };
+
   const handleSaveSettings = async () => {
     try {
       await safeInvoke("set_app_config", {
@@ -1007,6 +1081,11 @@ function App() {
                       ➕ 新建
                     </button>
                     <button
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        handleImportPasswords();
+                      }}
                       style={{
                         padding: "8px 16px",
                         background: "#6c757d",
@@ -1021,6 +1100,11 @@ function App() {
                       📥 导入
                     </button>
                     <button
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        handleExportPasswords();
+                      }}
                       style={{
                         padding: "8px 16px",
                         background: "#6c757d",

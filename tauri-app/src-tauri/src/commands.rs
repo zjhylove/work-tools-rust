@@ -177,7 +177,7 @@ pub async fn get_password_entries(
                     updated_at: entry.updated_at,
                 });
             }
-            Err(e) => {
+            Err(_e) => {
                 // 旧格式的数据解密失败,跳过该条目
                 continue;
             }
@@ -446,4 +446,63 @@ pub async fn decrypt_password(
 
     encryptor.decrypt_password(&encrypted_password)
         .map_err(|e| format!("解密失败: {}", e))
+}
+
+/// 导出密码数据为 JSON 字符串
+#[tauri::command]
+pub async fn export_passwords() -> Result<String, String> {
+    let config = load_plugin_config("password-manager")
+        .map_err(|e| e.to_string())?;
+
+    // 返回完整的配置 JSON (包括 master_password, salt 和 entries)
+    let json_string = serde_json::to_string_pretty(&config)
+        .map_err(|e| format!("序列化失败: {}", e))?;
+
+    Ok(json_string)
+}
+
+/// 从 JSON 字符串导入密码数据
+#[tauri::command]
+pub async fn import_passwords(json_data: String) -> Result<(), String> {
+    // 解析 JSON 数据
+    let imported_config: serde_json::Value = serde_json::from_str(&json_data)
+        .map_err(|e| format!("解析 JSON 失败: {}", e))?;
+
+    // 获取当前的加密配置
+    let mut current_config = load_plugin_config("password-manager")
+        .map_err(|e| e.to_string())?;
+
+    // 合并 entries
+    let current_entries: Vec<PasswordEntry> = current_config
+        .get("entries")
+        .and_then(|v| serde_json::from_value(v.clone()).ok())
+        .unwrap_or_default();
+
+    let imported_entries: Vec<PasswordEntry> = imported_config
+        .get("entries")
+        .and_then(|v| serde_json::from_value(v.clone()).ok())
+        .unwrap_or_default();
+
+    // 合并条目,避免 ID 重复
+    let mut merged_entries: Vec<PasswordEntry> = current_entries.clone();
+    let existing_ids: std::collections::HashSet<String> = current_entries
+        .iter()
+        .map(|e| e.id.clone())
+        .collect();
+
+    for entry in imported_entries {
+        if !existing_ids.contains(&entry.id) {
+            merged_entries.push(entry);
+        }
+    }
+
+    // 更新配置
+    current_config["entries"] = serde_json::to_value(&merged_entries)
+        .map_err(|e| e.to_string())?;
+
+    // 保存配置
+    save_plugin_config("password-manager", &current_config)
+        .map_err(|e| e.to_string())?;
+
+    Ok(())
 }
