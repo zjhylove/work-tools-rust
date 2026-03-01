@@ -359,6 +359,13 @@ export default function AuthPlugin() {
                     </button>
                     <button
                       class="btn-icon"
+                      onClick={() => generateTotp(entry)}
+                      title="刷新验证码"
+                    >
+                      🔄
+                    </button>
+                    <button
+                      class="btn-icon"
                       onClick={() => editEntry(entry)}
                       title="编辑"
                     >
