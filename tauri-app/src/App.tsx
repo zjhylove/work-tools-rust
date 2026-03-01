@@ -46,7 +46,11 @@ function App() {
   const [passwordEntries, setPasswordEntries] = createSignal<PasswordEntry[]>(
     [],
   );
-  const [showPasswordList, setShowPasswordList] = createSignal(false);
+  const [selectedEntry, setSelectedEntry] = createSignal<PasswordEntry | null>(
+    null,
+  );
+  const [searchQuery, setSearchQuery] = createSignal("");
+  const [isEditMode, setIsEditMode] = createSignal(false);
 
   // 加载插件列表
   onMount(async () => {
@@ -82,6 +86,10 @@ function App() {
       try {
         const entries = await invoke<PasswordEntry[]>("get_password_entries");
         setPasswordEntries(entries);
+        setSelectedEntry(null);
+        setIsEditMode(false);
+        setFormData({});
+        setFormErrors({});
       } catch (error) {
         console.error("加载密码列表失败:", error);
         setPasswordEntries([]);
@@ -128,18 +136,10 @@ function App() {
           label: "💾 保存密码",
           key: "save",
         },
-        {
-          type: "button",
-          label: "📋 查看已保存密码",
-          key: "view_list",
-        },
       ],
     };
 
     setPluginView(schema);
-    // 重置表单状态
-    setFormData({});
-    setFormErrors({});
   };
 
   const closePlugin = () => {
@@ -147,6 +147,8 @@ function App() {
     setPluginView(null);
     setFormData({});
     setFormErrors({});
+    setSelectedEntry(null);
+    setIsEditMode(false);
   };
 
   // 验证单个字段
@@ -230,47 +232,70 @@ function App() {
   const handleAction = async (action: string) => {
     console.log("执行操作:", action);
 
-    if (action === "view_list") {
-      // 切换到密码列表视图
-      setShowPasswordList(true);
-      return;
+    if (action === "save") {
+      // 提交前进行完整验证
+      if (!validateForm()) {
+        alert("请修正表单中的错误后再提交");
+        return;
+      }
+
+      // 所有验证通过，保存数据
+      const data = formData();
+      const entry: PasswordEntry = {
+        id:
+          isEditMode() && selectedEntry()
+            ? selectedEntry()!.id
+            : Date.now().toString(),
+        url: data.url || null,
+        service: data.service || "",
+        username: data.username || "",
+        password: data.password || "",
+        created_at:
+          isEditMode() && selectedEntry()
+            ? selectedEntry()!.created_at
+            : new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      };
+
+      try {
+        await invoke("save_password_entry", { entry });
+        console.log("密码保存成功:", entry);
+
+        // 重新加载列表
+        const entries = await invoke<PasswordEntry[]>("get_password_entries");
+        setPasswordEntries(entries);
+
+        alert(isEditMode() ? "密码更新成功!" : "密码保存成功!");
+
+        // 重置表单
+        setFormData({});
+        setFormErrors({});
+        setSelectedEntry(null);
+        setIsEditMode(false);
+      } catch (error) {
+        console.error("保存密码失败:", error);
+        alert("保存密码失败: " + error);
+      }
     }
+  };
 
-    // 提交前进行完整验证
-    if (!validateForm()) {
-      alert("请修正表单中的错误后再提交");
-      return;
-    }
+  const handleSelectEntry = (entry: PasswordEntry) => {
+    setSelectedEntry(entry);
+    setIsEditMode(true);
+    setFormData({
+      url: entry.url || "",
+      service: entry.service,
+      username: entry.username,
+      password: entry.password,
+    });
+    setFormErrors({});
+  };
 
-    // 所有验证通过，保存数据
-    const data = formData();
-    const entry: PasswordEntry = {
-      id: Date.now().toString(),
-      url: data.url || null,
-      service: data.service || "",
-      username: data.username || "",
-      password: data.password || "",
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    };
-
-    try {
-      await invoke("save_password_entry", { entry });
-      console.log("密码保存成功:", entry);
-
-      // 重新加载列表
-      const entries = await invoke<PasswordEntry[]>("get_password_entries");
-      setPasswordEntries(entries);
-
-      alert("密码保存成功!");
-
-      // 清空表单
-      setFormData({});
-      setFormErrors({});
-    } catch (error) {
-      console.error("保存密码失败:", error);
-      alert("保存密码失败: " + error);
-    }
+  const handleAddNew = () => {
+    setSelectedEntry(null);
+    setIsEditMode(false);
+    setFormData({});
+    setFormErrors({});
   };
 
   const handleDeletePassword = async (id: string) => {
@@ -286,6 +311,14 @@ function App() {
       const entries = await invoke<PasswordEntry[]>("get_password_entries");
       setPasswordEntries(entries);
 
+      // 如果删除的是当前选中的项,清空表单
+      if (selectedEntry()?.id === id) {
+        setSelectedEntry(null);
+        setIsEditMode(false);
+        setFormData({});
+        setFormErrors({});
+      }
+
       alert("删除成功!");
     } catch (error) {
       console.error("删除密码失败:", error);
@@ -293,8 +326,16 @@ function App() {
     }
   };
 
-  const handleBackToForm = () => {
-    setShowPasswordList(false);
+  // 过滤密码条目
+  const filteredEntries = () => {
+    const query = searchQuery().toLowerCase();
+    if (!query) return passwordEntries();
+    return passwordEntries().filter(
+      (entry) =>
+        entry.service.toLowerCase().includes(query) ||
+        entry.username.toLowerCase().includes(query) ||
+        (entry.url && entry.url.toLowerCase().includes(query)),
+    );
   };
 
   return (
@@ -406,73 +447,217 @@ function App() {
         {/* 插件详情视图 */}
         <Show when={selectedPlugin() && pluginView()}>
           <div style="margin-top: 20px;">
-            <Show
-              when={
-                selectedPlugin() === "password-manager" && showPasswordList()
-              }
-            >
-              {/* 密码列表视图 */}
-              <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px;">
-                <button
-                  onClick={handleBackToForm}
-                  style="padding: 10px 20px; background: #6c757d; color: white; border: none; border-radius: 6px; cursor: pointer;"
-                >
-                  ← 返回表单
-                </button>
-                <h2 style="color: #555; font-size: 20px; margin: 0;">
-                  已保存的密码 ({passwordEntries().length})
-                </h2>
-                <div style="width: 100px;"></div>
-              </div>
+            {/* 密码管理器专用布局 */}
+            <Show when={selectedPlugin() === "password-manager"}>
+              <div style="display: flex; gap: 20px; height: 600px;">
+                {/* 左侧:密码列表 */}
+                <div style="flex: 1; display: flex; flex-direction: column; background: #f8f9fa; border-radius: 12px; overflow: hidden;">
+                  {/* 工具栏 */}
+                  <div style="padding: 15px; background: white; border-bottom: 1px solid #e0e0e0;">
+                    <div style="display: flex; gap: 10px; margin-bottom: 10px;">
+                      <button
+                        onClick={handleAddNew}
+                        style="padding: 8px 16px; background: #28a745; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 14px;"
+                      >
+                        ➕ 新建
+                      </button>
+                      <button style="padding: 8px 16px; background: #17a2b8; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 14px;">
+                        📥 导入
+                      </button>
+                      <button style="padding: 8px 16px; background: #6c757d; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 14px;">
+                        📤 导出
+                      </button>
+                    </div>
+                    {/* 搜索框 */}
+                    <input
+                      type="text"
+                      placeholder="🔍 搜索密码..."
+                      value={searchQuery()}
+                      onInput={(e) => setSearchQuery(e.currentTarget.value)}
+                      style="width: 100%; padding: 10px; border: 1px solid #e0e0e0; border-radius: 6px; font-size: 14px;"
+                    />
+                  </div>
 
-              <Show when={passwordEntries().length === 0}>
-                <div style="text-align: center; padding: 60px 0; color: #999;">
-                  <div style="font-size: 48px; margin-bottom: 20px;">📭</div>
-                  <div>还没有保存的密码</div>
-                </div>
-              </Show>
-
-              <Show when={passwordEntries().length > 0}>
-                <div style="background: #f8f9fa; padding: 20px; border-radius: 12px;">
-                  <For each={passwordEntries()}>
-                    {(entry) => (
-                      <div style="background: white; padding: 20px; margin-bottom: 15px; border-radius: 8px; border: 1px solid #e0e0e0;">
-                        <div style="display: flex; justify-content: space-between; align-items: start;">
-                          <div style="flex: 1;">
-                            <h3 style="margin: 0 0 10px 0; color: #333; font-size: 18px;">
+                  {/* 密码列表 */}
+                  <div style="flex: 1; overflow-y: auto; padding: 10px;">
+                    <Show when={filteredEntries().length === 0}>
+                      <div style="text-align: center; padding: 60px 20px; color: #999;">
+                        <div style="font-size: 48px; margin-bottom: 10px;">
+                          📭
+                        </div>
+                        <div>
+                          {searchQuery()
+                            ? "没有找到匹配的密码"
+                            : "还没有保存的密码"}
+                        </div>
+                      </div>
+                    </Show>
+                    <Show when={filteredEntries().length > 0}>
+                      <For each={filteredEntries()}>
+                        {(entry) => (
+                          <div
+                            onClick={() => handleSelectEntry(entry)}
+                            style={{
+                              padding: "12px 15px",
+                              margin: "0 0 8px 0",
+                              background:
+                                selectedEntry()?.id === entry.id
+                                  ? "#667eea"
+                                  : "white",
+                              color:
+                                selectedEntry()?.id === entry.id
+                                  ? "white"
+                                  : "#333",
+                              "border-radius": "8px",
+                              cursor: "pointer",
+                              border:
+                                selectedEntry()?.id === entry.id
+                                  ? "2px solid #667eea"
+                                  : "1px solid #e0e0e0",
+                              transition: "all 0.2s",
+                            }}
+                            onMouseEnter={(e) => {
+                              if (selectedEntry()?.id !== entry.id) {
+                                e.currentTarget.style.background = "#f0f0f0";
+                              }
+                            }}
+                            onMouseLeave={(e) => {
+                              if (selectedEntry()?.id !== entry.id) {
+                                e.currentTarget.style.background = "white";
+                              }
+                            }}
+                          >
+                            <div style="font-weight: 600; margin-bottom: 4px;">
                               {entry.service}
-                            </h3>
-                            <Show when={entry.url}>
-                              <div style="margin-bottom: 8px; color: #666;">
-                                <strong>网址:</strong> {entry.url}
-                              </div>
-                            </Show>
-                            <div style="margin-bottom: 8px; color: #666;">
-                              <strong>用户名:</strong> {entry.username}
                             </div>
-                            <div style="margin-bottom: 8px; color: #666;">
-                              <strong>密码:</strong> {"*".repeat(8)}
-                            </div>
-                            <div style="font-size: 12px; color: #999;">
-                              创建时间:{" "}
-                              {new Date(entry.created_at).toLocaleString()}
+                            <div style="font-size: 13px; opacity: 0.8;">
+                              {entry.username}
                             </div>
                           </div>
+                        )}
+                      </For>
+                    </Show>
+                  </div>
+
+                  {/* 底部统计 */}
+                  <div style="padding: 10px 15px; background: white; border-top: 1px solid #e0e0e0; font-size: 13px; color: #666;">
+                    共 {passwordEntries().length} 个密码
+                    <Show when={searchQuery() !== ""}>
+                      <span> / 显示 {filteredEntries().length} 个结果</span>
+                    </Show>
+                  </div>
+                </div>
+
+                {/* 右侧:表单详情 */}
+                <div style="flex: 1; background: white; border-radius: 12px; border: 1px solid #e0e0e0; overflow-y: auto;">
+                  <div style="padding: 20px;">
+                    <h2 style="margin: 0 0 20px 0; color: #333; font-size: 20px;">
+                      {isEditMode() ? "编辑密码" : "新建密码"}
+                    </h2>
+
+                    <Show when={selectedEntry()}>
+                      <div style="margin-bottom: 20px; padding: 15px; background: #fff3cd; border-left: 4px solid #ffc107; border-radius: 4px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                          <span style="color: #856404; font-size: 14px;">
+                            正在编辑密码
+                          </span>
                           <button
-                            onClick={() => handleDeletePassword(entry.id)}
-                            style="padding: 8px 16px; background: #dc3545; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 14px;"
+                            onClick={() =>
+                              handleDeletePassword(selectedEntry()!.id)
+                            }
+                            style="padding: 6px 12px; background: #dc3545; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px;"
                           >
-                            删除
+                            🗑️ 删除
                           </button>
                         </div>
                       </div>
-                    )}
-                  </For>
+                    </Show>
+
+                    <For each={pluginView()!.fields}>
+                      {(field) => (
+                        <div style="margin-bottom: 20px;">
+                          <Show when={field.type === "input"}>
+                            <div>
+                              <label style="display: block; margin-bottom: 8px; font-weight: 600; color: #333;">
+                                {field.label}
+                              </label>
+                              <input
+                                type={field.inputType || "text"}
+                                placeholder={field.placeholder}
+                                value={formData()[field.key] || ""}
+                                style={{
+                                  width: "100%",
+                                  padding: "10px 12px",
+                                  border: formErrors()[field.key]
+                                    ? "2px solid #dc3545"
+                                    : "1px solid #e0e0e0",
+                                  "border-radius": "6px",
+                                  "font-size": "14px",
+                                  transition: "border-color 0.2s",
+                                }}
+                                onInput={(e) =>
+                                  handleFieldChange(
+                                    field.key,
+                                    e.currentTarget.value,
+                                    field,
+                                  )
+                                }
+                              />
+                              <Show when={formErrors()[field.key]}>
+                                <div style="margin-top: 5px; color: #dc3545; font-size: 13px;">
+                                  {formErrors()[field.key]}
+                                </div>
+                              </Show>
+                            </div>
+                          </Show>
+                          <Show when={field.type === "button"}>
+                            <button
+                              onClick={() => handleAction(field.key)}
+                              disabled={!isFormValid()}
+                              style={{
+                                padding: "12px 24px",
+                                background: isFormValid()
+                                  ? "linear-gradient(135deg, #667eea 0%, #764ba2 100%)"
+                                  : "#cccccc",
+                                color: "white",
+                                border: "none",
+                                "border-radius": "6px",
+                                "font-weight": "600",
+                                cursor: isFormValid()
+                                  ? "pointer"
+                                  : "not-allowed",
+                                "font-size": "15px",
+                                transition: "all 0.2s",
+                                opacity: isFormValid() ? 1 : 0.6,
+                                width: "100%",
+                              }}
+                            >
+                              {isEditMode() ? "💾 更新密码" : field.label}
+                            </button>
+                          </Show>
+                        </div>
+                      )}
+                    </For>
+
+                    <Show when={selectedEntry()}>
+                      <div style="margin-top: 20px; padding: 15px; background: #f8f9fa; border-radius: 8px;">
+                        <div style="font-size: 12px; color: #666; margin-bottom: 5px;">
+                          创建时间
+                        </div>
+                        <div style="font-size: 14px; color: #333;">
+                          {new Date(
+                            selectedEntry()!.created_at,
+                          ).toLocaleString()}
+                        </div>
+                      </div>
+                    </Show>
+                  </div>
                 </div>
-              </Show>
+              </div>
             </Show>
 
-            <Show when={!showPasswordList()}>
+            {/* 其他插件使用默认布局 */}
+            <Show when={selectedPlugin() !== "password-manager"}>
               <h2 style="color: #555; font-size: 20px; margin-bottom: 20px;">
                 插件配置
               </h2>
