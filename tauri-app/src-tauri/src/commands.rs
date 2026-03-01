@@ -52,97 +52,21 @@ pub struct AuthEntry {
     pub updated_at: Option<String>,
 }
 
-/// 获取所有可用插件
-#[tauri::command]
-pub async fn get_available_plugins(
-    manager: State<'_, PluginManagerState>,
-) -> Result<Vec<worktools_shared_types::PluginInfo>, String> {
-    manager
-        .get_available_plugins()
-        .await
-        .into_iter()
-        .map(|info| {
-            Ok(worktools_shared_types::PluginInfo {
-                id: info.id,
-                name: info.name,
-                version: info.version,
-                description: info.description,
-                icon: info.icon,
-            })
-        })
-        .collect()
-}
-
 /// 获取所有已安装插件
 #[tauri::command]
 pub async fn get_installed_plugins(
     manager: State<'_, PluginManagerState>,
 ) -> Result<Vec<worktools_shared_types::PluginInfo>, String> {
-    manager
-        .get_installed_plugins()
-        .await
-        .into_iter()
-        .map(|info| {
-            Ok(worktools_shared_types::PluginInfo {
-                id: info.id,
-                name: info.name,
-                version: info.version,
-                description: info.description,
-                icon: info.icon,
-            })
-        })
-        .collect()
+    Ok(manager.get_installed_plugins().await)
 }
 
-/// 安装插件
-#[tauri::command]
-pub async fn install_plugin(
-    plugin_id: String,
-    manager: State<'_, PluginManagerState>,
-) -> Result<(), String> {
-    manager
-        .install_plugin(&plugin_id)
-        .await
-        .map_err(|e| e.to_string())
-}
-
-/// 卸载插件
-#[tauri::command]
-pub async fn uninstall_plugin(
-    plugin_id: String,
-    manager: State<'_, PluginManagerState>,
-) -> Result<(), String> {
-    manager
-        .uninstall_plugin(&plugin_id)
-        .await
-        .map_err(|e| e.to_string())
-}
-
-/// 获取插件视图
+/// 获取插件视图 (返回 HTML 字符串)
 #[tauri::command]
 pub async fn get_plugin_view(
     plugin_id: String,
     manager: State<'_, PluginManagerState>,
-) -> Result<worktools_shared_types::ViewSchema, String> {
-    let result = manager
-        .call_plugin_method(&plugin_id, "get_view", serde_json::json!({}))
-        .await
-        .map_err(|e| e.to_string())?;
-
-    serde_json::from_value(result)
-        .map_err(|e| format!("解析视图失败: {}", e))
-}
-
-/// 初始化插件
-#[tauri::command]
-pub async fn init_plugin(
-    plugin_id: String,
-    manager: State<'_, PluginManagerState>,
-) -> Result<serde_json::Value, String> {
-    manager
-        .call_plugin_method(&plugin_id, "init", serde_json::json!({}))
-        .await
-        .map_err(|e| e.to_string())
+) -> Result<String, String> {
+    manager.get_plugin_view(&plugin_id).await.map_err(|e| e.to_string())
 }
 
 /// 调用插件方法
