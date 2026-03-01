@@ -1,4 +1,4 @@
-import { For, Show, createSignal, onMount } from "solid-js";
+import { For, Show, createSignal, onMount, createMemo } from "solid-js";
 import { invoke } from "@tauri-apps/api/core";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import "./PasswordManager.css";
@@ -24,6 +24,21 @@ interface UiField {
   pattern?: string;
 }
 
+// 开发环境日志工具
+const devLog = (...args: unknown[]) => {
+  if (import.meta.env.DEV) {
+    // eslint-disable-next-line no-console
+    console.log(...args);
+  }
+};
+
+const devError = (...args: unknown[]) => {
+  if (import.meta.env.DEV) {
+    // eslint-disable-next-line no-console
+    console.error(...args);
+  }
+};
+
 export default function PasswordManager() {
   const [entries, setEntries] = createSignal<PasswordEntry[]>([]);
   const [viewMode, setViewMode] = createSignal<"list" | "form">("list");
@@ -35,6 +50,7 @@ export default function PasswordManager() {
   >({});
   const [searchQuery, setSearchQuery] = createSignal("");
   const [isEditMode, setIsEditMode] = createSignal(false);
+  const [isLoading, setIsLoading] = createSignal(false);
 
   // 表单数据
   const [formData, setFormData] = createSignal<Record<string, string>>({});
@@ -73,8 +89,6 @@ export default function PasswordManager() {
       key: "url",
       placeholder: "https://example.com (可选)",
       required: false,
-      pattern:
-        "^$|^https?://[\\w\\-]+(\\.[\\w\\-]+)+([\\w\\-\\.,@?^=%&:/~\\+#]*[\\w\\-\\@?^=%&/~\\+#])?$",
     },
     {
       type: "button",
@@ -89,30 +103,33 @@ export default function PasswordManager() {
 
   // 加载密码列表
   const loadPasswords = async () => {
+    setIsLoading(true);
     try {
-      console.log("开始加载密码列表...");
+      devLog("开始加载密码列表...");
       const result = await invoke<PasswordEntry[]>("get_password_entries");
-      console.log("密码列表加载成功,条目数:", result.length);
+      devLog("密码列表加载成功,条目数:", result.length);
       setEntries(result);
       setError("");
       return true;
     } catch (err) {
-      console.error("加载密码失败:", err);
+      devError("加载密码失败:", err);
       setError("加载密码列表失败");
       return false;
+    } finally {
+      setIsLoading(false);
     }
   };
 
   // 初始化
   onMount(async () => {
-    console.log("PasswordManager 组件挂载,开始初始化...");
+    devLog("PasswordManager 组件挂载,开始初始化...");
     await loadPasswords();
-    console.log("PasswordManager 初始化完成");
-    console.log("当前条目数:", entries().length);
+    devLog("PasswordManager 初始化完成");
+    devLog("当前条目数:", entries().length);
   });
 
-  // 过滤后的条目
-  const filteredEntries = () => {
+  // 使用 createMemo 优化过滤性能
+  const filteredEntries = createMemo(() => {
     const query = searchQuery().toLowerCase().trim();
     if (!query) return entries();
 
@@ -122,7 +139,7 @@ export default function PasswordManager() {
         entry.username.toLowerCase().includes(query) ||
         (entry.url && entry.url.toLowerCase().includes(query)),
     );
-  };
+  });
 
   // 添加新密码
   const handleAddNew = async () => {
@@ -154,7 +171,7 @@ export default function PasswordManager() {
       await loadPasswords();
       setError("");
     } catch (err) {
-      console.error("删除密码失败:", err);
+      devError("删除密码失败:", err);
       setError("删除密码失败");
     }
   };
@@ -167,15 +184,35 @@ export default function PasswordManager() {
     }));
   };
 
-  // 复制密码
+  // 复制密码 (带降级方案)
   const copyPassword = async (password: string) => {
     try {
-      await navigator.clipboard.writeText(password);
+      // 优先使用现代 Clipboard API
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(password);
+      } else {
+        // 降级方案: 使用传统方法
+        // eslint-disable-next-line deprecation/deprecation
+        const textarea = document.createElement("textarea");
+        textarea.value = password;
+        textarea.style.position = "fixed";
+        textarea.style.opacity = "0";
+        document.body.appendChild(textarea);
+        textarea.select();
+
+        // eslint-disable-next-line deprecation/deprecation
+        const successful = document.execCommand("copy");
+        document.body.removeChild(textarea);
+
+        if (!successful) {
+          throw new Error("execCommand failed");
+        }
+      }
       setError("✓ 密码已复制");
       setTimeout(() => setError(""), 2000);
     } catch (err) {
-      console.error("复制失败:", err);
-      setError("复制失败");
+      devError("复制失败:", err);
+      setError("复制失败,请手动复制");
     }
   };
 
@@ -184,7 +221,7 @@ export default function PasswordManager() {
     try {
       await openUrl(url);
     } catch (err) {
-      console.error("打开链接失败:", err);
+      devError("打开链接失败:", err);
       // 降级处理:使用 window.open
       window.open(url, "_blank");
     }
@@ -198,10 +235,12 @@ export default function PasswordManager() {
     if (field.minLength && value.length < field.minLength) {
       return `${field.label}至少需要 ${field.minLength} 个字符`;
     }
-    if (field.pattern && value) {
-      const regex = new RegExp(field.pattern);
-      if (!regex.test(value)) {
-        return `${field.label}格式不正确`;
+    // 使用 URL API 验证 URL
+    if (field.key === "url" && value) {
+      try {
+        new URL(value);
+      } catch {
+        return "请输入有效的 URL (例如: https://example.com)";
       }
     }
     return null;
@@ -245,15 +284,24 @@ export default function PasswordManager() {
     if (actionKey === "submit") {
       try {
         const data = formData();
+        const currentEntry = selectedEntry();
+        const isEdit = isEditMode();
+
+        // 安全检查:确保必要的字段存在
+        if (!data.service || !data.username || !data.password) {
+          setError("请填写所有必填字段");
+          return;
+        }
+
         const entry: PasswordEntry = {
-          id: isEditMode() && selectedEntry() ? selectedEntry()!.id : "",
+          id: isEdit && currentEntry ? currentEntry.id : crypto.randomUUID(),
           url: data.url || null,
-          service: data.service || "",
-          username: data.username || "",
-          password: data.password || "",
+          service: data.service,
+          username: data.username,
+          password: data.password,
           created_at:
-            isEditMode() && selectedEntry()
-              ? selectedEntry()!.created_at
+            isEdit && currentEntry
+              ? currentEntry.created_at
               : new Date().toISOString(),
           updated_at: new Date().toISOString(),
         };
@@ -267,14 +315,26 @@ export default function PasswordManager() {
         setFormErrors({});
         setError("");
       } catch (err) {
-        console.error("保存密码失败:", err);
+        devError("保存密码失败:", err);
         setError("保存密码失败");
       }
     }
   };
 
-  // 导出密码
+  // 导出密码 (带安全警告)
   const handleExportPasswords = async () => {
+    // 显示安全警告
+    const confirmed = confirm(
+      "⚠️ 安全警告\n\n" +
+        "导出的文件将包含所有密码的明文。请确保:\n" +
+        "1. 将文件存储在安全位置\n" +
+        "2. 导入后立即删除导出文件\n" +
+        "3. 不要与他人分享此文件\n\n" +
+        "是否继续导出?",
+    );
+
+    if (!confirmed) return;
+
     try {
       const result = await invoke<string>("export_passwords");
       const blob = new Blob([result], { type: "application/json" });
@@ -282,41 +342,92 @@ export default function PasswordManager() {
       const a = document.createElement("a");
       a.href = url;
       a.download = `passwords-backup-${new Date().toISOString().split("T")[0]}.json`;
+      document.body.appendChild(a);
       a.click();
+      document.body.removeChild(a);
       URL.revokeObjectURL(url);
-      setError("✓ 密码已导出");
-      setTimeout(() => setError(""), 2000);
+
+      setError("✓ 密码已导出 - 请记得安全存储后删除文件");
+      setTimeout(() => setError(""), 5000);
     } catch (err) {
-      console.error("导出失败:", err);
+      devError("导出失败:", err);
       setError("导出失败");
     }
   };
 
-  // 导入密码
+  // 导入密码 (带确认和预览)
   const handleImportPasswords = async () => {
     try {
       const input = document.createElement("input");
       input.type = "file";
       input.accept = "application/json";
+
       input.onchange = async (e) => {
         const file = (e.target as HTMLInputElement).files?.[0];
-        if (!file) return;
+        if (!file) {
+          document.body.removeChild(input);
+          return;
+        }
 
-        const text = await file.text();
-        await invoke("import_passwords", { data: text });
-        await loadPasswords();
-        setError("✓ 密码已导入");
-        setTimeout(() => setError(""), 2000);
+        try {
+          const text = await file.text();
+
+          // 预览导入内容
+          let preview;
+          try {
+            preview = JSON.parse(text);
+            if (!Array.isArray(preview)) {
+              throw new Error("无效的格式");
+            }
+          } catch {
+            setError("导入失败: 文件格式不正确");
+            document.body.removeChild(input);
+            return;
+          }
+
+          const count = preview.length;
+
+          // 显示确认对话框
+          const confirmed = confirm(
+            `即将导入 ${count} 个密码条目。\n\n` +
+              `⚠️ 注意:\n` +
+              `• 现有密码可能会被覆盖\n` +
+              `• 请确保备份文件来源可信\n\n` +
+              `是否继续导入?`,
+          );
+
+          if (!confirmed) {
+            document.body.removeChild(input);
+            return;
+          }
+
+          await invoke("import_passwords", { data: text });
+          await loadPasswords();
+          setError(`✓ 已成功导入 ${count} 个密码`);
+          setTimeout(() => setError(""), 3000);
+        } finally {
+          // 清理 DOM 元素,防止内存泄漏
+          document.body.removeChild(input);
+        }
       };
+
+      document.body.appendChild(input);
       input.click();
     } catch (err) {
-      console.error("导入失败:", err);
+      devError("导入失败:", err);
       setError("导入失败");
     }
   };
 
   return (
     <div class="password-manager">
+      {/* 加载状态 */}
+      <Show when={isLoading()}>
+        <div class="loading-overlay">
+          <div class="loading-spinner">加载中...</div>
+        </div>
+      </Show>
+
       {/* 错误提示 */}
       <Show when={error()}>
         <div
@@ -333,13 +444,34 @@ export default function PasswordManager() {
           {/* 工具栏 */}
           <div class="toolbar">
             <div class="toolbar-actions">
-              <button class="btn-primary" onClick={handleAddNew}>
+              <button
+                class="btn-primary"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  handleAddNew();
+                }}
+              >
                 ➕ 新建
               </button>
-              <button class="btn-secondary" onClick={handleImportPasswords}>
+              <button
+                class="btn-secondary"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  handleImportPasswords();
+                }}
+              >
                 📥 导入
               </button>
-              <button class="btn-secondary" onClick={handleExportPasswords}>
+              <button
+                class="btn-secondary"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  handleExportPasswords();
+                }}
+              >
                 📤 导出
               </button>
             </div>
@@ -378,43 +510,75 @@ export default function PasswordManager() {
                     <div class="password-item-actions">
                       <button
                         class="btn-icon"
-                        onClick={() => togglePasswordVisibility(entry.id)}
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          togglePasswordVisibility(entry.id);
+                        }}
                         title={
                           visiblePasswords()[entry.id] ? "隐藏密码" : "显示密码"
                         }
+                        aria-label={
+                          visiblePasswords()[entry.id] ? "隐藏密码" : "显示密码"
+                        }
+                        role="button"
                       >
                         {visiblePasswords()[entry.id] ? "🙈" : "👁️"}
                       </button>
                       <button
                         class="btn-icon"
-                        onClick={() => copyPassword(entry.password)}
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          copyPassword(entry.password);
+                        }}
                         title="复制密码"
+                        aria-label="复制密码"
+                        role="button"
                       >
                         📋
                       </button>
                       <Show when={entry.url}>
                         <button
                           class="btn-icon"
-                          onClick={() => handleOpenUrl(entry.url!)}
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            if (entry.url) {
+                              handleOpenUrl(entry.url);
+                            }
+                          }}
                           title="打开链接"
+                          aria-label="打开链接"
+                          role="button"
                         >
                           🔗
                         </button>
                       </Show>
                       <button
                         class="btn-icon"
-                        onClick={() => handleSelectEntry(entry)}
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          handleSelectEntry(entry);
+                        }}
                         title="编辑"
+                        aria-label="编辑密码"
+                        role="button"
                       >
                         ✏️
                       </button>
                       <button
                         class="btn-icon btn-danger"
-                        onClick={() => {
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
                           setSelectedEntry(entry);
                           setShowDeleteConfirm(true);
                         }}
                         title="删除"
+                        aria-label="删除密码"
+                        role="button"
                       >
                         🗑️
                       </button>
@@ -442,7 +606,9 @@ export default function PasswordManager() {
             <h2>{isEditMode() ? "编辑密码" : "新建密码"}</h2>
             <button
               class="btn-secondary"
-              onClick={() => {
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
                 setViewMode("list");
                 setSelectedEntry(null);
                 setIsEditMode(false);
@@ -519,7 +685,9 @@ export default function PasswordManager() {
             <div class="modal-actions">
               <button
                 class="btn-danger"
-                onClick={async () => {
+                onClick={async (e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
                   await handleDeletePassword(selectedEntry()!.id);
                   setShowDeleteConfirm(false);
                   setSelectedEntry(null);
@@ -529,7 +697,9 @@ export default function PasswordManager() {
               </button>
               <button
                 class="btn-secondary"
-                onClick={() => {
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
                   setShowDeleteConfirm(false);
                   setSelectedEntry(null);
                 }}

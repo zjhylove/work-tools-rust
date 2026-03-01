@@ -2,14 +2,18 @@ import { For, Show, createSignal, onMount } from "solid-js";
 import { invoke } from "@tauri-apps/api/core";
 import AuthPlugin from "./components/AuthPlugin";
 import PasswordManager from "./components/PasswordManager";
+import { devError, devLog, devWarn } from "./utils/logger";
 import "./App.css";
 
 // 安全的 invoke 包装函数 - Tauri 2.x 的 invoke 函数会自动处理环境检测
-const safeInvoke = async <T,>(command: string, args?: any): Promise<T> => {
+const safeInvoke = async <T,>(
+  command: string,
+  args?: Record<string, unknown>,
+): Promise<T> => {
   try {
     return await invoke<T>(command, args);
   } catch (error) {
-    console.error("Invoke error:", error);
+    devError("Invoke error:", error);
     throw error;
   }
 };
@@ -33,36 +37,14 @@ function App() {
 
   // 加载插件列表
   onMount(async () => {
-    console.log("=== App onMount 开始 ===");
-    console.log("当前时间:", new Date().toISOString());
-
     // 检查是否在 Tauri 环境中
     const tauriAvailable =
       typeof window !== "undefined" && "__TAURI__" in window;
-    console.log("Tauri 环境检查:", tauriAvailable);
-    console.log("window.__TAURI__ 存在:", "__TAURI__" in window);
-    console.log(
-      "window.__TAURI__.core 存在:",
-      (window as any).__TAURI__?.core ? "true" : "false",
-    );
-
-    // 检查 CSS 变量是否加载
-    const rootElement = document.documentElement;
-    const computedStyle = getComputedStyle(rootElement);
-    console.log("=== CSS 变量诊断 ===");
-    console.log(
-      "--bg-secondary:",
-      computedStyle.getPropertyValue("--bg-secondary"),
-    );
-    console.log(
-      "--bg-primary:",
-      computedStyle.getPropertyValue("--bg-primary"),
-    );
-    console.log("--accent:", computedStyle.getPropertyValue("--accent"));
+    devLog("Tauri 环境检查:", tauriAvailable);
 
     // 如果不在 Tauri 环境,使用模拟数据
     if (!tauriAvailable) {
-      console.warn("⚠️ 不在 Tauri 环境,使用模拟数据");
+      devWarn("不在 Tauri 环境,使用模拟数据");
       const mockPlugins: PluginInfo[] = [
         {
           id: "password-manager",
@@ -86,43 +68,26 @@ function App() {
     }
 
     try {
-      console.log("调用 get_installed_plugins...");
       const installedPlugins = await safeInvoke<PluginInfo[]>(
         "get_installed_plugins",
       );
-      console.log("已安装插件 (原始):", installedPlugins);
-      console.log("已安装插件数量:", installedPlugins.length);
 
       if (Array.isArray(installedPlugins)) {
-        console.log("✅ 插件数据是数组，数量:", installedPlugins.length);
-        installedPlugins.forEach((plugin, index) => {
-          console.log(`插件 ${index}:`, {
-            id: plugin.id,
-            name: plugin.name,
-            description: plugin.description,
-            icon: plugin.icon,
-            version: plugin.version,
-          });
-        });
+        devLog(`加载了 ${installedPlugins.length} 个插件`);
         setPlugins(installedPlugins);
 
         // 默认选中第一个插件
         if (installedPlugins.length > 0) {
-          console.log("默认选中第一个插件:", installedPlugins[0].id);
           setSelectedPlugin(installedPlugins[0].id);
-        } else {
-          console.warn("没有已安装的插件!");
         }
       } else {
-        console.error(
+        devError(
           "get_installed_plugins 返回的不是数组:",
           typeof installedPlugins,
-          installedPlugins,
         );
       }
     } catch (error) {
-      console.error("加载插件失败:", error);
-      console.error("错误详情:", JSON.stringify(error, null, 2));
+      devError("加载插件失败:", error);
 
       // 降级处理:至少显示密码管理器
       setPlugins([
@@ -135,13 +100,12 @@ function App() {
         },
       ]);
     } finally {
-      console.log("=== App onMount 完成,设置 loading = false ===");
       setLoading(false);
     }
   });
 
   const openPlugin = async (pluginId: string) => {
-    console.log("打开插件:", pluginId);
+    devLog("打开插件:", pluginId);
     setSelectedPlugin(pluginId);
 
     // 插件组件自己负责数据加载和验证
@@ -184,7 +148,7 @@ function App() {
                   onClick={(e) => {
                     e.preventDefault();
                     e.stopPropagation();
-                    console.log("点击了插件:", plugin.id, plugin.name);
+                    devLog("点击了插件:", plugin.id, plugin.name);
                     openPlugin(plugin.id);
                   }}
                   style={{

@@ -1,5 +1,6 @@
 import { For, Show, createSignal, onMount, createMemo } from "solid-js";
 import { invoke } from "@tauri-apps/api/core";
+import { devError } from "../utils/logger";
 import "./AuthPlugin.css";
 
 interface AuthEntry {
@@ -103,7 +104,7 @@ export default function AuthPlugin() {
       const result = await invoke<AuthEntry[]>("list_auth_entries");
       setEntries(result);
     } catch (err) {
-      console.error("加载认证条目失败:", err);
+      devError("加载认证条目失败:", err);
       setError("加载认证条目失败");
     } finally {
       setLoading(false);
@@ -113,7 +114,7 @@ export default function AuthPlugin() {
   // 生成 TOTP 验证码
   const generateTotp = async (entry: AuthEntry, forceRefresh = false) => {
     try {
-      console.log("生成 TOTP:", entry.issuer, entry.secret);
+      // 安全:不要记录 TOTP 秘密或验证码
 
       // 如果是强制刷新，添加小延迟确保时间步已经更新
       if (forceRefresh) {
@@ -125,7 +126,7 @@ export default function AuthPlugin() {
         digits: entry.digits,
         period: entry.period,
       });
-      console.log("生成的验证码:", entry.issuer, code);
+      // 安全:不要记录验证码
 
       // 计算剩余时间
       const now = Math.floor(Date.now() / 1000);
@@ -142,7 +143,7 @@ export default function AuthPlugin() {
         setTimeout(() => setError(""), 1500);
       }
     } catch (err) {
-      console.error("生成验证码失败:", entry.issuer, err);
+      devError("生成验证码失败:", entry.issuer, err);
       setError("生成验证码失败");
     }
   };
@@ -192,7 +193,7 @@ export default function AuthPlugin() {
       setError("✓ 验证码已复制");
       setTimeout(() => setError(""), 2000);
     } catch (err) {
-      console.error("复制失败:", err);
+      devError("复制失败:", err);
       setError("复制失败");
     }
   };
@@ -250,7 +251,7 @@ export default function AuthPlugin() {
       setFieldErrors({});
       setError("");
     } catch (err) {
-      console.error("保存失败:", err);
+      devError("保存失败:", err);
       setError("保存认证条目失败");
     }
   };
@@ -269,7 +270,7 @@ export default function AuthPlugin() {
       setSelectedEntry(null);
       setViewMode("list");
     } catch (err) {
-      console.error("删除失败:", err);
+      devError("删除失败:", err);
       setError("删除认证条目失败");
     }
   };
@@ -311,7 +312,7 @@ export default function AuthPlugin() {
         return newErrors;
       });
     } catch (err) {
-      console.error("生成密钥失败:", err);
+      devError("生成密钥失败:", err);
     }
   };
 

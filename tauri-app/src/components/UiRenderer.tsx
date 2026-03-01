@@ -1,38 +1,24 @@
 import { Component, For, Switch, Match, createSignal } from "solid-js";
+import { devLog } from "../utils/logger";
+import { UiField, ViewSchema } from "../types";
 import "./UiRenderer.css";
-
-interface UiField {
-  type: string;
-  label: string;
-  key: string;
-  placeholder?: string;
-  default?: any;
-  min?: number;
-  max?: number;
-  columns?: string[];
-  data_binding?: string;
-  options?: Array<{ label: string; value: string }>;
-  action?: string;
-  actions?: Array<{ label: string; icon: string; action: string }>;
-}
-
-interface ViewSchema {
-  fields: UiField[];
-}
 
 interface UiRendererProps {
   schema: ViewSchema;
 }
 
-const UiRenderer: Component<UiRendererProps> = (props) => {
-  const [values, setValues] = createSignal<Record<string, any>>({});
+// 字段值的联合类型
+type FieldValue = string | number | boolean | string[] | undefined;
 
-  const handleChange = (key: string, value: any) => {
+const UiRenderer: Component<UiRendererProps> = (props) => {
+  const [values, setValues] = createSignal<Record<string, FieldValue>>({});
+
+  const handleChange = (key: string, value: FieldValue) => {
     setValues((prev) => ({ ...prev, [key]: value }));
   };
 
   const handleAction = (action: string) => {
-    console.log("Action:", action, "Values:", values());
+    devLog("Action:", action, "Values:", values());
     // TODO: 调用插件方法
   };
 
@@ -47,10 +33,14 @@ const UiRenderer: Component<UiRendererProps> = (props) => {
                 <input
                   type="text"
                   class="field-input"
-                  placeholder={field.placeholder}
-                  value={values()[field.key] || field.default || ""}
+                  placeholder={"placeholder" in field ? field.placeholder : ""}
+                  value={
+                    values()[field.key || ""] ||
+                    ("default" in field ? field.default : "") ||
+                    ""
+                  }
                   onInput={(e) =>
-                    handleChange(field.key, e.currentTarget.value)
+                    handleChange(field.key || "", e.currentTarget.value)
                   }
                 />
               </Match>
@@ -60,11 +50,18 @@ const UiRenderer: Component<UiRendererProps> = (props) => {
                 <input
                   type="number"
                   class="field-input"
-                  min={field.min}
-                  max={field.max}
-                  value={values()[field.key] || field.default || ""}
+                  min={"min" in field ? field.min : undefined}
+                  max={"max" in field ? field.max : undefined}
+                  value={
+                    values()[field.key || ""] ||
+                    ("default" in field ? field.default : "") ||
+                    ""
+                  }
                   onInput={(e) =>
-                    handleChange(field.key, parseInt(e.currentTarget.value))
+                    handleChange(
+                      field.key || "",
+                      parseInt(e.currentTarget.value),
+                    )
                   }
                 />
               </Match>
@@ -73,9 +70,14 @@ const UiRenderer: Component<UiRendererProps> = (props) => {
                 <label class="field-checkbox-label">
                   <input
                     type="checkbox"
-                    checked={values()[field.key] || field.default || false}
+                    checked={
+                      !!(
+                        values()[field.key || ""] ??
+                        ("default" in field ? field.default : false)
+                      )
+                    }
                     onChange={(e) =>
-                      handleChange(field.key, e.currentTarget.checked)
+                      handleChange(field.key || "", e.currentTarget.checked)
                     }
                   />
                   <span>{field.label}</span>
@@ -86,12 +88,16 @@ const UiRenderer: Component<UiRendererProps> = (props) => {
                 <label class="field-label">{field.label}</label>
                 <select
                   class="field-select"
-                  value={values()[field.key] || field.default || ""}
+                  value={
+                    values()[field.key || ""] ||
+                    ("default" in field ? field.default : "") ||
+                    ""
+                  }
                   onChange={(e) =>
-                    handleChange(field.key, e.currentTarget.value)
+                    handleChange(field.key || "", e.currentTarget.value)
                   }
                 >
-                  <For each={field.options || []}>
+                  <For each={"options" in field ? field.options : []}>
                     {(option) => (
                       <option value={option.value}>{option.label}</option>
                     )}
@@ -102,7 +108,11 @@ const UiRenderer: Component<UiRendererProps> = (props) => {
               <Match when={field.type === "button"}>
                 <button
                   class="field-button"
-                  onClick={() => handleAction(field.action || "")}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    handleAction("action" in field ? field.action || "" : "");
+                  }}
                 >
                   {field.label}
                 </button>
@@ -114,15 +124,19 @@ const UiRenderer: Component<UiRendererProps> = (props) => {
                   <table>
                     <thead>
                       <tr>
-                        <For each={field.columns || []}>
-                          {(col) => <th>{col}</th>}
+                        <For each={"columns" in field ? field.columns : []}>
+                          {(col) => (
+                            <th>{typeof col === "string" ? col : ""}</th>
+                          )}
                         </For>
                       </tr>
                     </thead>
                     <tbody>
                       <tr>
                         <td
-                          colSpan={field.columns?.length || 1}
+                          colSpan={
+                            "columns" in field ? field.columns?.length || 1 : 1
+                          }
                           class="empty-table"
                         >
                           暂无数据
