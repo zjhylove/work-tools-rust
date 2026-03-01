@@ -1,4 +1,4 @@
-import { For, Show, createSignal, onMount } from "solid-js";
+import { For, Show, createSignal, onMount, createMemo } from "solid-js";
 import { invoke } from "@tauri-apps/api/core";
 import "./AuthPlugin.css";
 
@@ -59,29 +59,42 @@ export default function AuthPlugin() {
     const rule = validationRules[key as keyof typeof validationRules];
     if (!rule) return null;
 
-    if (rule.required && !value.trim()) {
+    // 去除首尾空格后再验证
+    const trimmedValue = value.trim();
+
+    if (rule.required && !trimmedValue) {
       return `${rule.label}不能为空`;
     }
-    if (rule.minLength && value.length < rule.minLength) {
+    // 使用原始值的长度验证（密钥不应有前后空格）
+    if (rule.minLength && trimmedValue.length < rule.minLength) {
       return `${rule.label}至少需要 ${rule.minLength} 个字符`;
     }
     return null;
   };
 
-  // 表单是否有效
-  const isFormValid = () => {
+  // 使用 createMemo 创建响应式的表单有效性检查
+  const isFormValid = createMemo(() => {
     const data = formData();
+    const errors = fieldErrors();
+
+    // 首先检查是否有字段级错误
+    if (Object.keys(errors).length > 0) {
+      return false;
+    }
+
+    // 然后验证所有字段
     for (const [key, rule] of Object.entries(validationRules)) {
       const value = (data[key as keyof AuthEntry] as string) || "";
-      if (rule.required && !value.trim()) {
+      const trimmedValue = value.trim();
+      if (rule.required && !trimmedValue) {
         return false;
       }
-      if (rule.minLength && value.length < rule.minLength) {
+      if (rule.minLength && trimmedValue.length < rule.minLength) {
         return false;
       }
     }
-    return Object.keys(fieldErrors()).length === 0;
-  };
+    return true;
+  });
 
   // 加载认证条目列表
   const loadEntries = async () => {
