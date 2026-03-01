@@ -207,17 +207,6 @@ fn generate_secret() -> String {
         .collect()
 }
 
-fn generate_qr_code(entry: &AuthEntry) -> String {
-    // 生成 otpauth URI
-    let uri = format!(
-        "otpauth://totp/{}:{}?secret={}&algorithm={}&digits={}&period={}",
-        entry.issuer, entry.name, entry.secret, entry.algorithm, entry.digits, entry.period
-    );
-
-    // 返回 QR Code URL
-    format!("https://api.qrserver.com/v1/create-qr-code/?size=300x300&data={}", urlencoding::encode(&uri))
-}
-
 fn main() -> Result<()> {
     tracing_subscriber::fmt()
         .with_max_level(tracing::Level::INFO)
@@ -254,13 +243,6 @@ fn main() -> Result<()> {
     rpc_server.register_handler("generate_secret", |_params| {
         let secret = generate_secret();
         Ok(serde_json::json!({ "secret": secret }))
-    });
-
-    // 注册 generate_qr_code 处理器
-    rpc_server.register_handler("generate_qr_code", |params| {
-        let entry: AuthEntry = serde_json::from_value(serde_json::to_value(params)?)?;
-        let qr_url = generate_qr_code(&entry);
-        Ok(serde_json::json!({ "qr_url": qr_url }))
     });
 
     // 注册 list_entries 处理器 - 列出所有认证条目

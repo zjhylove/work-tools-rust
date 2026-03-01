@@ -113,7 +113,6 @@ pub fn run() {
             commands::update_auth_entry,
             commands::delete_auth_entry_plugin,
             commands::generate_totp_code,
-            commands::generate_qr_code_url,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

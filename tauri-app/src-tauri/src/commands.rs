@@ -606,27 +606,3 @@ pub async fn generate_totp_code(
 
     Ok(code.to_string())
 }
-
-/// 通过插件生成 QR 码
-#[tauri::command]
-pub async fn generate_qr_code_url(
-    entry: AuthEntry,
-    manager: State<'_, PluginManagerState>,
-) -> Result<String, String> {
-    let manager = manager.inner();
-    let result = manager
-        .call_plugin_method(
-            "auth",
-            "generate_qr_code",
-            serde_json::to_value(entry).unwrap(),
-        )
-        .await
-        .map_err(|e| format!("调用插件失败: {}", e))?;
-
-    let qr_url = result
-        .get("qr_url")
-        .and_then(|v| v.as_str())
-        .ok_or_else(|| format!("解析 QR 码失败"))?;
-
-    Ok(qr_url.to_string())
-}
