@@ -1,6 +1,7 @@
 import { For, Show, createSignal, onMount } from "solid-js";
 import { invoke } from "@tauri-apps/api/core";
-import PluginView from "./components/PluginView";
+import PasswordManager from "./components/PasswordManager";
+import AuthPlugin from "./components/AuthPlugin";
 import { devError, devLog, devWarn } from "./utils/logger";
 import "./App.css";
 
@@ -314,10 +315,12 @@ function App() {
         }}
       >
         <Show when={selectedPlugin()}>
-          <PluginView
-            pluginId={selectedPlugin()!}
-            setSelectedPlugin={setSelectedPlugin}
-          />
+          <Show when={selectedPlugin() === "password-manager"}>
+            <PasswordManager />
+          </Show>
+          <Show when={selectedPlugin() === "auth"}>
+            <AuthPlugin />
+          </Show>
         </Show>
 
         {/* 无插件选中时的提示 */}

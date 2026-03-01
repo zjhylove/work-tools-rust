@@ -225,6 +225,7 @@ dependencies = [
  "anyhow",
  "base32",
  "chrono",
+ "dirs 5.0.1",
  "hmac",
  "serde",
  "serde_json",
