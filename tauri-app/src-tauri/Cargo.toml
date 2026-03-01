@@ -31,3 +31,7 @@ rand = "0.8"
 # 本地依赖
 worktools-shared-types = { path = "../../shared/types" }
 worktools-rpc-protocol = { path = "../../shared/rpc-protocol" }
+
+[[bin]]
+name = "test-plugins"
+path = "src/bin/test_plugins.rs"

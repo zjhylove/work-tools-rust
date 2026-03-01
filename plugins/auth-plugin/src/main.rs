@@ -128,6 +128,7 @@ fn generate_qr_code(entry: &AuthEntry) -> String {
 fn main() -> Result<()> {
     tracing_subscriber::fmt()
         .with_max_level(tracing::Level::INFO)
+        .with_writer(std::io::stderr)
         .init();
 
     tracing::info!("Auth Plugin 启动");
