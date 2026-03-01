@@ -38,17 +38,18 @@ pub fn run() {
         PluginManager::new().expect("无法创建插件管理器")
     );
 
-    // 尝试加载已保存的加密配置
+    // 尝试加载已保存的加密配置(加载 salt 和 validation_token)
+    // 每次会话都需要重新验证主密码以提高安全性
     let crypto_config = if let Ok(config) = config::load_plugin_config("password-manager") {
-        let master_password = config.get("master_password")
-            .and_then(|v| v.as_str())
-            .map(|s| s.to_string());
         let salt = config.get("salt")
             .and_then(|v| v.as_str())
             .map(|s| s.to_string());
+        let validation_token = config.get("validation_token")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string());
         crypto::CryptoConfig {
-            master_password,
             salt,
+            validation_token,
         }
     } else {
         crypto::CryptoConfig::default()
@@ -86,6 +87,9 @@ pub fn run() {
             commands::get_installed_plugins,
             commands::install_plugin,
             commands::uninstall_plugin,
+            commands::get_plugin_view,
+            commands::init_plugin,
+            commands::call_plugin_method,
             commands::get_plugin_config,
             commands::set_plugin_config,
             commands::get_app_config,
@@ -99,7 +103,6 @@ pub fn run() {
             commands::get_auth_entries,
             commands::save_auth_entry,
             commands::delete_auth_entry,
-            commands::generate_totp,
             commands::generate_secret,
             commands::init_or_verify_master_password,
             commands::has_master_password,

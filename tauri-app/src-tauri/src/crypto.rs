@@ -6,17 +6,17 @@ use anyhow::Result;
 /// 加密配置
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct CryptoConfig {
-    /// 加密后的主密码
-    pub master_password: Option<String>,
     /// 盐值
     pub salt: Option<String>,
+    /// 验证令牌(用于验证主密码是否正确)
+    pub validation_token: Option<String>,
 }
 
 impl Default for CryptoConfig {
     fn default() -> Self {
         Self {
-            master_password: None,
             salt: None,
+            validation_token: None,
         }
     }
 }
@@ -63,39 +63,42 @@ impl PasswordEncryptor {
 
     /// 初始化或验证主密码
     pub fn init_or_verify_master_password(&mut self, password: &str) -> Result<bool> {
-        // 首次设置主密码
-        if self.config.master_password.is_none() {
+        // 首次设置主密码(salt 不存在)
+        if self.config.salt.is_none() {
             let salt = Self::generate_salt();
             let key = Self::derive_key(password, &salt);
 
-            // 使用 AES 加密主密码
+            // 使用 AES 创建 cipher
             let cipher = Aes256::new(&GenericArray::from(key));
-            let encrypted = Self::encrypt_with_cipher(&cipher, password)?;
 
-            self.config.master_password = Some(encrypted);
+            // 创建验证令牌:加密一个已知字符串用于后续验证
+            let validation_token = Self::encrypt_with_cipher(&cipher, "VALIDATE_PASSWORD")?;
+
             self.config.salt = Some(salt);
+            self.config.validation_token = Some(validation_token);
             self.cipher = Some(cipher);
 
             return Ok(true);
         }
 
-        // 验证主密码
+        // 验证主密码(salt 已存在)
         let salt = self.config.salt.as_ref().ok_or_else(|| anyhow::anyhow!("盐值不存在"))?;
         let key = Self::derive_key(password, salt);
         let cipher = Aes256::new(&GenericArray::from(key));
 
-        let stored_encrypted = self.config.master_password.as_ref().unwrap();
+        // 验证令牌是否存在
+        let stored_token = self.config.validation_token.as_ref()
+            .ok_or_else(|| anyhow::anyhow!("验证令牌不存在"))?;
 
-        // 尝试解密,如果失败说明密码错误
-        let decrypted = match Self::decrypt_with_cipher(&cipher, stored_encrypted) {
-            Ok(text) => text,
-            Err(_) => return Ok(false), // 解密失败,密码错误
-        };
+        // 用输入的密码加密相同的字符串,比较结果
+        let test_token = Self::encrypt_with_cipher(&cipher, "VALIDATE_PASSWORD")?;
 
-        if password == decrypted {
+        if test_token == *stored_token {
+            // 验证成功,创建 cipher
             self.cipher = Some(cipher);
             Ok(true)
         } else {
+            // 验证失败,密码错误
             Ok(false)
         }
     }
@@ -195,7 +198,12 @@ impl PasswordEncryptor {
 
     /// 检查是否已设置主密码
     pub fn has_master_password(&self) -> bool {
-        self.config.master_password.is_some()
+        self.config.salt.is_some()
+    }
+
+    /// 检查是否已验证主密码(cipher 是否存在)
+    pub fn has_cipher(&self) -> bool {
+        self.cipher.is_some()
     }
 }
 

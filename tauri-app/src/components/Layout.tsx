@@ -70,9 +70,7 @@ const Layout: Component = () => {
       </div>
 
       {/* 对话框 */}
-      <Show when={showMarket()}>
-        <PluginMarket onClose={handleMarketClose} />
-      </Show>
+      <PluginMarket show={showMarket()} onClose={handleMarketClose} />
 
       <Show when={showLog()}>
         <LogViewer onClose={() => setShowLog(false)} />

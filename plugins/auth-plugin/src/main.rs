@@ -91,61 +91,11 @@ fn get_plugin_info() -> serde_json::Value {
     })
 }
 
+// UI Schema - 不再需要,前端使用独立组件
+// 保留空的实现以兼容接口
 fn get_view_schema() -> serde_json::Value {
     serde_json::json!({
-        "fields": [
-            {
-                "type": "input",
-                "label": "账户名称",
-                "key": "name",
-                "placeholder": "例如: Google Account",
-                "required": true,
-                "minLength": 2
-            },
-            {
-                "type": "input",
-                "label": "发行方",
-                "key": "issuer",
-                "placeholder": "例如: Google",
-                "required": true
-            },
-            {
-                "type": "input",
-                "label": "密钥",
-                "key": "secret",
-                "placeholder": "输入或生成密钥",
-                "required": true,
-                "minLength": 16
-            },
-            {
-                "type": "input",
-                "label": "算法",
-                "key": "algorithm",
-                "placeholder": "SHA1",
-                "default": "SHA1"
-            },
-            {
-                "type": "input",
-                "label": "验证码位数",
-                "key": "digits",
-                "placeholder": "6",
-                "default": "6",
-                "required": true
-            },
-            {
-                "type": "input",
-                "label": "更新间隔(秒)",
-                "key": "period",
-                "placeholder": "30",
-                "default": "30",
-                "required": true
-            },
-            {
-                "type": "button",
-                "label": "💾 保存验证器",
-                "key": "save"
-            }
-        ]
+        "fields": []
     })
 }
 
@@ -321,6 +271,16 @@ fn main() -> Result<()> {
 
         Ok(serde_json::json!({ "success": true }))
     });
+
+    // 注册 init 处理器 - 初始化插件
+    rpc_server.register_handler("init", |_params| {
+        let data = load_data()?;
+        Ok(serde_json::json!({
+            "entries": data.entries
+        }))
+    });
+
+    // 注册 handle_action 处理器 - 不再需要,前端直接调用具体的 RPC 方法
 
     // 从 stdin 读取 JSON-RPC 请求,处理并输出响应
     let stdin = stdin();

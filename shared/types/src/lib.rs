@@ -11,15 +11,19 @@ pub struct PluginInfo {
 }
 
 /// UI 字段类型定义
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type")]
 pub enum UiField {
+    // === 基础组件 ===
     #[serde(rename = "input")]
     Input {
         label: String,
         key: String,
         placeholder: Option<String>,
         default: Option<String>,
+        #[serde(rename = "input_type")]
+        input_type: Option<String>, // "text", "password", "email", "url"
+        required: Option<bool>,
     },
     #[serde(rename = "number")]
     Number {
@@ -29,18 +33,13 @@ pub enum UiField {
         min: Option<i32>,
         max: Option<i32>,
     },
-    #[serde(rename = "table")]
-    Table {
-        label: String,
-        columns: Vec<String>,
-        data_binding: String,
-        actions: Option<Vec<TableAction>>,
-    },
     #[serde(rename = "button")]
     Button {
         label: String,
         key: String,
-        action: String,
+        action: Option<String>,
+        icon: Option<String>,
+        variant: Option<String>, // "primary", "secondary", "danger"
     },
     #[serde(rename = "checkbox")]
     Checkbox {
@@ -55,6 +54,70 @@ pub enum UiField {
         options: Vec<SelectOption>,
         default: Option<String>,
     },
+    #[serde(rename = "table")]
+    Table {
+        label: String,
+        columns: Vec<String>,
+        data_binding: String,
+        actions: Option<Vec<TableAction>>,
+    },
+
+    // === 高级组件 (新增) ===
+
+    /// 表格列表 (支持搜索、分页、批量操作)
+    #[serde(rename = "table_list")]
+    TableList {
+        label: String,
+        data_binding: String,
+        columns: Vec<TableColumn>,
+        actions: Vec<TableAction>,
+        search_placeholder: Option<String>,
+        pagination: Option<PaginationConfig>,
+    },
+
+    /// 表单容器 (支持嵌套、验证)
+    #[serde(rename = "form")]
+    Form {
+        label: String,
+        fields: Vec<UiField>,
+        submit_action: String,
+        cancel_action: Option<String>,
+        validation: Option<FormValidation>,
+    },
+
+    /// 对话框
+    #[serde(rename = "dialog")]
+    Dialog {
+        title: String,
+        content: Vec<UiField>,
+        trigger_action: String,
+        width: Option<String>,
+        height: Option<String>,
+    },
+
+    /// 标签页
+    #[serde(rename = "tabs")]
+    Tabs {
+        tabs: Vec<TabItem>,
+        default_tab: Option<String>,
+    },
+
+    /// 分组
+    #[serde(rename = "group")]
+    Group {
+        label: String,
+        fields: Vec<UiField>,
+        collapsible: Option<bool>,
+    },
+}
+
+/// 表格列定义
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TableColumn {
+    pub key: String,
+    pub label: String,
+    pub width: Option<String>,
+    pub render: Option<String>, // "password", "icon", etc.
 }
 
 /// 表格操作按钮
@@ -63,6 +126,39 @@ pub struct TableAction {
     pub label: String,
     pub icon: String,
     pub action: String,
+    pub confirm: Option<bool>, // 是否需要确认
+}
+
+/// 分页配置
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PaginationConfig {
+    pub page_size: usize,
+    pub show_total: bool,
+}
+
+/// 表单验证规则
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ValidationRule {
+    pub field: String,
+    pub required: Option<bool>,
+    pub min_length: Option<usize>,
+    pub max_length: Option<usize>,
+    pub pattern: Option<String>,
+}
+
+/// 表单验证配置
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FormValidation {
+    pub rules: Vec<ValidationRule>,
+}
+
+/// 标签页项
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TabItem {
+    pub id: String,
+    pub label: String,
+    pub icon: Option<String>,
+    pub content: Vec<UiField>,
 }
 
 /// 下拉选择选项

@@ -137,6 +137,47 @@ pub async fn uninstall_plugin(
         .map_err(|e| e.to_string())
 }
 
+/// 获取插件视图
+#[tauri::command]
+pub async fn get_plugin_view(
+    plugin_id: String,
+    manager: State<'_, PluginManagerState>,
+) -> Result<worktools_shared_types::ViewSchema, String> {
+    let result = manager
+        .call_plugin_method(&plugin_id, "get_view", serde_json::json!({}))
+        .await
+        .map_err(|e| e.to_string())?;
+
+    serde_json::from_value(result)
+        .map_err(|e| format!("解析视图失败: {}", e))
+}
+
+/// 初始化插件
+#[tauri::command]
+pub async fn init_plugin(
+    plugin_id: String,
+    manager: State<'_, PluginManagerState>,
+) -> Result<serde_json::Value, String> {
+    manager
+        .call_plugin_method(&plugin_id, "init", serde_json::json!({}))
+        .await
+        .map_err(|e| e.to_string())
+}
+
+/// 调用插件方法
+#[tauri::command]
+pub async fn call_plugin_method(
+    plugin_id: String,
+    method: String,
+    params: serde_json::Value,
+    manager: State<'_, PluginManagerState>,
+) -> Result<serde_json::Value, String> {
+    manager
+        .call_plugin_method(&plugin_id, &method, params)
+        .await
+        .map_err(|e| e.to_string())
+}
+
 /// 获取插件配置
 #[tauri::command]
 pub async fn get_plugin_config(plugin_id: String) -> Result<Value, String> {
@@ -166,22 +207,33 @@ pub async fn set_app_config(config: crate::config::AppConfig) -> Result<(), Stri
 
 /// ============= 密码管理器命令 =============
 
-/// 获取所有密码条目 (解密版本)
+/// 获取所有密码条目 (解密版本) - 调用插件
 #[tauri::command]
 pub async fn get_password_entries(
     crypto_state: State<'_, CryptoState>,
+    manager: State<'_, PluginManagerState>,
 ) -> Result<Vec<DecryptedPasswordEntry>, String> {
-    let config = load_plugin_config("password-manager")
-        .map_err(|e| e.to_string())?;
+    // 调用插件的 list_passwords 方法
+    let result = manager
+        .call_plugin_method("password-manager", "list_passwords", serde_json::json!({}))
+        .await
+        .map_err(|e| format!("调用插件失败: {}", e))?;
 
-    let entries: Vec<PasswordEntry> = config
-        .get("entries")
-        .and_then(|v| serde_json::from_value(v.clone()).ok())
-        .unwrap_or_default();
+    // 解析响应
+    let entries_value = result.get("entries")
+        .ok_or_else(|| "插件返回格式错误".to_string())?;
 
-    // 解密所有密码
+    let entries: Vec<PasswordEntry> = serde_json::from_value(entries_value.clone())
+        .map_err(|e| format!("解析条目失败: {}", e))?;
+
+    // 解密所有密码 (在 await 之前完成)
     let encryptor = crypto_state.lock()
         .map_err(|e| format!("获取加密器失败: {}", e))?;
+
+    // 检查是否已验证主密码(cipher 是否存在)
+    if !encryptor.has_cipher() {
+        return Err("主密码验证失败".to_string());
+    }
 
     let mut decrypted_entries = Vec::new();
     for entry in entries {
@@ -198,8 +250,17 @@ pub async fn get_password_entries(
                 });
             }
             Err(_e) => {
-                // 旧格式的数据解密失败,跳过该条目
-                continue;
+                // 解密失败,可能是旧版本的明文密码,直接使用原始值
+                // 这样用户可以看到旧数据,重新保存后会使用新加密
+                decrypted_entries.push(DecryptedPasswordEntry {
+                    id: entry.id,
+                    url: entry.url,
+                    service: entry.service,
+                    username: entry.username,
+                    password: entry.password.clone(), // 使用原始密码(可能是明文)
+                    created_at: entry.created_at,
+                    updated_at: entry.updated_at,
+                });
             }
         }
     }
@@ -207,81 +268,77 @@ pub async fn get_password_entries(
     Ok(decrypted_entries)
 }
 
-/// 保存密码条目 (加密密码后存储)
+/// 保存密码条目 (加密密码后存储) - 调用插件
 #[tauri::command]
 pub async fn save_password_entry(
     entry: DecryptedPasswordEntry,
     crypto_state: State<'_, CryptoState>,
+    manager: State<'_, PluginManagerState>,
 ) -> Result<(), String> {
-    // 加密密码
-    let encryptor = crypto_state.lock()
-        .map_err(|e| format!("获取加密器失败: {}", e))?;
-
-    let encrypted_password = encryptor.encrypt_password(&entry.password)
-        .map_err(|e| format!("加密密码失败: {}", e))?;
-
-    // 创建加密后的条目用于存储
-    let encrypted_entry = PasswordEntry {
-        id: entry.id,
-        url: entry.url,
-        service: entry.service,
-        username: entry.username,
-        password: encrypted_password,
-        created_at: entry.created_at,
-        updated_at: entry.updated_at,
+    // 加密密码 (在 await 之前完成)
+    let encrypted_password = {
+        let encryptor = crypto_state.lock()
+            .map_err(|e| format!("获取加密器失败: {}", e))?;
+        encryptor.encrypt_password(&entry.password)
+            .map_err(|e| format!("加密密码失败: {}", e))?
     };
 
-    let mut config = load_plugin_config("password-manager")
-        .map_err(|e| e.to_string())?;
+    // 判断是新增还是更新
+    let params = if entry.id.is_empty() {
+        // 新增
+        serde_json::json!({
+            "service": entry.service,
+            "username": entry.username,
+            "password": encrypted_password,
+            "url": entry.url,
+        })
+    } else {
+        // 更新
+        serde_json::json!({
+            "id": entry.id,
+            "service": entry.service,
+            "username": entry.username,
+            "password": encrypted_password,
+            "url": entry.url,
+        })
+    };
 
-    // 使用辅助函数加载条目
-    let mut entries = load_password_entries_from_config(&config);
+    // 调用插件方法
+    let method = if entry.id.is_empty() { "add_password" } else { "update_password" };
 
-    // 查找并更新或添加新条目 (使用 filter)
-    entries.retain(|e| e.id != encrypted_entry.id);
-    entries.push(encrypted_entry);
+    manager
+        .call_plugin_method("password-manager", method, params)
+        .await
+        .map_err(|e| format!("调用插件失败: {}", e))?;
 
-    // 使用辅助函数保存条目
-    save_password_entries_to_config(&entries, &mut config)?;
-
-    // 保存加密配置 (master_password 和 salt)
-    let crypto_config = encryptor.get_config();
-    config["master_password"] = serde_json::to_value(&crypto_config.master_password)
-        .map_err(|e| e.to_string())?;
-    config["salt"] = serde_json::to_value(&crypto_config.salt)
-        .map_err(|e| e.to_string())?;
-
-    save_plugin_config("password-manager", &config)
-        .map_err(|e| e.to_string())
+    Ok(())
 }
 
-/// 删除密码条目
+/// 删除密码条目 - 调用插件
 #[tauri::command]
-pub async fn delete_password_entry(id: String) -> Result<(), String> {
-    let mut config = load_plugin_config("password-manager")
-        .map_err(|e| e.to_string())?;
+pub async fn delete_password_entry(
+    id: String,
+    manager: State<'_, PluginManagerState>,
+) -> Result<(), String> {
+    manager
+        .call_plugin_method("password-manager", "delete_password", serde_json::json!({ "id": id }))
+        .await
+        .map_err(|e| format!("调用插件失败: {}", e))?;
 
-    // 使用辅助函数加载和过滤条目
-    let mut entries = load_password_entries_from_config(&config);
-    entries.retain(|e| e.id != id);
-
-    // 使用辅助函数保存
-    save_password_entries_to_config(&entries, &mut config)?;
-
-    save_plugin_config("password-manager", &config)
-        .map_err(|e| e.to_string())
+    Ok(())
 }
 
 /// 清空所有密码条目 (用于重置)
 #[tauri::command]
-pub async fn clear_all_password_entries() -> Result<(), String> {
-    let mut config = load_plugin_config("password-manager")
-        .map_err(|e| e.to_string())?;
+pub async fn clear_all_password_entries(
+    manager: State<'_, PluginManagerState>,
+) -> Result<(), String> {
+    manager
+        .call_plugin_method("password-manager", "clear_all_passwords", serde_json::json!({}))
+        .await
+        .map_err(|e| format!("调用插件失败: {}", e))?;
 
-    save_password_entries_to_config(&[], &mut config)?;
-
-    save_plugin_config("password-manager", &config)
-        .map_err(|e| e.to_string())
+    Ok(())
 }
 
 /// ============= 双因素认证命令 =============
@@ -347,19 +404,6 @@ pub async fn delete_auth_entry(id: String) -> Result<(), String> {
         .map_err(|e| e.to_string())
 }
 
-/// 生成 TOTP 验证码
-#[tauri::command]
-pub async fn generate_totp(_secret: String, digits: u32, period: u64) -> Result<String, String> {
-    use std::time::{SystemTime, UNIX_EPOCH};
-    let time = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap()
-        .as_secs();
-    let time_step = time / period;
-    let code = (time_step % 1_000_000) as u32;
-    Ok(format!("{:0width$}", code % (10_u32.pow(digits)), width = digits as usize))
-}
-
 /// 生成随机密钥
 #[tauri::command]
 pub async fn generate_secret() -> Result<String, String> {
@@ -388,8 +432,33 @@ pub async fn init_or_verify_master_password(
     let mut encryptor = crypto_state.lock()
         .map_err(|e| format!("获取加密器失败: {}", e))?;
 
-    encryptor.init_or_verify_master_password(&password)
-        .map_err(|e| format!("主密码验证失败: {}", e))
+    let result = encryptor.init_or_verify_master_password(&password)
+        .map_err(|e| format!("主密码验证失败: {}", e))?;
+
+    // 验证成功后,保存 salt 和 validation_token 到磁盘
+    // 这样应用重启后可以验证主密码,但不存储主密码本身
+    if result {
+        let config = encryptor.get_config();
+
+        // 保存到 password-manager 的配置文件
+        let mut plugin_config = load_plugin_config("password-manager")
+            .unwrap_or_else(|_| serde_json::json!({}));
+
+        // 保存 salt 和 validation_token
+        plugin_config["salt"] = serde_json::to_value(&config.salt)
+            .map_err(|e| format!("序列化盐值失败: {}", e))?;
+        plugin_config["validation_token"] = serde_json::to_value(&config.validation_token)
+            .map_err(|e| format!("序列化验证令牌失败: {}", e))?;
+
+        // 移除 master_password(如果存在旧数据)
+        plugin_config.as_object_mut()
+            .map(|obj| obj.remove("master_password"));
+
+        save_plugin_config("password-manager", &plugin_config)
+            .map_err(|e| format!("保存加密配置失败: {}", e))?;
+    }
+
+    Ok(result)
 }
 
 /// 检查是否已设置主密码
@@ -400,7 +469,17 @@ pub async fn has_master_password(
     let encryptor = crypto_state.lock()
         .map_err(|e| format!("获取加密器失败: {}", e))?;
 
-    Ok(encryptor.has_master_password())
+    // 检查是否有 salt 存在(说明已经设置过主密码)
+    let has_salt = encryptor.get_config().salt.is_some();
+
+    // 或者检查配置文件
+    let has_salt_in_config = if let Ok(config) = load_plugin_config("password-manager") {
+        config.get("salt").is_some()
+    } else {
+        false
+    };
+
+    Ok(has_salt || has_salt_in_config)
 }
 
 /// 获取加密配置 (用于持久化)
@@ -456,51 +535,33 @@ pub async fn decrypt_password(
         .map_err(|e| format!("解密失败: {}", e))
 }
 
-/// 导出密码数据为 JSON 字符串
+/// 导出密码数据为 JSON 字符串 - 调用插件
 #[tauri::command]
-pub async fn export_passwords() -> Result<String, String> {
-    let config = load_plugin_config("password-manager")
-        .map_err(|e| e.to_string())?;
+pub async fn export_passwords(
+    manager: State<'_, PluginManagerState>,
+) -> Result<String, String> {
+    let result = manager
+        .call_plugin_method("password-manager", "export_passwords", serde_json::json!({}))
+        .await
+        .map_err(|e| format!("调用插件失败: {}", e))?;
 
-    // 返回完整的配置 JSON (包括 master_password, salt 和 entries)
-    let json_string = serde_json::to_string_pretty(&config)
-        .map_err(|e| format!("序列化失败: {}", e))?;
+    let data = result.get("data")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| "插件返回格式错误".to_string())?;
 
-    Ok(json_string)
+    Ok(data.to_string())
 }
 
-/// 从 JSON 字符串导入密码数据
+/// 从 JSON 字符串导入密码数据 - 调用插件
 #[tauri::command]
-pub async fn import_passwords(json_data: String) -> Result<(), String> {
-    // 解析 JSON 数据
-    let imported_config: serde_json::Value = serde_json::from_str(&json_data)
-        .map_err(|e| format!("解析 JSON 失败: {}", e))?;
-
-    // 获取当前的加密配置
-    let mut current_config = load_plugin_config("password-manager")
-        .map_err(|e| e.to_string())?;
-
-    // 使用辅助函数加载条目
-    let current_entries = load_password_entries_from_config(&current_config);
-    let imported_entries = load_password_entries_from_config(&imported_config);
-
-    // 使用 HashSet 优化 ID 查找,合并条目避免 ID 重复
-    let existing_ids: std::collections::HashSet<String> = current_entries
-        .iter()
-        .map(|e| e.id.clone())
-        .collect();
-
-    let merged_entries: Vec<PasswordEntry> = current_entries
-        .into_iter()
-        .chain(imported_entries.into_iter().filter(|e| !existing_ids.contains(&e.id)))
-        .collect();
-
-    // 使用辅助函数保存
-    save_password_entries_to_config(&merged_entries, &mut current_config)?;
-
-    // 保存配置
-    save_plugin_config("password-manager", &current_config)
-        .map_err(|e| e.to_string())?;
+pub async fn import_passwords(
+    json_data: String,
+    manager: State<'_, PluginManagerState>,
+) -> Result<(), String> {
+    manager
+        .call_plugin_method("password-manager", "import_passwords", serde_json::json!({ "data": json_data }))
+        .await
+        .map_err(|e| format!("调用插件失败: {}", e))?;
 
     Ok(())
 }

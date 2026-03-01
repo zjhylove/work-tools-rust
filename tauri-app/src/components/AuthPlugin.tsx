@@ -38,9 +38,50 @@ export default function AuthPlugin() {
     period: 30,
   });
 
+  // 字段级错误信息
+  const [fieldErrors, setFieldErrors] = createSignal<Record<string, string>>(
+    {},
+  );
+
   // 错误信息
   const [error, setError] = createSignal("");
   const [showDeleteConfirm, setShowDeleteConfirm] = createSignal(false);
+
+  // 验证规则定义
+  const validationRules = {
+    name: { required: true, minLength: 1, label: "账户名称" },
+    issuer: { required: true, minLength: 1, label: "发行方" },
+    secret: { required: true, minLength: 10, label: "密钥" },
+  };
+
+  // 验证单个字段
+  const validateField = (key: string, value: string): string | null => {
+    const rule = validationRules[key as keyof typeof validationRules];
+    if (!rule) return null;
+
+    if (rule.required && !value.trim()) {
+      return `${rule.label}不能为空`;
+    }
+    if (rule.minLength && value.length < rule.minLength) {
+      return `${rule.label}至少需要 ${rule.minLength} 个字符`;
+    }
+    return null;
+  };
+
+  // 表单是否有效
+  const isFormValid = () => {
+    const data = formData();
+    for (const [key, rule] of Object.entries(validationRules)) {
+      const value = (data[key as keyof AuthEntry] as string) || "";
+      if (rule.required && !value.trim()) {
+        return false;
+      }
+      if (rule.minLength && value.length < rule.minLength) {
+        return false;
+      }
+    }
+    return Object.keys(fieldErrors()).length === 0;
+  };
 
   // 加载认证条目列表
   const loadEntries = async () => {
@@ -135,8 +176,19 @@ export default function AuthPlugin() {
     try {
       const data = formData();
 
-      if (!data.name || !data.issuer || !data.secret) {
-        setError("请填写所有必填字段");
+      // 验证所有必填字段
+      const errors: Record<string, string> = {};
+      for (const [key, rule] of Object.entries(validationRules)) {
+        const value = (data[key as keyof AuthEntry] as string) || "";
+        const error = validateField(key, value);
+        if (error) {
+          errors[key] = error;
+        }
+      }
+
+      if (Object.keys(errors).length > 0) {
+        setFieldErrors(errors);
+        setError("请修正表单中的错误");
         return;
       }
 
@@ -161,6 +213,7 @@ export default function AuthPlugin() {
       // 重新加载列表
       await loadEntries();
       setViewMode("list");
+      setFieldErrors({});
       setError("");
     } catch (err) {
       console.error("保存失败:", err);
@@ -191,6 +244,7 @@ export default function AuthPlugin() {
   const editEntry = (entry: AuthEntry) => {
     setSelectedEntry(entry);
     setFormData(entry);
+    setFieldErrors({});
     setViewMode("edit");
   };
 
@@ -205,6 +259,7 @@ export default function AuthPlugin() {
       digits: 6,
       period: 30,
     });
+    setFieldErrors({});
     setViewMode("add");
     setError("");
   };
@@ -316,14 +371,23 @@ export default function AuthPlugin() {
               <input
                 type="text"
                 value={formData().issuer || ""}
-                onInput={(e) =>
-                  setFormData((prev) => ({
-                    ...prev,
-                    issuer: e.currentTarget.value,
-                  }))
-                }
+                onInput={(e) => {
+                  const value = e.currentTarget.value;
+                  setFormData((prev) => ({ ...prev, issuer: value }));
+                  const error = validateField("issuer", value);
+                  setFieldErrors((prev) => {
+                    const newErrors = { ...prev };
+                    if (error) newErrors.issuer = error;
+                    else delete newErrors.issuer;
+                    return newErrors;
+                  });
+                }}
                 placeholder="例如: Google"
+                classList={{ "input-error": !!fieldErrors().issuer }}
               />
+              <Show when={fieldErrors().issuer}>
+                <div class="field-error">{fieldErrors().issuer}</div>
+              </Show>
             </div>
 
             <div class="form-group">
@@ -331,14 +395,23 @@ export default function AuthPlugin() {
               <input
                 type="text"
                 value={formData().name || ""}
-                onInput={(e) =>
-                  setFormData((prev) => ({
-                    ...prev,
-                    name: e.currentTarget.value,
-                  }))
-                }
+                onInput={(e) => {
+                  const value = e.currentTarget.value;
+                  setFormData((prev) => ({ ...prev, name: value }));
+                  const error = validateField("name", value);
+                  setFieldErrors((prev) => {
+                    const newErrors = { ...prev };
+                    if (error) newErrors.name = error;
+                    else delete newErrors.name;
+                    return newErrors;
+                  });
+                }}
                 placeholder="例如: user@example.com"
+                classList={{ "input-error": !!fieldErrors().name }}
               />
+              <Show when={fieldErrors().name}>
+                <div class="field-error">{fieldErrors().name}</div>
+              </Show>
             </div>
 
             <div class="form-group">
@@ -347,18 +420,27 @@ export default function AuthPlugin() {
                 <input
                   type="text"
                   value={formData().secret || ""}
-                  onInput={(e) =>
-                    setFormData((prev) => ({
-                      ...prev,
-                      secret: e.currentTarget.value,
-                    }))
-                  }
+                  onInput={(e) => {
+                    const value = e.currentTarget.value;
+                    setFormData((prev) => ({ ...prev, secret: value }));
+                    const error = validateField("secret", value);
+                    setFieldErrors((prev) => {
+                      const newErrors = { ...prev };
+                      if (error) newErrors.secret = error;
+                      else delete newErrors.secret;
+                      return newErrors;
+                    });
+                  }}
                   placeholder="输入或生成密钥"
+                  classList={{ "input-error": !!fieldErrors().secret }}
                 />
                 <button class="btn-secondary" onClick={generateSecret}>
                   生成
                 </button>
               </div>
+              <Show when={fieldErrors().secret}>
+                <div class="field-error">{fieldErrors().secret}</div>
+              </Show>
             </div>
 
             <div class="form-row">
@@ -409,7 +491,12 @@ export default function AuthPlugin() {
             </div>
 
             <div class="form-actions">
-              <button class="btn-primary" onClick={saveEntry}>
+              <button
+                class="btn-primary"
+                onClick={saveEntry}
+                disabled={!isFormValid()}
+                classList={{ disabled: !isFormValid() }}
+              >
                 {viewMode() === "add" ? "添加" : "保存"}
               </button>
               <button class="btn-secondary" onClick={() => setViewMode("list")}>
