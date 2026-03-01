@@ -205,8 +205,10 @@ export default function AuthPlugin() {
         return;
       }
 
+      let savedEntry: AuthEntry | null = null;
+
       if (viewMode() === "add") {
-        await invoke("add_auth_entry", {
+        savedEntry = await invoke("add_auth_entry", {
           entry: {
             ...data,
             id: "", // 后端会生成
@@ -214,7 +216,7 @@ export default function AuthPlugin() {
           },
         });
       } else if (viewMode() === "edit" && selectedEntry()) {
-        await invoke("update_auth_entry", {
+        savedEntry = await invoke("update_auth_entry", {
           entry: {
             ...data,
             id: selectedEntry()!.id,
@@ -225,6 +227,12 @@ export default function AuthPlugin() {
 
       // 重新加载列表
       await loadEntries();
+
+      // 如果是新增条目，立即为其生成验证码
+      if (savedEntry) {
+        setTimeout(() => generateTotp(savedEntry!), 100);
+      }
+
       setViewMode("list");
       setFieldErrors({});
       setError("");
@@ -282,6 +290,13 @@ export default function AuthPlugin() {
     try {
       const secret = await invoke<string>("generate_secret");
       setFormData((prev) => ({ ...prev, secret }));
+
+      // 清除密钥字段的验证错误
+      setFieldErrors((prev) => {
+        const newErrors = { ...prev };
+        delete newErrors.secret;
+        return newErrors;
+      });
     } catch (err) {
       console.error("生成密钥失败:", err);
     }
