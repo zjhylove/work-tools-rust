@@ -56,33 +56,67 @@ function App() {
   const [showSettings, setShowSettings] = createSignal(false);
   const [showLogs, setShowLogs] = createSignal(false);
   const [showPluginMarket, setShowPluginMarket] = createSignal(false);
+  const [showDiagnostics, setShowDiagnostics] = createSignal(false);
+  const [diagnostics, setDiagnostics] = createSignal<string[]>([]);
   const [theme, setTheme] = createSignal("light");
   const [autoStart, setAutoStart] = createSignal(false);
   const [minimizeToTray, setMinimizeToTray] = createSignal(true);
 
   // 加载插件列表
   onMount(async () => {
+    console.log("=== App onMount 开始 ===");
     try {
+      console.log("调用 get_installed_plugins...");
       const installedPlugins = await invoke<PluginInfo[]>(
         "get_installed_plugins",
       );
-      console.log("已安装插件:", installedPlugins);
-      setPlugins(installedPlugins);
+      console.log("已安装插件 (原始):", installedPlugins);
+      console.log("已安装插件数量:", installedPlugins.length);
 
-      // 加载配置
-      const config = await invoke<any>("get_app_config");
-      if (config) {
-        setTheme(config.theme || "light");
-        setAutoStart(config.settings?.auto_start || false);
-        setMinimizeToTray(config.settings?.minimize_to_tray !== false);
-      }
+      if (Array.isArray(installedPlugins)) {
+        installedPlugins.forEach((plugin, index) => {
+          console.log(`插件 ${index}:`, {
+            id: plugin.id,
+            name: plugin.name,
+            description: plugin.description,
+            icon: plugin.icon,
+            version: plugin.version,
+          });
+        });
+        setPlugins(installedPlugins);
 
-      // 默认选中第一个插件
-      if (installedPlugins.length > 0) {
-        await openPlugin(installedPlugins[0].id);
+        // 加载配置
+        try {
+          const config = await invoke<any>("get_app_config");
+          console.log("加载配置:", config);
+          if (config) {
+            setTheme(config.theme || "light");
+            setAutoStart(config.settings?.auto_start || false);
+            setMinimizeToTray(config.settings?.minimize_to_tray !== false);
+          }
+        } catch (configError) {
+          console.warn("加载配置失败:", configError);
+        }
+
+        // 默认选中第一个插件
+        if (installedPlugins.length > 0) {
+          console.log("默认选中第一个插件:", installedPlugins[0].id);
+          await openPlugin(installedPlugins[0].id);
+        } else {
+          console.warn("没有已安装的插件!");
+        }
+      } else {
+        console.error(
+          "get_installed_plugins 返回的不是数组:",
+          typeof installedPlugins,
+          installedPlugins,
+        );
       }
     } catch (error) {
       console.error("加载插件失败:", error);
+      console.error("错误详情:", JSON.stringify(error, null, 2));
+
+      // 降级处理:至少显示密码管理器
       setPlugins([
         {
           id: "password-manager",
@@ -93,6 +127,7 @@ function App() {
         },
       ]);
     } finally {
+      console.log("=== App onMount 完成,设置 loading = false ===");
       setLoading(false);
     }
   });
@@ -355,6 +390,51 @@ function App() {
     );
   };
 
+  const runDiagnostics = async () => {
+    const results: string[] = [];
+    results.push("=== 开始诊断 ===");
+    results.push(`时间: ${new Date().toISOString()}`);
+
+    try {
+      results.push("\n1. 测试 get_installed_plugins:");
+      const installed = await invoke<PluginInfo[]>("get_installed_plugins");
+      results.push(`   返回类型: ${typeof installed}`);
+      results.push(`   是否为数组: ${Array.isArray(installed)}`);
+      results.push(
+        `   数组长度: ${Array.isArray(installed) ? installed.length : "N/A"}`,
+      );
+
+      if (Array.isArray(installed)) {
+        installed.forEach((p, i) => {
+          results.push(
+            `   插件[${i}]: id=${p.id}, name=${p.name}, icon=${p.icon}`,
+          );
+        });
+      } else {
+        results.push(`   实际值: ${JSON.stringify(installed)}`);
+      }
+
+      results.push("\n2. 测试 get_available_plugins:");
+      const available = await invoke<PluginInfo[]>("get_available_plugins");
+      results.push(`   可用插件数量: ${available.length}`);
+
+      results.push("\n3. 当前前端状态:");
+      results.push(`   plugins() 数量: ${plugins().length}`);
+      plugins().forEach((p, i) => {
+        results.push(`   前端插件[${i}]: id=${p.id}, name=${p.name}`);
+      });
+
+      results.push("\n4. 当前选中插件:");
+      results.push(`   selectedPlugin: ${selectedPlugin()}`);
+    } catch (error) {
+      results.push(`\n错误: ${error}`);
+    }
+
+    results.push("\n=== 诊断完成 ===");
+    setDiagnostics(results);
+    setShowDiagnostics(true);
+  };
+
   return (
     <div
       style={{
@@ -567,6 +647,29 @@ function App() {
             }
           >
             🧩
+          </button>
+          <button
+            onClick={runDiagnostics}
+            title="诊断"
+            style={{
+              width: "36px",
+              height: "36px",
+              background: "transparent",
+              border: "none",
+              color: "white",
+              cursor: "pointer",
+              "border-radius": "4px",
+              "font-size": "18px",
+              transition: "background 0.2s",
+            }}
+            onMouseEnter={(e) =>
+              (e.currentTarget.style.background = "rgba(255,255,255,0.1)")
+            }
+            onMouseLeave={(e) =>
+              (e.currentTarget.style.background = "transparent")
+            }
+          >
+            🔍
           </button>
         </div>
       </div>
@@ -1310,6 +1413,97 @@ function App() {
                   </div>
                 )}
               </For>
+            </div>
+          </div>
+        </div>
+      </Show>
+
+      {/* 诊断对话框 */}
+      <Show when={showDiagnostics()}>
+        <div
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: "rgba(0,0,0,0.5)",
+            display: "flex",
+            "align-items": "center",
+            "justify-content": "center",
+            "z-index": 1000,
+          }}
+        >
+          <div
+            style={{
+              background: "white",
+              "border-radius": "8px",
+              width: "700px",
+              height: "500px",
+              "box-shadow": "0 4px 20px rgba(0,0,0,0.3)",
+              display: "flex",
+              "flex-direction": "column",
+            }}
+          >
+            <div
+              style={{
+                padding: "20px",
+                "border-bottom": "1px solid #dee2e6",
+                display: "flex",
+                "justify-content": "space-between",
+                "align-items": "center",
+              }}
+            >
+              <h3 style={{ margin: 0 }}>诊断信息</h3>
+              <button
+                onClick={() => setShowDiagnostics(false)}
+                style={{
+                  background: "transparent",
+                  border: "none",
+                  "font-size": "20px",
+                  cursor: "pointer",
+                  color: "#999",
+                }}
+              >
+                ✕
+              </button>
+            </div>
+            <div
+              style={{
+                flex: 1,
+                padding: "20px",
+                overflow: "auto",
+                background: "#1e1e1e",
+                color: "#d4d4d4",
+                "font-family": "monospace",
+                "font-size": "12px",
+                "line-height": "1.6",
+                "white-space": "pre-wrap",
+              }}
+            >
+              {diagnostics().join("\n")}
+            </div>
+            <div
+              style={{
+                padding: "15px 20px",
+                "border-top": "1px solid #dee2e6",
+                "text-align": "right",
+              }}
+            >
+              <button
+                onClick={runDiagnostics}
+                style={{
+                  padding: "8px 20px",
+                  background: "#0078d4",
+                  color: "white",
+                  border: "none",
+                  "border-radius": "3px",
+                  cursor: "pointer",
+                  "font-size": "13px",
+                }}
+              >
+                重新运行
+              </button>
             </div>
           </div>
         </div>
