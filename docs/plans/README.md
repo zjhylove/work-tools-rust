@@ -287,21 +287,82 @@ npm run tauri build
 - Windows: `target/release/bundle/msi/`
 - Linux: `target/release/bundle/deb/`
 
+## 剩余插件技术调研 (2026-03-01)
+
+### 技术栈总览
+
+| 插件 | 核心依赖 | 技术难度 | 工时估算 |
+|------|---------|---------|---------|
+| object-storage-plugin | rust-s3, reqwest | ⭐⭐ | 2-3 天 |
+| ai-chat-plugin | reqwest, SSE | ⭐⭐ | 2-3 天 |
+| db-doc-plugin | sqlx, docx-rs | ⭐⭐⭐ | 2-3 天 |
+| api-doc-plugin | serde, handlebars | ⭐⭐⭐ | 3-4 天 |
+| ip-forward-plugin | russh, tokio | ⭐⭐⭐⭐ | 4-5 天 |
+| db-router-plugin | sqlx | ⭐⭐⭐⭐ | 5-7 天 |
+
+### 开发优先级 (已优化)
+
+**阶段 1: 快速产出** (推荐优先)
+1. ✅ **object-storage-plugin** (2-3 天) - 技术简单,价值高
+2. ✅ **ai-chat-plugin** (2-3 天) - 用户需求强,HTTP 为主
+
+**阶段 2: 核心功能**
+3. ✅ **db-doc-plugin** (2-3 天) - 数据库开发常用
+4. ✅ **api-doc-plugin** (3-4 天) - API 开发必备
+
+**阶段 3: 高级功能**
+5. ⏳ **ip-forward-plugin** (4-5 天) - SSH 隧道复杂
+
+**阶段 4: 可选功能**
+6. ❓ **db-router-plugin** (5-7 天) - 建议简化为配置工具
+
+### 技术要点
+
+**object-storage-plugin**
+- 阿里云 OSS 和腾讯云 COS 都兼容 S3 协议
+- 使用 `rust-s3` 库统一处理
+- 支持文件上传/下载、预签名 URL
+
+**ai-chat-plugin**
+- 使用 `reqwest` 处理 SSE 流式响应
+- 支持多模型 (OpenAI, Claude, 国产大模型)
+- 对话历史存储为 JSON
+
+**db-doc-plugin**
+- 使用 `sqlx` 查询 information_schema
+- Word 生成先用 Markdown,再通过 `docx-rs` 转换
+- 支持表结构、列信息、索引导出
+
+**api-doc-plugin**
+- 依赖 OpenAPI/Swagger 规范
+- 使用 `handlebars` 模板引擎生成文档
+- 支持在线调试和导出
+
+**ip-forward-plugin**
+- 使用 `russh` 实现 SSH 隧道
+- `tokio::net::TcpListener` 处理本地端口映射
+- 支持本地/远程转发
+
+**db-router-plugin**
+- 建议简化为配置工具,非运行时中间件
+- 生成 ShardingSphere 或 MyBatis 配置
+- 测试多数据源连接
+
 ## 下一步工作
 
-1. **auth-plugin 完整界面** (高优先级)
-   - 实现认证条目列表
-   - 表单界面
-   - TOTP 实时显示和倒计时
+1. **object-storage-plugin** (推荐立即开始)
+   - S3 兼容接口
+   - 阿里云 OSS / 腾讯云 COS
+   - 文件上传/下载、Bucket 管理
 
-2. **继续开发剩余插件**
-   - 按优先级逐个完成
-   - 每完成一个进行测试和提交
+2. **ai-chat-plugin**
+   - SSE 流式响应
+   - 多模型支持
+   - 对话历史管理
 
-3. **优化和完善**
-   - 性能优化
-   - 用户体验改进
-   - 文档完善
+3. **完善现有插件**
+   - auth-plugin 完整界面
+   - password-manager 增强
 
 ## 参考资源
 
