@@ -179,7 +179,6 @@ impl PluginManager {
             .read()
             .await
             .values()
-            .filter(|p| p.is_installed)
             .map(|p| p.info.clone())
             .collect()
     }
