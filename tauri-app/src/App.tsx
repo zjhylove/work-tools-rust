@@ -1,5 +1,6 @@
 import { For, Show, createSignal, onMount, createMemo } from "solid-js";
 import { invoke } from "@tauri-apps/api/core";
+import { openUrl as openUrlTauri } from "@tauri-apps/plugin-opener";
 import "./App.css";
 
 // 安全的 invoke 包装函数 - Tauri 2.x 的 invoke 函数会自动处理环境检测
@@ -61,6 +62,10 @@ function App() {
   );
   const [searchQuery, setSearchQuery] = createSignal("");
   const [isEditMode, setIsEditMode] = createSignal(false);
+  // 密码可见性状态: key 是 entry.id, value 是布尔值表示密码是否可见
+  const [visiblePasswords, setVisiblePasswords] = createSignal<
+    Record<string, boolean>
+  >({});
 
   // 视图模式: 'list' 显示密码列表, 'form' 显示添加/编辑表单
   const [viewMode, setViewMode] = createSignal<"list" | "form">("list");
@@ -86,6 +91,10 @@ function App() {
   // 删除确认对话框状态
   const [showDeleteConfirm, setShowDeleteConfirm] = createSignal(false);
   const [entryToDelete, setEntryToDelete] = createSignal<string | null>(null);
+
+  // Toast 提示状态
+  const [toastMessage, setToastMessage] = createSignal("");
+  const [showToast, setShowToast] = createSignal(false);
 
   // 加载插件列表
   onMount(async () => {
@@ -251,6 +260,15 @@ function App() {
         setShowMasterPasswordDialog(false);
         setMasterPassword("");
         setMasterPasswordError("");
+
+        // 验证成功后,加载密码列表
+        if (selectedPlugin() === "password-manager") {
+          const entries = await safeInvoke<PasswordEntry[]>(
+            "get_password_entries",
+          );
+          setPasswordEntries(entries);
+        }
+
         return true;
       } else {
         setMasterPasswordError(isFirstTimeSetup() ? "设置失败" : "密码错误");
@@ -425,7 +443,6 @@ function App() {
 
   const handleAction = async (action: string) => {
     if (action === "save") {
-
       // 检查是否已通过主密码验证
       if (!isAuthenticated()) {
         console.log("未验证主密码,显示提示");
@@ -456,7 +473,6 @@ function App() {
             : new Date().toISOString(),
         updated_at: new Date().toISOString(),
       };
-
 
       try {
         await safeInvoke("save_password_entry", { entry });
@@ -511,7 +527,6 @@ function App() {
   };
 
   const handleDeletePassword = async (id: string) => {
-
     // 检查是否已通过主密码验证
     if (!isAuthenticated()) {
       await showMasterPasswordPrompt();
@@ -553,6 +568,46 @@ function App() {
   const cancelDeletePassword = () => {
     setShowDeleteConfirm(false);
     setEntryToDelete(null);
+  };
+
+  // 切换密码可见性
+  const togglePasswordVisibility = (entryId: string) => {
+    setVisiblePasswords((prev) => ({
+      ...prev,
+      [entryId]: !prev[entryId],
+    }));
+  };
+
+  // 显示 Toast 提示
+  const showToastMessage = (message: string) => {
+    setToastMessage(message);
+    setShowToast(true);
+    setTimeout(() => {
+      setShowToast(false);
+    }, 2000); // 2秒后自动消失
+  };
+
+  // 复制密码到剪贴板
+  const copyPassword = async (password: string) => {
+    try {
+      await navigator.clipboard.writeText(password);
+      showToastMessage("✓ 密码已复制!");
+    } catch (error) {
+      console.error("复制失败:", error);
+      showToastMessage("✗ 复制失败");
+    }
+  };
+
+  // 打开 URL 链接
+  const openUrl = async (url: string) => {
+    if (!url) return;
+    try {
+      await openUrlTauri(url);
+      showToastMessage("✓ 已打开链接!");
+    } catch (error) {
+      console.error("打开链接失败:", error);
+      showToastMessage("✗ 打开链接失败");
+    }
   };
 
   const handleSaveSettings = async () => {
@@ -1071,6 +1126,21 @@ function App() {
                             >
                               {entry.username}
                             </div>
+                            <div
+                              style={{
+                                "font-size": "12px",
+                                opacity: 0.7,
+                                "margin-top": "4px",
+                                "font-family": "monospace",
+                                overflow: "hidden",
+                                "text-overflow": "ellipsis",
+                                "white-space": "nowrap",
+                              }}
+                            >
+                              {visiblePasswords()[entry.id]
+                                ? entry.password
+                                : "••••••••"}
+                            </div>
                           </div>
                           <div
                             style={{
@@ -1079,6 +1149,96 @@ function App() {
                               "flex-shrink": 0,
                             }}
                           >
+                            {/* 显示/隐藏密码按钮 */}
+                            <button
+                              onClick={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                togglePasswordVisibility(entry.id);
+                              }}
+                              title={
+                                visiblePasswords()[entry.id]
+                                  ? "隐藏密码"
+                                  : "显示密码"
+                              }
+                              style={{
+                                padding: "6px 10px",
+                                background: "#6c757d",
+                                color: "white",
+                                border: "none",
+                                "border-radius": "3px",
+                                cursor: "pointer",
+                                "font-size": "12px",
+                                "font-weight": "500",
+                                transition: "background 0.15s",
+                              }}
+                              onMouseEnter={(e) =>
+                                (e.currentTarget.style.background = "#5a6268")
+                              }
+                              onMouseLeave={(e) =>
+                                (e.currentTarget.style.background = "#6c757d")
+                              }
+                            >
+                              {visiblePasswords()[entry.id] ? "🙈" : "👁️"}
+                            </button>
+                            {/* 复制密码按钮 */}
+                            <button
+                              onClick={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                copyPassword(entry.password);
+                              }}
+                              title="复制密码"
+                              style={{
+                                padding: "6px 10px",
+                                background: "#28a745",
+                                color: "white",
+                                border: "none",
+                                "border-radius": "3px",
+                                cursor: "pointer",
+                                "font-size": "12px",
+                                "font-weight": "500",
+                                transition: "background 0.15s",
+                              }}
+                              onMouseEnter={(e) =>
+                                (e.currentTarget.style.background = "#218838")
+                              }
+                              onMouseLeave={(e) =>
+                                (e.currentTarget.style.background = "#28a745")
+                              }
+                            >
+                              📋
+                            </button>
+                            {/* 打开链接按钮 (仅当有 URL 时显示) */}
+                            <Show when={entry.url}>
+                              <button
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  openUrl(entry.url!);
+                                }}
+                                title="打开链接"
+                                style={{
+                                  padding: "6px 10px",
+                                  background: "#17a2b8",
+                                  color: "white",
+                                  border: "none",
+                                  "border-radius": "3px",
+                                  cursor: "pointer",
+                                  "font-size": "12px",
+                                  "font-weight": "500",
+                                  transition: "background 0.15s",
+                                }}
+                                onMouseEnter={(e) =>
+                                  (e.currentTarget.style.background = "#138496")
+                                }
+                                onMouseLeave={(e) =>
+                                  (e.currentTarget.style.background = "#17a2b8")
+                                }
+                              >
+                                🔗
+                              </button>
+                            </Show>
                             <button
                               onClick={(e) => {
                                 e.preventDefault();
@@ -1220,49 +1380,6 @@ function App() {
                       ✕ 返回列表
                     </button>
                   </div>
-
-                  <Show when={selectedEntry()}>
-                    <div
-                      style={{
-                        margin: "0 0 20px 0",
-                        padding: "12px",
-                        background: "#fff8e1",
-                        "border-left": "4px solid #ffc107",
-                        "border-radius": "3px",
-                      }}
-                    >
-                      <div
-                        style={{
-                          display: "flex",
-                          "justify-content": "space-between",
-                          "align-items": "center",
-                        }}
-                      >
-                        <span style={{ color: "#856404", "font-size": "14px" }}>
-                          正在编辑密码
-                        </span>
-                        <button
-                          onClick={(e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            handleDeletePassword(selectedEntry()!.id);
-                          }}
-                          style={{
-                            padding: "6px 12px",
-                            background: "#d13438",
-                            color: "white",
-                            border: "none",
-                            "border-radius": "3px",
-                            cursor: "pointer",
-                            "font-size": "12px",
-                            "font-weight": "500",
-                          }}
-                        >
-                          🗑️ 删除
-                        </button>
-                      </div>
-                    </div>
-                  </Show>
 
                   <Show when={pluginView()}>
                     <For each={pluginView()!.fields}>
@@ -2117,6 +2234,28 @@ function App() {
               </div>
             </div>
           </div>
+        </div>
+      </Show>
+
+      {/* Toast 提示 */}
+      <Show when={showToast()}>
+        <div
+          style={{
+            position: "fixed",
+            bottom: "20px",
+            left: "50%",
+            transform: "translateX(-50%)",
+            background: "#333",
+            color: "white",
+            padding: "12px 24px",
+            "border-radius": "4px",
+            "box-shadow": "0 2px 8px rgba(0,0,0,0.2)",
+            "font-size": "14px",
+            "z-index": 2000,
+            animation: "fadeIn 0.3s, fadeOut 0.3s 1.7s",
+          }}
+        >
+          {toastMessage()}
         </div>
       </Show>
     </div>
