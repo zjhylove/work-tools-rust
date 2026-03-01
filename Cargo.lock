@@ -2646,6 +2646,8 @@ dependencies = [
  "rand 0.8.5",
  "serde",
  "serde_json",
+ "tracing",
+ "tracing-subscriber",
  "worktools-rpc-protocol",
  "worktools-shared-types",
 ]

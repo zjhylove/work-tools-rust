@@ -46,6 +46,12 @@ fn get_view_schema() -> ViewSchema {
 }
 
 fn main() -> Result<()> {
+    // 配置日志输出到 stderr,保持 stdout 纯净用于 JSON-RPC
+    tracing_subscriber::fmt()
+        .with_max_level(tracing::Level::INFO)
+        .with_writer(std::io::stderr)
+        .init();
+
     let mut rpc_server = RpcServer::new();
 
     // 注册 RPC 方法
