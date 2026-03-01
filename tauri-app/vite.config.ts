@@ -23,10 +23,19 @@ export default defineConfig(async () => ({
           host,
           port: 1421,
         }
-      : undefined,
+      : {
+          // 优化 HMR 配置
+          overlay: true,
+        },
     watch: {
       // 3. tell Vite to ignore watching `src-tauri`
       ignored: ["**/src-tauri/**"],
+      // 4. 监听 CSS 文件变化
+      usePolling: false,
     },
+  },
+  // 优化 CSS 处理
+  css: {
+    devSourcemap: true,
   },
 }));
