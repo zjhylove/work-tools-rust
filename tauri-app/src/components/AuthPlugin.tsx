@@ -221,14 +221,14 @@ export default function AuthPlugin() {
 
   return (
     <div class="auth-plugin">
-      <div class="auth-plugin-header">
-        <h2>双因素认证</h2>
-        <Show when={viewMode() === "list"}>
+      <Show when={viewMode() === "list"}>
+        <div class="auth-plugin-header">
+          <h2>双因素认证</h2>
           <button class="btn-primary" onClick={addNew}>
             + 添加
           </button>
-        </Show>
-      </div>
+        </div>
+      </Show>
 
       {/* 错误提示 */}
       <Show when={error()}>
@@ -299,11 +299,17 @@ export default function AuthPlugin() {
         </div>
       </Show>
 
-      {/* 表单模态对话框 */}
+      {/* 表单视图 */}
       <Show when={viewMode() === "add" || viewMode() === "edit"}>
-        <div class="modal-overlay">
-          <div class="modal auth-modal">
-            <h3>{viewMode() === "add" ? "添加认证" : "编辑认证"}</h3>
+        <div class="auth-form-container">
+          <div class="auth-form-content">
+            {/* 标题栏 */}
+            <div class="auth-form-header">
+              <h2>{viewMode() === "add" ? "添加认证" : "编辑认证"}</h2>
+              <button class="btn-secondary" onClick={() => setViewMode("list")}>
+                ✕ 返回列表
+              </button>
+            </div>
 
             <div class="form-group">
               <label>发行方 *</label>
@@ -402,7 +408,7 @@ export default function AuthPlugin() {
               </div>
             </div>
 
-            <div class="modal-actions">
+            <div class="form-actions">
               <button class="btn-primary" onClick={saveEntry}>
                 {viewMode() === "add" ? "添加" : "保存"}
               </button>

@@ -136,7 +136,37 @@
   flex-shrink: 0;
 }
 
-/* 模态框样式 */
+/* 表单容器样式 */
+.auth-form-container {
+  flex: 1;
+  background: var(--bg-primary);
+  "border-radius": "12px",
+  border: 1px solid var(--border-color);
+  overflow: auto;
+  "box-shadow": var(--shadow-sm);
+}
+
+.auth-form-content {
+  padding: 28px;
+}
+
+.auth-form-header {
+  display: flex;
+  "justify-content": space-between;
+  "align-items": center;
+  "margin-bottom": "24px";
+  "padding-bottom": "16px";
+  "border-bottom": "2px solid var(--accent)";
+}
+
+.auth-form-header h2 {
+  margin: 0;
+  color: var(--text-primary);
+  "font-size": "20px",
+  "font-weight": "700",
+}
+
+/* 模态框样式(仅用于删除确认) */
 .modal-overlay {
   position: fixed;
   top: 0;
@@ -160,10 +190,6 @@
   border: 1px solid var(--border-color);
 }
 
-.auth-modal {
-  max-width: 500px;
-}
-
 .modal h3 {
   margin: 0 0 16px 0;
   font-size: 18px;
@@ -181,10 +207,10 @@
   display: flex;
   gap: 10px;
   justify-content: flex-end;
-  margin-top: 20px;
 }
 
 /* 表单样式 */
+.form-group {
   margin-bottom: 16px;
 }
 
