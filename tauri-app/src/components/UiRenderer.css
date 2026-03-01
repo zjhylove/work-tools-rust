@@ -1,75 +1,106 @@
 .ui-renderer {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: var(--space-lg);
 }
 
 .field-container {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--space-sm);
 }
 
 .field-label {
   font-weight: 500;
   color: var(--text-primary);
-  font-size: 14px;
+  font-size: 13px;
+  letter-spacing: -0.1px;
 }
 
 .field-input,
-.field-select {
-  padding: 8px 12px;
+.field-select,
+.field-textarea {
+  padding: var(--space-sm) var(--space-md);
   border: 1px solid var(--border-color);
-  border-radius: 6px;
-  font-size: 14px;
+  border-radius: var(--radius-md);
+  font-size: 13px;
   background: var(--bg-primary);
   color: var(--text-primary);
+  transition: all 0.2s ease;
+  font-family: inherit;
 }
 
 .field-input:focus,
-.field-select:focus {
+.field-select:focus,
+.field-textarea:focus {
   outline: none;
   border-color: var(--accent);
-  box-shadow: 0 0 0 2px var(--accent-bg);
+  box-shadow: 0 0 0 3px var(--accent-light);
+}
+
+.field-input::placeholder,
+.field-textarea::placeholder {
+  color: var(--text-tertiary);
+}
+
+.field-textarea {
+  resize: vertical;
+  min-height: 80px;
+  line-height: 1.5;
 }
 
 .field-checkbox-label {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-sm);
   cursor: pointer;
+  user-select: none;
+  padding: var(--space-sm) 0;
 }
 
 .field-checkbox-label input[type='checkbox'] {
   width: 16px;
   height: 16px;
   cursor: pointer;
+  accent-color: var(--accent);
 }
 
 .field-button {
-  padding: 10px 20px;
+  padding: var(--space-sm) var(--space-lg);
   background: var(--accent);
   color: white;
   border: none;
-  border-radius: 6px;
-  font-size: 14px;
+  border-radius: var(--radius-md);
+  font-size: 13px;
   font-weight: 500;
   cursor: pointer;
-  transition: background-color 0.2s;
+  transition: all 0.2s ease;
+  user-select: none;
+  white-space: nowrap;
 }
 
 .field-button:hover {
   background: var(--accent-hover);
+  box-shadow: var(--shadow-sm);
+  transform: translateY(-1px);
 }
 
 .field-button:active {
-  transform: translateY(1px);
+  transform: translateY(0);
+  box-shadow: none;
+}
+
+.field-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
 }
 
 .field-table {
   border: 1px solid var(--border-color);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   overflow: hidden;
+  box-shadow: var(--shadow-sm);
 }
 
 .field-table table {
@@ -79,23 +110,36 @@
 
 .field-table th,
 .field-table td {
-  padding: 10px 12px;
+  padding: var(--space-md);
   text-align: left;
-  border-bottom: 1px solid var(--border-color);
+  border-bottom: 1px solid var(--border-light);
+  font-size: 13px;
 }
 
 .field-table th {
   background: var(--bg-secondary);
   font-weight: 500;
   color: var(--text-primary);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
 }
 
 .field-table td {
   color: var(--text-secondary);
 }
 
+.field-table tr:last-child td {
+  border-bottom: none;
+}
+
+.field-table tr:hover td {
+  background: var(--bg-secondary);
+}
+
 .field-table .empty-table {
   text-align: center;
-  color: var(--text-secondary);
+  color: var(--text-tertiary);
+  padding: var(--space-2xl);
   font-style: italic;
 }
