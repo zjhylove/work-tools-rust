@@ -28,6 +28,37 @@ export default (props: PluginViewProps) => {
       const bridge = createPluginBridge(props.pluginId);
       bridge.exposeToWindow();
 
+      // 等待DOM更新后自动加载初始数据
+      setTimeout(async () => {
+        try {
+          // 对于 password-manager,自动加载数据
+          if (props.pluginId === "password-manager") {
+            const result = await bridge.call("list_passwords");
+            console.log("密码列表:", result);
+
+            // 更新DOM显示数据
+            const listEl = document.getElementById("password-list");
+            if (listEl && result.entries) {
+              if (result.entries.length === 0) {
+                listEl.innerHTML = "<p>暂无密码条目</p>";
+              } else {
+                listEl.innerHTML = result.entries
+                  .map(
+                    (entry: any) => `
+                  <div style="padding: 10px; border: 1px solid #ddd; margin-bottom: 5px; border-radius: 4px;">
+                    <strong>${entry.service}</strong> - ${entry.username}
+                  </div>
+                `,
+                  )
+                  .join("");
+              }
+            }
+          }
+        } catch (err) {
+          console.error("加载初始数据失败:", err);
+        }
+      }, 100);
+
       setLoading(false);
     } catch (err) {
       setError(err as string);
