@@ -372,7 +372,7 @@ function App() {
           width: "250px",
           display: "flex",
           "flex-direction": "column",
-          background: "linear-gradient(180deg, #2c3e50 0%, #34495e 100%)",
+          background: "#1e1e1e",
           color: "white",
           "flex-shrink": 0,
         }}
@@ -382,15 +382,16 @@ function App() {
           style={{
             padding: "20px 15px",
             "text-align": "center",
-            "border-bottom": "1px solid rgba(255,255,255,0.1)",
+            "border-bottom": "1px solid #333",
           }}
         >
           <h2
             style={{
               margin: 0,
-              "font-size": "20px",
+              "font-size": "18px",
               "font-weight": "600",
-              color: "#ecf0f1",
+              color: "#ffffff",
+              "letter-spacing": "0.5px",
             }}
           >
             Work Tools
@@ -409,27 +410,29 @@ function App() {
             <For each={plugins()}>
               {(plugin) => (
                 <div
-                  onClick={() => {
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
                     console.log("点击了插件:", plugin.id, plugin.name);
                     openPlugin(plugin.id);
                   }}
                   style={{
                     padding: "12px 15px",
                     cursor: "pointer",
+                    "user-select": "none",
                     background:
                       selectedPlugin() === plugin.id
-                        ? "rgba(52, 152, 219, 0.3)"
+                        ? "#2d2d2d"
                         : "transparent",
                     "border-left":
                       selectedPlugin() === plugin.id
-                        ? "3px solid #3498db"
+                        ? "3px solid #0078d4"
                         : "3px solid transparent",
-                    transition: "all 0.2s",
+                    transition: "all 0.15s ease",
                   }}
                   onMouseEnter={(e) => {
                     if (selectedPlugin() !== plugin.id) {
-                      e.currentTarget.style.background =
-                        "rgba(255,255,255,0.05)";
+                      e.currentTarget.style.background = "#2a2a2a";
                     }
                   }}
                   onMouseLeave={(e) => {
@@ -490,7 +493,7 @@ function App() {
         <div
           style={{
             padding: "10px",
-            "border-top": "1px solid rgba(255,255,255,0.1)",
+            "border-top": "1px solid #333",
             display: "flex",
             "justify-content": "center",
             gap: "15px",
@@ -572,7 +575,7 @@ function App() {
       <div
         style={{
           flex: 1,
-          background: "#ecf0f1",
+          background: "#f5f5f5",
           overflow: "auto",
           display: "flex",
           "flex-direction": "column",
@@ -596,17 +599,18 @@ function App() {
                 display: "flex",
                 "flex-direction": "column",
                 background: "white",
-                "border-radius": "8px",
+                "border-radius": "6px",
                 overflow: "hidden",
-                "box-shadow": "0 2px 8px rgba(0,0,0,0.1)",
+                "box-shadow": "0 1px 3px rgba(0,0,0,0.08)",
+                border: "1px solid #e0e0e0",
               }}
             >
               {/* 工具栏 */}
               <div
                 style={{
                   padding: "15px",
-                  background: "#f8f9fa",
-                  "border-bottom": "1px solid #dee2e6",
+                  background: "#fafafa",
+                  "border-bottom": "1px solid #e0e0e0",
                 }}
               >
                 <div
@@ -620,25 +624,34 @@ function App() {
                     onClick={handleAddNew}
                     style={{
                       padding: "8px 16px",
-                      background: "#28a745",
+                      background: "#0078d4",
                       color: "white",
                       border: "none",
-                      "border-radius": "4px",
+                      "border-radius": "3px",
                       cursor: "pointer",
-                      "font-size": "14px",
+                      "font-size": "13px",
+                      "font-weight": "500",
+                      transition: "background 0.15s",
                     }}
+                    onMouseEnter={(e) =>
+                      (e.currentTarget.style.background = "#106ebe")
+                    }
+                    onMouseLeave={(e) =>
+                      (e.currentTarget.style.background = "#0078d4")
+                    }
                   >
                     ➕ 新建
                   </button>
                   <button
                     style={{
                       padding: "8px 16px",
-                      background: "#17a2b8",
+                      background: "#6c757d",
                       color: "white",
                       border: "none",
-                      "border-radius": "4px",
+                      "border-radius": "3px",
                       cursor: "pointer",
-                      "font-size": "14px",
+                      "font-size": "13px",
+                      "font-weight": "500",
                     }}
                   >
                     📥 导入
@@ -649,9 +662,10 @@ function App() {
                       background: "#6c757d",
                       color: "white",
                       border: "none",
-                      "border-radius": "4px",
+                      "border-radius": "3px",
                       cursor: "pointer",
-                      "font-size": "14px",
+                      "font-size": "13px",
+                      "font-weight": "500",
                     }}
                   >
                     📤 导出
@@ -665,9 +679,10 @@ function App() {
                   style={{
                     width: "100%",
                     padding: "8px 12px",
-                    border: "1px solid #ced4da",
-                    "border-radius": "4px",
-                    "font-size": "14px",
+                    border: "1px solid #d0d0d0",
+                    "border-radius": "3px",
+                    "font-size": "13px",
+                    "font-family": "inherit",
                   }}
                 />
               </div>
@@ -704,27 +719,32 @@ function App() {
                   <For each={filteredEntries()}>
                     {(entry) => (
                       <div
-                        onClick={() => handleSelectEntry(entry)}
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          handleSelectEntry(entry);
+                        }}
                         style={{
                           padding: "12px 15px",
                           margin: "0 0 8px 0",
                           background:
                             selectedEntry()?.id === entry.id
-                              ? "#3498db"
+                              ? "#0078d4"
                               : "white",
                           color:
                             selectedEntry()?.id === entry.id ? "white" : "#333",
-                          "border-radius": "4px",
+                          "border-radius": "3px",
                           cursor: "pointer",
+                          "user-select": "none",
                           border:
                             selectedEntry()?.id === entry.id
-                              ? "2px solid #2980b9"
-                              : "1px solid #dee2e6",
-                          transition: "all 0.2s",
+                              ? "1px solid #0078d4"
+                              : "1px solid #e0e0e0",
+                          transition: "all 0.15s ease",
                         }}
                         onMouseEnter={(e) => {
                           if (selectedEntry()?.id !== entry.id) {
-                            e.currentTarget.style.background = "#f8f9fa";
+                            e.currentTarget.style.background = "#fafafa";
                           }
                         }}
                         onMouseLeave={(e) => {
@@ -754,9 +774,9 @@ function App() {
               <div
                 style={{
                   padding: "10px 15px",
-                  background: "#f8f9fa",
-                  "border-top": "1px solid #dee2e6",
-                  "font-size": "13px",
+                  background: "#fafafa",
+                  "border-top": "1px solid #e0e0e0",
+                  "font-size": "12px",
                   color: "#666",
                 }}
               >
@@ -772,20 +792,21 @@ function App() {
               style={{
                 flex: 1,
                 background: "white",
-                "border-radius": "8px",
-                border: "1px solid #dee2e6",
+                "border-radius": "6px",
+                border: "1px solid #e0e0e0",
                 overflow: "auto",
-                "box-shadow": "0 2px 8px rgba(0,0,0,0.1)",
+                "box-shadow": "0 1px 3px rgba(0,0,0,0.08)",
               }}
             >
               <div style={{ padding: "20px" }}>
                 <h2
                   style={{
                     margin: "0 0 20px 0",
-                    color: "#2c3e50",
-                    "font-size": "20px",
-                    "border-bottom": "2px solid #3498db",
-                    "padding-bottom": "10px",
+                    color: "#1e1e1e",
+                    "font-size": "18px",
+                    "font-weight": "600",
+                    "border-bottom": "2px solid #0078d4",
+                    "padding-bottom": "8px",
                   }}
                 >
                   {isEditMode() ? "编辑密码" : "新建密码"}
@@ -796,9 +817,9 @@ function App() {
                     style={{
                       margin: "0 0 20px 0",
                       padding: "12px",
-                      background: "#fff3cd",
+                      background: "#fff8e1",
                       "border-left": "4px solid #ffc107",
-                      "border-radius": "4px",
+                      "border-radius": "3px",
                     }}
                   >
                     <div
@@ -812,17 +833,20 @@ function App() {
                         正在编辑密码
                       </span>
                       <button
-                        onClick={() =>
-                          handleDeletePassword(selectedEntry()!.id)
-                        }
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          handleDeletePassword(selectedEntry()!.id);
+                        }}
                         style={{
                           padding: "6px 12px",
-                          background: "#dc3545",
+                          background: "#d13438",
                           color: "white",
                           border: "none",
-                          "border-radius": "4px",
+                          "border-radius": "3px",
                           cursor: "pointer",
                           "font-size": "12px",
+                          "font-weight": "500",
                         }}
                       >
                         🗑️ 删除
@@ -839,9 +863,10 @@ function App() {
                           <label
                             style={{
                               display: "block",
-                              "margin-bottom": "8px",
-                              "font-weight": "600",
-                              color: "#2c3e50",
+                              "margin-bottom": "6px",
+                              "font-weight": "500",
+                              color: "#1e1e1e",
+                              "font-size": "13px",
                             }}
                           >
                             {field.label}
@@ -852,13 +877,14 @@ function App() {
                             value={formData()[field.key] || ""}
                             style={{
                               width: "100%",
-                              padding: "10px 12px",
+                              padding: "8px 10px",
                               border: formErrors()[field.key]
-                                ? "2px solid #dc3545"
-                                : "1px solid #ced4da",
-                              "border-radius": "4px",
-                              "font-size": "14px",
-                              transition: "border-color 0.2s",
+                                ? "2px solid #d13438"
+                                : "1px solid #d0d0d0",
+                              "border-radius": "3px",
+                              "font-size": "13px",
+                              "font-family": "inherit",
+                              transition: "border-color 0.15s",
                             }}
                             onInput={(e) =>
                               handleFieldChange(
@@ -871,9 +897,9 @@ function App() {
                           <Show when={formErrors()[field.key]}>
                             <div
                               style={{
-                                "margin-top": "5px",
-                                color: "#dc3545",
-                                "font-size": "13px",
+                                "margin-top": "4px",
+                                color: "#d13438",
+                                "font-size": "12px",
                               }}
                             >
                               {formErrors()[field.key]}
@@ -883,18 +909,22 @@ function App() {
                       </Show>
                       <Show when={field.type === "button"}>
                         <button
-                          onClick={() => handleAction(field.key)}
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            handleAction(field.key);
+                          }}
                           disabled={!isFormValid()}
                           style={{
-                            padding: "12px 24px",
-                            background: isFormValid() ? "#3498db" : "#95a5a6",
+                            padding: "10px 20px",
+                            background: isFormValid() ? "#0078d4" : "#a0a0a0",
                             color: "white",
                             border: "none",
-                            "border-radius": "4px",
-                            "font-weight": "600",
+                            "border-radius": "3px",
+                            "font-weight": "500",
                             cursor: isFormValid() ? "pointer" : "not-allowed",
-                            "font-size": "15px",
-                            transition: "all 0.2s",
+                            "font-size": "14px",
+                            transition: "all 0.15s",
                             opacity: isFormValid() ? 1 : 0.6,
                             width: "100%",
                           }}
@@ -910,21 +940,24 @@ function App() {
                   <div
                     style={{
                       "margin-top": "20px",
-                      padding: "15px",
-                      background: "#f8f9fa",
-                      "border-radius": "4px",
+                      padding: "12px",
+                      background: "#fafafa",
+                      "border-radius": "3px",
+                      border: "1px solid #e0e0e0",
                     }}
                   >
                     <div
                       style={{
-                        "font-size": "12px",
+                        "font-size": "11px",
                         color: "#666",
-                        "margin-bottom": "5px",
+                        "margin-bottom": "4px",
+                        "text-transform": "uppercase",
+                        "letter-spacing": "0.5px",
                       }}
                     >
                       创建时间
                     </div>
-                    <div style={{ "font-size": "14px", color: "#333" }}>
+                    <div style={{ "font-size": "13px", color: "#333" }}>
                       {new Date(selectedEntry()!.created_at).toLocaleString()}
                     </div>
                   </div>
