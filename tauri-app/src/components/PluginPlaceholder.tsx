@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
 
 interface PluginPlaceholderProps {
@@ -10,9 +10,10 @@ export default function PluginPlaceholder({
   pluginId,
   setSelectedPlugin,
 }: PluginPlaceholderProps) {
-  const [html, setHtml] = useState<string>("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>("");
+  const [pluginUrl, setPluginUrl] = useState<string>("");
+  const iframeRef = useRef<HTMLIFrameElement>(null);
 
   useEffect(() => {
     const loadPlugin = async () => {
@@ -23,21 +24,64 @@ export default function PluginPlaceholder({
         setLoading(true);
         setError("");
 
-        // 尝试读取插件的前端资源
+        // 获取插件资源路径
         try {
-          const indexHtml = await invoke<string>("read_plugin_asset", {
+          const assetsUrl = await invoke<string>("get_plugin_assets_url", {
             pluginId: pluginId,
-            assetPath: "index.html",
           });
 
-          console.log("[PluginPlaceholder] 插件资源加载成功");
-          setHtml(indexHtml);
+          console.log("[PluginPlaceholder] 插件资源路径:", assetsUrl);
+          // 使用 file:// 协议加载本地文件
+          setPluginUrl(`file://${assetsUrl}/index.html`);
+
+          // 设置 window.pluginAPI 供插件使用
+          if (iframeRef.current) {
+            const iframe = iframeRef.current;
+            iframe.onload = () => {
+              console.log("[PluginPlaceholder] iframe 加载完成");
+              try {
+                // 向 iframe 注入 pluginAPI
+                if (iframe.contentWindow) {
+                  iframe.contentWindow.window.pluginAPI = {
+                    call: async (
+                      method: string,
+                      params: Record<string, unknown>,
+                    ) => {
+                      console.log(
+                        `[PluginAPI] 调用 ${pluginId}.${method}`,
+                        params,
+                      );
+                      return await invoke("call_plugin_method", {
+                        pluginId,
+                        method,
+                        params,
+                      });
+                    },
+                    get_plugin_config: async (id: string) => {
+                      return await invoke("get_plugin_config", {
+                        pluginId: id,
+                      });
+                    },
+                    set_plugin_config: async (
+                      id: string,
+                      config: Record<string, unknown>,
+                    ) => {
+                      return await invoke("set_plugin_config", {
+                        pluginId: id,
+                        config,
+                      });
+                    },
+                  };
+                  console.log("[PluginPlaceholder] pluginAPI 注入成功");
+                }
+              } catch (err) {
+                console.error("[PluginPlaceholder] 注入 pluginAPI 失败:", err);
+              }
+            };
+          }
         } catch (err) {
-          // 插件没有前端资源,显示提示
-          console.log("[PluginPlaceholder] 插件没有前端资源");
-          setError(
-            `插件 "${pluginId}" 尚未实现 React 前端组件。\n\n请参考以下文件实现:\n- /src/components/PasswordManagerReact.tsx\n- /src/components/AuthPluginReact.tsx`,
-          );
+          console.error("[PluginPlaceholder] 获取插件路径失败:", err);
+          setError(`插件 "${pluginId}" 加载失败: ${err}`);
         }
       } catch (err) {
         console.error("[PluginPlaceholder] 加载插件失败:", err);
@@ -70,8 +114,8 @@ export default function PluginPlaceholder({
           textAlign: "center",
         }}
       >
-        <div style={{ fontSize: "64px", marginBottom: "20px" }}>🚧</div>
-        <h2>插件开发中</h2>
+        <div style={{ fontSize: "64px", marginBottom: "20px" }}>⚠️</div>
+        <h2>插件加载失败</h2>
         <pre
           style={{
             textAlign: "left",
@@ -105,12 +149,20 @@ export default function PluginPlaceholder({
     );
   }
 
-  // 如果有 HTML 内容,使用 dangerouslySetInnerHTML 渲染
-  if (html) {
+  // 使用 iframe 加载插件前端
+  if (pluginUrl) {
     return (
-      <div
-        style={{ padding: "20px", height: "100%", overflow: "auto" }}
-        dangerouslySetInnerHTML={{ __html: html }}
+      <iframe
+        ref={iframeRef}
+        src={pluginUrl}
+        style={{
+          width: "100%",
+          height: "100%",
+          border: "none",
+          padding: 0,
+          margin: 0,
+        }}
+        title={`Plugin: ${pluginId}`}
       />
     );
   }

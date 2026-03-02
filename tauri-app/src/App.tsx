@@ -3,11 +3,6 @@ import { invoke } from "@tauri-apps/api/core";
 import PluginStore from "./components/PluginStore";
 import PluginPlaceholder from "./components/PluginPlaceholder";
 import { devError, devLog, devWarn } from "./utils/logger";
-import { getPluginLoader } from "./utils/pluginRegistry";
-
-// 直接导入 React 组件
-import PasswordManager from "./components/PasswordManager";
-import AuthPlugin from "./components/AuthPlugin";
 
 // 安全的 invoke 包装函数
 const safeInvoke = async <T,>(
@@ -111,24 +106,16 @@ export default function App() {
     setSelectedPlugin(pluginId);
   };
 
-  // 🔥 直接渲染组件 (不使用 lazy)
+  // 所有插件统一使用 PluginPlaceholder 加载
   const renderPlugin = () => {
     if (!selectedPlugin) return null;
 
-    // 直接使用 switch 语句渲染组件
-    switch (selectedPlugin) {
-      case "password-manager":
-        return <PasswordManager />;
-      case "auth":
-        return <AuthPlugin />;
-      default:
-        return (
-          <PluginPlaceholder
-            pluginId={selectedPlugin}
-            setSelectedPlugin={setSelectedPlugin}
-          />
-        );
-    }
+    return (
+      <PluginPlaceholder
+        pluginId={selectedPlugin}
+        setSelectedPlugin={setSelectedPlugin}
+      />
+    );
   };
 
   return (
