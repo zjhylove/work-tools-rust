@@ -26,22 +26,36 @@ export default function PluginPlaceholder({
 
         // 读取插件的 index.html 内容
         try {
-          const html = await invoke<string>("read_plugin_asset", {
-            pluginId: pluginId,
-            assetPath: "index.html",
-          });
+          let html: string;
+          let mainJs: string;
+          let styles: string;
 
-          // 读取 main.js 内容
-          const mainJs = await invoke<string>("read_plugin_asset", {
-            pluginId: pluginId,
-            assetPath: "main.js",
-          });
+          try {
+            html = await invoke<string>("read_plugin_asset", {
+              pluginId: pluginId,
+              assetPath: "index.html",
+            });
+          } catch (e) {
+            throw new Error(`读取 index.html 失败: ${e}`);
+          }
 
-          // 读取 styles.css 内容
-          const styles = await invoke<string>("read_plugin_asset", {
-            pluginId: pluginId,
-            assetPath: "styles.css",
-          });
+          try {
+            mainJs = await invoke<string>("read_plugin_asset", {
+              pluginId: pluginId,
+              assetPath: "main.js",
+            });
+          } catch (e) {
+            throw new Error(`读取 main.js 失败: ${e}`);
+          }
+
+          try {
+            styles = await invoke<string>("read_plugin_asset", {
+              pluginId: pluginId,
+              assetPath: "styles.css",
+            });
+          } catch (e) {
+            throw new Error(`读取 styles.css 失败: ${e}`);
+          }
 
           console.log("[PluginPlaceholder] 插件资源读取成功");
 
@@ -98,7 +112,13 @@ export default function PluginPlaceholder({
           }, 100);
         } catch (err) {
           console.error("[PluginPlaceholder] 读取插件资源失败:", err);
-          setError(`插件 "${pluginId}" 资源加载失败: ${err}`);
+          if (err instanceof Error) {
+            setError(
+              `插件 "${pluginId}" 未安装或资源不完整\n\n错误详情: ${err.message}\n\n请先通过插件商店安装插件包。`,
+            );
+          } else {
+            setError(`插件 "${pluginId}" 资源加载失败`);
+          }
         }
       } catch (err) {
         console.error("[PluginPlaceholder] 加载插件失败:", err);
