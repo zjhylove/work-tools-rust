@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import PluginStoreReact from "./components/PluginStoreReact";
-import PluginPlaceholder from "./components/PluginPlaceholder";
+import PluginStore from "./components/PluginStore";
+import PluginView from "./components/PluginView";
 import { devError, devLog, devWarn } from "./utils/logger";
 import { getPluginLoader } from "./utils/pluginRegistry";
 
@@ -123,7 +123,7 @@ export default function App() {
         return <AuthPluginReact />;
       default:
         return (
-          <PluginPlaceholder
+          <PluginView
             pluginId={selectedPlugin}
             setSelectedPlugin={setSelectedPlugin}
           />
@@ -467,7 +467,7 @@ export default function App() {
                 overflow: "auto",
               }}
             >
-              <PluginStoreReact onPluginsChange={() => {}} />
+              <PluginStore onPluginsChange={() => {}} />
             </div>
           </div>
         </div>

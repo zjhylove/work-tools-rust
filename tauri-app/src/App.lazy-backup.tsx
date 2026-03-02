@@ -1,15 +1,11 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, lazy, Suspense } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import PluginStoreReact from "./components/PluginStoreReact";
-import PluginPlaceholder from "./components/PluginPlaceholder";
+import PluginStore from "./components/PluginStore";
+import PluginView from "./components/PluginView";
 import { devError, devLog, devWarn } from "./utils/logger";
 import { getPluginLoader } from "./utils/pluginRegistry";
 
-// 直接导入 React 组件进行测试
-import PasswordManagerReact from "./components/PasswordManagerReact";
-import AuthPluginReact from "./components/AuthPluginReact";
-
-// 安全的 invoke 包装函数
+// 安全的 invoke 包装函数 - Tauri 2.x 的 invoke 函数会自动处理环境检测
 const safeInvoke = async <T,>(
   command: string,
   args?: Record<string, unknown>,
@@ -40,10 +36,12 @@ export default function App() {
   // 加载插件列表
   useEffect(() => {
     const loadPlugins = async () => {
+      // 检查是否在 Tauri 环境中
       const tauriAvailable =
         typeof window !== "undefined" && "__TAURI__" in window;
       devLog("Tauri 环境检查:", tauriAvailable);
 
+      // 如果不在 Tauri 环境,使用模拟数据
       if (!tauriAvailable) {
         devWarn("不在 Tauri 环境,使用模拟数据");
         const mockPlugins: PluginInfo[] = [
@@ -77,6 +75,7 @@ export default function App() {
           devLog(`加载了 ${installedPlugins.length} 个插件`);
           setPlugins(installedPlugins);
 
+          // 默认选中第一个插件
           if (!selectedPlugin && installedPlugins.length > 0) {
             setSelectedPlugin(installedPlugins[0].id);
           }
@@ -89,6 +88,7 @@ export default function App() {
       } catch (error) {
         devError("加载插件失败:", error);
 
+        // 降级处理:至少显示密码管理器
         setPlugins([
           {
             id: "password-manager",
@@ -109,26 +109,35 @@ export default function App() {
   const openPlugin = async (pluginId: string) => {
     devLog("打开插件:", pluginId);
     setSelectedPlugin(pluginId);
+
+    // 插件组件自己负责数据加载和验证
+    // App.tsx 只负责路由
   };
 
-  // 🔥 直接渲染组件 (不使用 lazy)
+  // 🔥 动态渲染插件组件
   const renderPlugin = () => {
     if (!selectedPlugin) return null;
 
-    // 直接使用 switch 语句渲染组件
-    switch (selectedPlugin) {
-      case "password-manager":
-        return <PasswordManagerReact />;
-      case "auth":
-        return <AuthPluginReact />;
-      default:
-        return (
-          <PluginPlaceholder
-            pluginId={selectedPlugin}
-            setSelectedPlugin={setSelectedPlugin}
-          />
-        );
+    const loader = getPluginLoader(selectedPlugin);
+
+    if (!loader) {
+      // 未注册的插件,使用通用 PluginView
+      return (
+        <PluginView
+          pluginId={selectedPlugin}
+          setSelectedPlugin={setSelectedPlugin}
+        />
+      );
     }
+
+    // loader 返回 Promise,需要包装为无参数函数供 lazy 使用
+    const PluginComponent = lazy(() => loader());
+
+    return (
+      <Suspense fallback={<div style={{ padding: "20px" }}>加载中...</div>}>
+        <PluginComponent />
+      </Suspense>
+    );
   };
 
   return (
@@ -284,6 +293,14 @@ export default function App() {
               alignItems: "center",
               justifyContent: "center",
             }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = "var(--hover-bg)";
+              e.currentTarget.style.transform = "scale(1.05)";
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = "var(--bg-tertiary)";
+              e.currentTarget.style.transform = "scale(1)";
+            }}
           >
             📋
           </button>
@@ -304,6 +321,14 @@ export default function App() {
               alignItems: "center",
               justifyContent: "center",
             }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = "var(--hover-bg)";
+              e.currentTarget.style.transform = "scale(1.05)";
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = "var(--bg-tertiary)";
+              e.currentTarget.style.transform = "scale(1)";
+            }}
           >
             🧩
           </button>
@@ -322,6 +347,7 @@ export default function App() {
       >
         {renderPlugin()}
 
+        {/* 无插件选中时的提示 */}
         {!selectedPlugin && (
           <div
             style={{
@@ -467,7 +493,7 @@ export default function App() {
                 overflow: "auto",
               }}
             >
-              <PluginStoreReact onPluginsChange={() => {}} />
+              <PluginStore onPluginsChange={() => {}} />
             </div>
           </div>
         </div>

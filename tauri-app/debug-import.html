@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>调试组件导入</title>
+</head>
+<body>
+  <h1>组件导入测试</h1>
+  <div id="output"></div>
+
+  <script type="module">
+    const output = document.getElementById('output');
+
+    function log(msg) {
+      console.log(msg);
+      output.innerHTML += `<div>${msg}</div>`;
+    }
+
+    async function testImport() {
+      try {
+        log('1. 开始测试 PasswordManagerReact 导入...');
+        const module1 = await import('/src/components/PasswordManagerReact.tsx');
+        log(`   ✅ 模块对象: ${JSON.stringify(Object.keys(module1))}`);
+        log(`   ✅ default 存在: ${!!module1.default}`);
+        log(`   ✅ default 类型: ${typeof module1.default}`);
+        log(`   ✅ default 名称: ${module1.default?.name || 'anonymous'}`);
+
+        if (typeof module1.default === 'function') {
+          log('   ✅ default 是函数,可以作为组件使用!');
+        } else {
+          log(`   ❌ default 不是函数,类型是: ${typeof module1.default}`);
+        }
+      } catch (error) {
+        log(`   ❌ 导入失败: ${error.message}`);
+        console.error(error);
+      }
+
+      log('<hr>');
+
+      try {
+        log('2. 开始测试 AuthPluginReact 导入...');
+        const module2 = await import('/src/components/AuthPluginReact.tsx');
+        log(`   ✅ 模块对象: ${JSON.stringify(Object.keys(module2))}`);
+        log(`   ✅ default 存在: ${!!module2.default}`);
+        log(`   ✅ default 类型: ${typeof module2.default}`);
+        log(`   ✅ default 名称: ${module2.default?.name || 'anonymous'}`);
+
+        if (typeof module2.default === 'function') {
+          log('   ✅ default 是函数,可以作为组件使用!');
+        } else {
+          log(`   ❌ default 不是函数,类型是: ${typeof module2.default}`);
+        }
+      } catch (error) {
+        log(`   ❌ 导入失败: ${error.message}`);
+        console.error(error);
+      }
+    }
+
+    testImport();
+  </script>
+</body>
+</html>
