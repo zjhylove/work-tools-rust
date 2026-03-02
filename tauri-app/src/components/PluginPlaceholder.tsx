@@ -12,7 +12,7 @@ export default function PluginPlaceholder({
 }: PluginPlaceholderProps) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>("");
-  const [pluginUrl, setPluginUrl] = useState<string>("");
+  const [htmlContent, setHtmlContent] = useState<string>("");
   const iframeRef = useRef<HTMLIFrameElement>(null);
 
   useEffect(() => {
@@ -24,21 +24,38 @@ export default function PluginPlaceholder({
         setLoading(true);
         setError("");
 
-        // 获取插件资源路径
+        // 读取插件的 index.html 内容
         try {
-          const assetsUrl = await invoke<string>("get_plugin_assets_url", {
+          const html = await invoke<string>("read_plugin_asset", {
             pluginId: pluginId,
+            assetPath: "index.html",
           });
 
-          console.log("[PluginPlaceholder] 插件资源路径:", assetsUrl);
-          // 使用 file:// 协议加载本地文件
-          setPluginUrl(`file://${assetsUrl}/index.html`);
+          // 读取 main.js 内容
+          const mainJs = await invoke<string>("read_plugin_asset", {
+            pluginId: pluginId,
+            assetPath: "main.js",
+          });
+
+          // 读取 styles.css 内容
+          const styles = await invoke<string>("read_plugin_asset", {
+            pluginId: pluginId,
+            assetPath: "styles.css",
+          });
+
+          console.log("[PluginPlaceholder] 插件资源读取成功");
+
+          // 组合完整的 HTML 内容
+          const fullHtml = html
+            .replace("./main.js", "data:text/javascript;base64," + btoa(mainJs))
+            .replace("./styles.css", "data:text/css;base64," + btoa(styles));
+
+          setHtmlContent(fullHtml);
 
           // 设置 window.pluginAPI 供插件使用
-          if (iframeRef.current) {
-            const iframe = iframeRef.current;
-            iframe.onload = () => {
-              console.log("[PluginPlaceholder] iframe 加载完成");
+          setTimeout(() => {
+            if (iframeRef.current) {
+              const iframe = iframeRef.current;
               try {
                 // 向 iframe 注入 pluginAPI
                 if (iframe.contentWindow) {
@@ -77,11 +94,11 @@ export default function PluginPlaceholder({
               } catch (err) {
                 console.error("[PluginPlaceholder] 注入 pluginAPI 失败:", err);
               }
-            };
-          }
+            }
+          }, 100);
         } catch (err) {
-          console.error("[PluginPlaceholder] 获取插件路径失败:", err);
-          setError(`插件 "${pluginId}" 加载失败: ${err}`);
+          console.error("[PluginPlaceholder] 读取插件资源失败:", err);
+          setError(`插件 "${pluginId}" 资源加载失败: ${err}`);
         }
       } catch (err) {
         console.error("[PluginPlaceholder] 加载插件失败:", err);
@@ -149,12 +166,12 @@ export default function PluginPlaceholder({
     );
   }
 
-  // 使用 iframe 加载插件前端
-  if (pluginUrl) {
+  // 使用 iframe 的 srcdoc 加载插件前端
+  if (htmlContent) {
     return (
       <iframe
         ref={iframeRef}
-        src={pluginUrl}
+        srcDoc={htmlContent}
         style={{
           width: "100%",
           height: "100%",
