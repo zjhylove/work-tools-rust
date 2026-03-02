@@ -1,4 +1,4 @@
-import { For, Show, createSignal, onMount, createMemo } from "solid-js";
+import React, { useState, useEffect, useMemo } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import "./PasswordManager.css";
@@ -39,22 +39,22 @@ const devError = (...args: unknown[]) => {
   }
 };
 
-export default function PasswordManager() {
-  const [entries, setEntries] = createSignal<PasswordEntry[]>([]);
-  const [viewMode, setViewMode] = createSignal<"list" | "form">("list");
-  const [selectedEntry, setSelectedEntry] = createSignal<PasswordEntry | null>(
+function PasswordManager() {
+  const [entries, setEntries] = useState<PasswordEntry[]>([]);
+  const [viewMode, setViewMode] = useState<"list" | "form">("list");
+  const [selectedEntry, setSelectedEntry] = useState<PasswordEntry | null>(
     null,
   );
-  const [visiblePasswords, setVisiblePasswords] = createSignal<
+  const [visiblePasswords, setVisiblePasswords] = useState<
     Record<string, boolean>
   >({});
-  const [searchQuery, setSearchQuery] = createSignal("");
-  const [isEditMode, setIsEditMode] = createSignal(false);
-  const [isLoading, setIsLoading] = createSignal(false);
-
-  // 表单数据
-  const [formData, setFormData] = createSignal<Record<string, string>>({});
-  const [formErrors, setFormErrors] = createSignal<Record<string, string>>({});
+  const [searchQuery, setSearchQuery] = useState("");
+  const [isEditMode, setIsEditMode] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [formData, setFormData] = useState<Record<string, string>>({});
+  const [formErrors, setFormErrors] = useState<Record<string, string>>({});
+  const [error, setError] = useState("");
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   // 定义密码管理器的表单字段
   const passwordFormFields: UiField[] = [
@@ -97,10 +97,6 @@ export default function PasswordManager() {
     },
   ];
 
-  // 错误信息
-  const [error, setError] = createSignal("");
-  const [showDeleteConfirm, setShowDeleteConfirm] = createSignal(false);
-
   // 加载密码列表
   const loadPasswords = async () => {
     setIsLoading(true);
@@ -121,25 +117,28 @@ export default function PasswordManager() {
   };
 
   // 初始化
-  onMount(async () => {
-    devLog("PasswordManager 组件挂载,开始初始化...");
-    await loadPasswords();
-    devLog("PasswordManager 初始化完成");
-    devLog("当前条目数:", entries().length);
-  });
+  useEffect(() => {
+    const init = async () => {
+      devLog("PasswordManager 组件挂载,开始初始化...");
+      await loadPasswords();
+      devLog("PasswordManager 初始化完成");
+      devLog("当前条目数:", entries.length);
+    };
+    init();
+  }, []);
 
-  // 使用 createMemo 优化过滤性能
-  const filteredEntries = createMemo(() => {
-    const query = searchQuery().toLowerCase().trim();
-    if (!query) return entries();
+  // 使用 useMemo 优化过滤性能
+  const filteredEntries = useMemo(() => {
+    const query = searchQuery.toLowerCase().trim();
+    if (!query) return entries;
 
-    return entries().filter(
+    return entries.filter(
       (entry) =>
         entry.service.toLowerCase().includes(query) ||
         entry.username.toLowerCase().includes(query) ||
         (entry.url && entry.url.toLowerCase().includes(query)),
     );
-  });
+  }, [entries, searchQuery]);
 
   // 添加新密码
   const handleAddNew = async () => {
@@ -268,7 +267,7 @@ export default function PasswordManager() {
     // 检查所有字段
     for (const field of passwordFormFields) {
       if (field.type === "input") {
-        const value = formData()[field.key] || "";
+        const value = formData[field.key] || "";
         const error = validateField(field, value);
         if (error) {
           return false;
@@ -283,9 +282,8 @@ export default function PasswordManager() {
   const handleAction = async (actionKey: string) => {
     if (actionKey === "submit") {
       try {
-        const data = formData();
-        const currentEntry = selectedEntry();
-        const isEdit = isEditMode();
+        const data = formData;
+        const isEdit = isEditMode;
 
         // 安全检查:确保必要的字段存在
         if (!data.service || !data.username || !data.password) {
@@ -294,14 +292,14 @@ export default function PasswordManager() {
         }
 
         const entry: PasswordEntry = {
-          id: isEdit && currentEntry ? currentEntry.id : crypto.randomUUID(),
+          id: isEdit && selectedEntry ? selectedEntry.id : crypto.randomUUID(),
           url: data.url || null,
           service: data.service,
           username: data.username,
           password: data.password,
           created_at:
-            isEdit && currentEntry
-              ? currentEntry.created_at
+            isEdit && selectedEntry
+              ? selectedEntry.created_at
               : new Date().toISOString(),
           updated_at: new Date().toISOString(),
         };
@@ -420,32 +418,36 @@ export default function PasswordManager() {
   };
 
   return (
-    <div class="password-manager">
+    <div className="password-manager">
       {/* 加载状态 */}
-      <Show when={isLoading()}>
-        <div class="loading-overlay">
-          <div class="loading-spinner">加载中...</div>
+      {isLoading && (
+        <div className="loading-overlay">
+          <div className="loading-spinner">加载中...</div>
         </div>
-      </Show>
+      )}
 
       {/* 错误提示 */}
-      <Show when={error()}>
+      {error && (
         <div
-          class="error-message"
-          classList={{ success: error().startsWith("✓") }}
+          className="error-message"
+          style={
+            error.startsWith("✓")
+              ? { backgroundColor: "#d4edda", color: "#155724" }
+              : {}
+          }
         >
-          {error()}
+          {error}
         </div>
-      </Show>
+      )}
 
       {/* 列表视图 */}
-      <Show when={viewMode() === "list"}>
-        <div class="password-list-container">
+      {viewMode === "list" && (
+        <div className="password-list-container">
           {/* 工具栏 */}
-          <div class="toolbar">
-            <div class="toolbar-actions">
+          <div className="toolbar">
+            <div className="toolbar-actions">
               <button
-                class="btn-primary"
+                className="btn-primary"
                 onClick={(e) => {
                   e.preventDefault();
                   e.stopPropagation();
@@ -455,7 +457,7 @@ export default function PasswordManager() {
                 ➕ 新建
               </button>
               <button
-                class="btn-secondary"
+                className="btn-secondary"
                 onClick={(e) => {
                   e.preventDefault();
                   e.stopPropagation();
@@ -465,7 +467,7 @@ export default function PasswordManager() {
                 📥 导入
               </button>
               <button
-                class="btn-secondary"
+                className="btn-secondary"
                 onClick={(e) => {
                   e.preventDefault();
                   e.stopPropagation();
@@ -477,135 +479,132 @@ export default function PasswordManager() {
             </div>
             <input
               type="text"
-              class="search-input"
+              className="search-input"
               placeholder="🔍 搜索密码..."
-              value={searchQuery()}
+              value={searchQuery}
               onInput={(e) => setSearchQuery(e.currentTarget.value)}
             />
           </div>
 
           {/* 密码列表 */}
-          <div class="password-list">
-            <Show when={filteredEntries().length === 0}>
-              <div class="empty-state">
-                <div class="empty-icon">📭</div>
-                <div class="empty-text">
-                  {searchQuery() ? "没有找到匹配的密码" : "还没有保存的密码"}
+          <div className="password-list">
+            {filteredEntries.length === 0 ? (
+              <div className="empty-state">
+                <div className="empty-icon">📭</div>
+                <div className="empty-text">
+                  {searchQuery ? "没有找到匹配的密码" : "还没有保存的密码"}
                 </div>
               </div>
-            </Show>
-            <Show when={filteredEntries().length > 0}>
-              <For each={filteredEntries()}>
-                {(entry) => (
-                  <div class="password-item">
-                    <div class="password-item-info">
-                      <div class="password-item-service">{entry.service}</div>
-                      <div class="password-item-username">{entry.username}</div>
-                      <div class="password-item-password">
-                        {visiblePasswords()[entry.id]
-                          ? entry.password
-                          : "••••••••"}
-                      </div>
+            ) : (
+              filteredEntries.map((entry) => (
+                <div key={entry.id} className="password-item">
+                  <div className="password-item-info">
+                    <div className="password-item-service">{entry.service}</div>
+                    <div className="password-item-username">
+                      {entry.username}
                     </div>
-                    <div class="password-item-actions">
-                      <button
-                        class="btn-icon"
-                        onClick={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          togglePasswordVisibility(entry.id);
-                        }}
-                        title={
-                          visiblePasswords()[entry.id] ? "隐藏密码" : "显示密码"
-                        }
-                        aria-label={
-                          visiblePasswords()[entry.id] ? "隐藏密码" : "显示密码"
-                        }
-                        role="button"
-                      >
-                        {visiblePasswords()[entry.id] ? "🙈" : "👁️"}
-                      </button>
-                      <button
-                        class="btn-icon"
-                        onClick={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          copyPassword(entry.password);
-                        }}
-                        title="复制密码"
-                        aria-label="复制密码"
-                        role="button"
-                      >
-                        📋
-                      </button>
-                      <Show when={entry.url}>
-                        <button
-                          class="btn-icon"
-                          onClick={(e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            if (entry.url) {
-                              handleOpenUrl(entry.url);
-                            }
-                          }}
-                          title="打开链接"
-                          aria-label="打开链接"
-                          role="button"
-                        >
-                          🔗
-                        </button>
-                      </Show>
-                      <button
-                        class="btn-icon"
-                        onClick={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          handleSelectEntry(entry);
-                        }}
-                        title="编辑"
-                        aria-label="编辑密码"
-                        role="button"
-                      >
-                        ✏️
-                      </button>
-                      <button
-                        class="btn-icon btn-danger"
-                        onClick={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          setSelectedEntry(entry);
-                          setShowDeleteConfirm(true);
-                        }}
-                        title="删除"
-                        aria-label="删除密码"
-                        role="button"
-                      >
-                        🗑️
-                      </button>
+                    <div className="password-item-password">
+                      {visiblePasswords[entry.id] ? entry.password : "••••••••"}
                     </div>
                   </div>
-                )}
-              </For>
-            </Show>
+                  <div className="password-item-actions">
+                    <button
+                      className="btn-icon"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        togglePasswordVisibility(entry.id);
+                      }}
+                      title={
+                        visiblePasswords[entry.id] ? "隐藏密码" : "显示密码"
+                      }
+                      aria-label={
+                        visiblePasswords[entry.id] ? "隐藏密码" : "显示密码"
+                      }
+                      role="button"
+                    >
+                      {visiblePasswords[entry.id] ? "🙈" : "👁️"}
+                    </button>
+                    <button
+                      className="btn-icon"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        copyPassword(entry.password);
+                      }}
+                      title="复制密码"
+                      aria-label="复制密码"
+                      role="button"
+                    >
+                      📋
+                    </button>
+                    {entry.url && (
+                      <button
+                        className="btn-icon"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          if (entry.url) {
+                            handleOpenUrl(entry.url);
+                          }
+                        }}
+                        title="打开链接"
+                        aria-label="打开链接"
+                        role="button"
+                      >
+                        🔗
+                      </button>
+                    )}
+                    <button
+                      className="btn-icon"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        handleSelectEntry(entry);
+                      }}
+                      title="编辑"
+                      aria-label="编辑密码"
+                      role="button"
+                    >
+                      ✏️
+                    </button>
+                    <button
+                      className="btn-icon btn-danger"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        setSelectedEntry(entry);
+                        setShowDeleteConfirm(true);
+                      }}
+                      title="删除"
+                      aria-label="删除密码"
+                      role="button"
+                    >
+                      🗑️
+                    </button>
+                  </div>
+                </div>
+              ))
+            )}
           </div>
 
           {/* 底部统计 */}
-          <div class="list-footer">
-            共 {entries().length} 个密码
-            <Show when={searchQuery() !== ""}>
-              <span> / 显示 {filteredEntries().length} 个结果</span>
-            </Show>
+          <div className="list-footer">
+            共 {entries.length} 个密码
+            {searchQuery !== "" && (
+              <span> / 显示 {filteredEntries.length} 个结果</span>
+            )}
           </div>
         </div>
-      </Show>
+      )}
 
       {/* 表单视图 */}
-      <Show when={viewMode() === "form"}>
-        <div class="password-form-container">
-          <div class="form-header">
-            <h2>{isEditMode() ? "编辑密码" : "新建密码"}</h2>
+      {viewMode === "form" && (
+        <div className="password-form-container">
+          <div className="form-header">
+            <h2>{isEditMode ? "编辑密码" : "新建密码"}</h2>
             <button
-              class="btn-secondary"
+              className="btn-secondary"
               onClick={(e) => {
                 e.preventDefault();
                 e.stopPropagation();
@@ -620,75 +619,70 @@ export default function PasswordManager() {
             </button>
           </div>
 
-          <For each={passwordFormFields}>
-            {(field) => (
-              <div class="form-field">
-                <Show when={field.type === "input"}>
-                  <div>
-                    <label class="field-label">{field.label}</label>
-                    <input
-                      type={field.inputType || "text"}
-                      placeholder={field.placeholder}
-                      value={formData()[field.key] || ""}
-                      classList={{
-                        "field-input": true,
-                        "field-input-error": !!formErrors()[field.key],
-                      }}
-                      onInput={(e) =>
-                        handleFieldChange(
-                          field.key,
-                          e.currentTarget.value,
-                          field,
-                        )
-                      }
-                    />
-                    <Show when={formErrors()[field.key]}>
-                      <div class="field-error">{formErrors()[field.key]}</div>
-                    </Show>
-                  </div>
-                </Show>
-                <Show when={field.type === "button"}>
-                  <button
-                    class="btn-submit"
-                    disabled={!isFormValid()}
-                    onClick={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      handleAction(field.key);
-                    }}
-                    classList={{ disabled: !isFormValid() }}
-                  >
-                    {isEditMode() ? "💾 更新密码" : field.label}
-                  </button>
-                </Show>
-              </div>
-            )}
-          </For>
+          {passwordFormFields.map((field) => (
+            <div key={field.key} className="form-field">
+              {field.type === "input" && (
+                <div>
+                  <label className="field-label">{field.label}</label>
+                  <input
+                    type={field.inputType || "text"}
+                    placeholder={field.placeholder}
+                    value={formData[field.key] || ""}
+                    className={`field-input ${formErrors[field.key] ? "field-input-error" : ""}`}
+                    onInput={(e) =>
+                      handleFieldChange(field.key, e.currentTarget.value, field)
+                    }
+                  />
+                  {formErrors[field.key] && (
+                    <div className="field-error">{formErrors[field.key]}</div>
+                  )}
+                </div>
+              )}
+              {field.type === "button" && (
+                <button
+                  className="btn-submit"
+                  disabled={!isFormValid()}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    handleAction(field.key);
+                  }}
+                  style={
+                    !isFormValid()
+                      ? { opacity: 0.5, cursor: "not-allowed" }
+                      : {}
+                  }
+                >
+                  {isEditMode ? "💾 更新密码" : field.label}
+                </button>
+              )}
+            </div>
+          ))}
 
-          <Show when={selectedEntry()}>
-            <div class="form-meta">
-              <div class="meta-label">创建时间</div>
-              <div class="meta-value">
-                {new Date(selectedEntry()!.created_at).toLocaleString()}
+          {selectedEntry && (
+            <div className="form-meta">
+              <div className="meta-label">创建时间</div>
+              <div className="meta-value">
+                {new Date(selectedEntry.created_at).toLocaleString()}
               </div>
             </div>
-          </Show>
+          )}
         </div>
-      </Show>
+      )}
 
       {/* 删除确认对话框 */}
-      <Show when={showDeleteConfirm() && selectedEntry()}>
-        <div class="modal-overlay">
-          <div class="modal">
+      {showDeleteConfirm && selectedEntry && (
+        <div className="modal-overlay">
+          <div className="modal">
             <h3>确认删除</h3>
-            <p>确定要删除 "{selectedEntry()!.service}" 的密码吗?</p>
-            <div class="modal-actions">
+            <p>确定要删除 "{selectedEntry.service}" 的密码吗?</p>
+            <div className="modal-actions">
               <button
-                class="btn-danger"
+                className="btn-danger"
                 onClick={async (e) => {
                   e.preventDefault();
                   e.stopPropagation();
-                  await handleDeletePassword(selectedEntry()!.id);
+                  await handleDeletePassword(selectedEntry.id);
                   setShowDeleteConfirm(false);
                   setSelectedEntry(null);
                 }}
@@ -696,7 +690,7 @@ export default function PasswordManager() {
                 删除
               </button>
               <button
-                class="btn-secondary"
+                className="btn-secondary"
                 onClick={(e) => {
                   e.preventDefault();
                   e.stopPropagation();
@@ -709,7 +703,9 @@ export default function PasswordManager() {
             </div>
           </div>
         </div>
-      </Show>
+      )}
     </div>
   );
 }
+
+export default PasswordManager;

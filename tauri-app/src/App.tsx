@@ -1,13 +1,13 @@
 import React, { useState, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import PluginStoreReact from "./components/PluginStoreReact";
+import PluginStore from "./components/PluginStore";
 import PluginPlaceholder from "./components/PluginPlaceholder";
 import { devError, devLog, devWarn } from "./utils/logger";
 import { getPluginLoader } from "./utils/pluginRegistry";
 
-// 直接导入 React 组件进行测试
-import PasswordManagerReact from "./components/PasswordManagerReact";
-import AuthPluginReact from "./components/AuthPluginReact";
+// 直接导入 React 组件
+import PasswordManager from "./components/PasswordManager";
+import AuthPlugin from "./components/AuthPlugin";
 
 // 安全的 invoke 包装函数
 const safeInvoke = async <T,>(
@@ -118,9 +118,9 @@ export default function App() {
     // 直接使用 switch 语句渲染组件
     switch (selectedPlugin) {
       case "password-manager":
-        return <PasswordManagerReact />;
+        return <PasswordManager />;
       case "auth":
-        return <AuthPluginReact />;
+        return <AuthPlugin />;
       default:
         return (
           <PluginPlaceholder
@@ -467,7 +467,7 @@ export default function App() {
                 overflow: "auto",
               }}
             >
-              <PluginStoreReact onPluginsChange={() => {}} />
+              <PluginStore onPluginsChange={() => {}} />
             </div>
           </div>
         </div>

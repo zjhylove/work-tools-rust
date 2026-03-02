@@ -1,4 +1,4 @@
-import { For, Show, createSignal, onMount, createMemo } from "solid-js";
+import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { devError } from "../utils/logger";
 import "./AuthPlugin.css";
@@ -20,17 +20,13 @@ interface TotpInfo {
   remaining_seconds: number;
 }
 
-export default function AuthPlugin() {
-  const [entries, setEntries] = createSignal<AuthEntry[]>([]);
-  const [loading, setLoading] = createSignal(true);
-  const [viewMode, setViewMode] = createSignal<"list" | "add" | "edit">("list");
-  const [selectedEntry, setSelectedEntry] = createSignal<AuthEntry | null>(
-    null,
-  );
-  const [totpMap, setTotpMap] = createSignal<Record<string, TotpInfo>>({});
-
-  // 表单数据
-  const [formData, setFormData] = createSignal<Partial<AuthEntry>>({
+function AuthPlugin() {
+  const [entries, setEntries] = useState<AuthEntry[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [viewMode, setViewMode] = useState<"list" | "add" | "edit">("list");
+  const [selectedEntry, setSelectedEntry] = useState<AuthEntry | null>(null);
+  const [totpMap, setTotpMap] = useState<Record<string, TotpInfo>>({});
+  const [formData, setFormData] = useState<Partial<AuthEntry>>({
     name: "",
     issuer: "",
     secret: "",
@@ -38,15 +34,9 @@ export default function AuthPlugin() {
     digits: 6,
     period: 30,
   });
-
-  // 字段级错误信息
-  const [fieldErrors, setFieldErrors] = createSignal<Record<string, string>>(
-    {},
-  );
-
-  // 错误信息
-  const [error, setError] = createSignal("");
-  const [showDeleteConfirm, setShowDeleteConfirm] = createSignal(false);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const [error, setError] = useState("");
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   // 验证规则定义
   const validationRules = {
@@ -73,10 +63,9 @@ export default function AuthPlugin() {
     return null;
   };
 
-  // 使用 createMemo 创建响应式的表单有效性检查
-  const isFormValid = createMemo(() => {
-    const data = formData();
-    const errors = fieldErrors();
+  // 使用 useMemo 创建响应式的表单有效性检查
+  const isFormValid = useMemo(() => {
+    const errors = fieldErrors;
 
     // 首先检查是否有字段级错误
     if (Object.keys(errors).length > 0) {
@@ -85,7 +74,7 @@ export default function AuthPlugin() {
 
     // 然后验证所有字段
     for (const [key, rule] of Object.entries(validationRules)) {
-      const value = (data[key as keyof AuthEntry] as string) || "";
+      const value = (formData[key as keyof AuthEntry] as string) || "";
       const trimmedValue = value.trim();
       if (rule.required && !trimmedValue) {
         return false;
@@ -95,7 +84,7 @@ export default function AuthPlugin() {
       }
     }
     return true;
-  });
+  }, [formData, fieldErrors]);
 
   // 加载认证条目列表
   const loadEntries = async () => {
@@ -112,79 +101,102 @@ export default function AuthPlugin() {
   };
 
   // 生成 TOTP 验证码
-  const generateTotp = async (entry: AuthEntry, forceRefresh = false) => {
-    try {
-      // 安全:不要记录 TOTP 秘密或验证码
+  const generateTotp = useCallback(
+    async (entry: AuthEntry, forceRefresh = false) => {
+      try {
+        // 安全:不要记录 TOTP 秘密或验证码
 
-      // 如果是强制刷新，添加小延迟确保时间步已经更新
-      if (forceRefresh) {
-        await new Promise((resolve) => setTimeout(resolve, 100));
+        // 如果是强制刷新，添加小延迟确保时间步已经更新
+        if (forceRefresh) {
+          await new Promise((resolve) => setTimeout(resolve, 100));
+        }
+
+        const code = await invoke<string>("generate_totp_code", {
+          secret: entry.secret,
+          digits: entry.digits,
+          period: entry.period,
+        });
+        // 安全:不要记录验证码
+
+        // 计算剩余时间
+        const now = Math.floor(Date.now() / 1000);
+        const remaining = entry.period - (now % entry.period);
+
+        setTotpMap((prev) => ({
+          ...prev,
+          [entry.id]: { code, remaining_seconds: remaining },
+        }));
+
+        // 如果是强制刷新，显示反馈
+        if (forceRefresh) {
+          setError("✓ 验证码已刷新");
+          setTimeout(() => setError(""), 1500);
+        }
+      } catch (err) {
+        devError("生成验证码失败:", entry.issuer, err);
+        setError("生成验证码失败");
       }
-
-      const code = await invoke<string>("generate_totp_code", {
-        secret: entry.secret,
-        digits: entry.digits,
-        period: entry.period,
-      });
-      // 安全:不要记录验证码
-
-      // 计算剩余时间
-      const now = Math.floor(Date.now() / 1000);
-      const remaining = entry.period - (now % entry.period);
-
-      setTotpMap((prev) => ({
-        ...prev,
-        [entry.id]: { code, remaining_seconds: remaining },
-      }));
-
-      // 如果是强制刷新，显示反馈
-      if (forceRefresh) {
-        setError("✓ 验证码已刷新");
-        setTimeout(() => setError(""), 1500);
-      }
-    } catch (err) {
-      devError("生成验证码失败:", entry.issuer, err);
-      setError("生成验证码失败");
-    }
-  };
+    },
+    [],
+  ); // 空依赖数组,因为不依赖任何外部变量
 
   // 刷新所有验证码
-  const refreshAllCodes = () => {
-    entries().forEach((entry) => generateTotp(entry));
-  };
+  const refreshAllCodes = useCallback(() => {
+    entries.forEach((entry) => generateTotp(entry));
+  }, [entries, generateTotp]);
 
   // 自动刷新验证码
-  onMount(() => {
-    loadEntries().then(() => {
+  useEffect(() => {
+    let interval: ReturnType<typeof setInterval> | null = null;
+    let isMounted = true;
+
+    const init = async () => {
+      await loadEntries();
       // 加载完条目后,立即生成所有验证码
-      setTimeout(() => refreshAllCodes(), 100);
-    });
-
-    // 每秒刷新倒计时
-    const interval = setInterval(() => {
-      const updatedMap: Record<string, TotpInfo> = {};
-
-      entries().forEach((entry) => {
-        const current = totpMap()[entry.id];
-        if (current) {
-          const newRemaining = current.remaining_seconds - 1;
-          if (newRemaining <= 0) {
-            // 重新生成验证码
-            generateTotp(entry);
-          } else {
-            updatedMap[entry.id] = {
-              code: current.code,
-              remaining_seconds: newRemaining,
-            };
+      if (isMounted) {
+        setTimeout(() => {
+          if (isMounted) {
+            refreshAllCodes();
           }
-        }
-      });
+        }, 100);
 
-      setTotpMap((prev) => ({ ...prev, ...updatedMap }));
-    }, 1000);
+        // 每秒刷新倒计时
+        interval = setInterval(() => {
+          if (!isMounted) return;
 
-    return () => clearInterval(interval);
-  });
+          setTotpMap((prev) => {
+            const updatedMap: Record<string, TotpInfo> = {};
+
+            entries.forEach((entry) => {
+              const current = prev[entry.id];
+              if (current) {
+                const newRemaining = current.remaining_seconds - 1;
+                if (newRemaining <= 0) {
+                  // 重新生成验证码 (异步操作不影响状态更新)
+                  generateTotp(entry);
+                } else {
+                  updatedMap[entry.id] = {
+                    code: current.code,
+                    remaining_seconds: newRemaining,
+                  };
+                }
+              }
+            });
+
+            // 只更新需要更新的条目,减少不必要的重新渲染
+            return { ...prev, ...updatedMap };
+          });
+        }, 1000);
+      }
+    };
+
+    init();
+
+    return () => {
+      isMounted = false;
+      if (interval) clearInterval(interval);
+    };
+  }, [entries.length]); // 只在 entries 数量变化时重新初始化
 
   // 复制验证码
   const copyCode = async (code: string) => {
@@ -201,12 +213,10 @@ export default function AuthPlugin() {
   // 保存认证条目
   const saveEntry = async () => {
     try {
-      const data = formData();
-
       // 验证所有必填字段
       const errors: Record<string, string> = {};
       for (const [key, rule] of Object.entries(validationRules)) {
-        const value = (data[key as keyof AuthEntry] as string) || "";
+        const value = (formData[key as keyof AuthEntry] as string) || "";
         const error = validateField(key, value);
         if (error) {
           errors[key] = error;
@@ -221,20 +231,20 @@ export default function AuthPlugin() {
 
       let savedEntry: AuthEntry | null = null;
 
-      if (viewMode() === "add") {
+      if (viewMode === "add") {
         savedEntry = await invoke("add_auth_entry", {
           entry: {
-            ...data,
+            ...formData,
             id: "", // 后端会生成
             created_at: new Date().toISOString(),
           },
         });
-      } else if (viewMode() === "edit" && selectedEntry()) {
+      } else if (viewMode === "edit" && selectedEntry) {
         savedEntry = await invoke("update_auth_entry", {
           entry: {
-            ...data,
-            id: selectedEntry()!.id,
-            created_at: selectedEntry()!.created_at,
+            ...formData,
+            id: selectedEntry.id,
+            created_at: selectedEntry.created_at,
           },
         });
       }
@@ -258,11 +268,11 @@ export default function AuthPlugin() {
 
   // 删除认证条目
   const deleteEntry = async () => {
-    if (!selectedEntry()) return;
+    if (!selectedEntry) return;
 
     try {
       await invoke("delete_auth_entry_plugin", {
-        id: selectedEntry()!.id,
+        id: selectedEntry.id,
       });
 
       await loadEntries();
@@ -317,111 +327,113 @@ export default function AuthPlugin() {
   };
 
   return (
-    <div class="auth-plugin">
-      <Show when={viewMode() === "list"}>
-        <div class="auth-plugin-header">
+    <div className="auth-plugin">
+      {viewMode === "list" && (
+        <div className="auth-plugin-header">
           <h2>双因素认证</h2>
-          <button class="btn-primary" onClick={addNew}>
+          <button className="btn-primary" onClick={addNew}>
             + 添加
           </button>
         </div>
-      </Show>
+      )}
 
       {/* 错误提示 */}
-      <Show when={error()}>
+      {error && (
         <div
-          class="error-message"
-          classList={{ success: error().startsWith("✓") }}
+          className="error-message"
+          style={
+            error.startsWith("✓")
+              ? { backgroundColor: "#d4edda", color: "#155724" }
+              : {}
+          }
         >
-          {error()}
+          {error}
         </div>
-      </Show>
+      )}
 
       {/* 列表视图 */}
-      <Show when={viewMode() === "list"}>
-        <div class="auth-list">
-          <Show
-            when={!loading() && entries().length > 0}
-            fallback={<div class="empty-state">暂无认证条目</div>}
-          >
-            <For each={entries()}>
-              {(entry) => (
-                <div class="auth-item">
-                  <div class="auth-item-info">
-                    <div class="auth-item-issuer">{entry.issuer}</div>
-                    <div class="auth-item-name">{entry.name}</div>
-                  </div>
-
-                  <Show when={totpMap()[entry.id]}>
-                    {(totp) => (
-                      <div class="auth-item-totp">
-                        <div class="totp-code">{totp().code}</div>
-                        <div class="totp-timer">
-                          剩余 {totp().remaining_seconds} 秒
-                        </div>
-                      </div>
-                    )}
-                  </Show>
-
-                  <div class="auth-item-actions">
-                    <button
-                      class="btn-icon"
-                      onClick={() => copyCode(totpMap()[entry.id]?.code || "")}
-                      title="复制验证码"
-                    >
-                      📋
-                    </button>
-                    <button
-                      class="btn-icon"
-                      onClick={() => generateTotp(entry, true)}
-                      title="刷新验证码"
-                    >
-                      🔄
-                    </button>
-                    <button
-                      class="btn-icon"
-                      onClick={() => editEntry(entry)}
-                      title="编辑"
-                    >
-                      ✏️
-                    </button>
-                    <button
-                      class="btn-icon btn-danger"
-                      onClick={() => {
-                        setSelectedEntry(entry);
-                        setShowDeleteConfirm(true);
-                      }}
-                      title="删除"
-                    >
-                      🗑️
-                    </button>
-                  </div>
+      {viewMode === "list" && (
+        <div className="auth-list">
+          {!loading && entries.length > 0 ? (
+            entries.map((entry) => (
+              <div key={entry.id} className="auth-item">
+                <div className="auth-item-info">
+                  <div className="auth-item-issuer">{entry.issuer}</div>
+                  <div className="auth-item-name">{entry.name}</div>
                 </div>
-              )}
-            </For>
-          </Show>
+
+                {totpMap[entry.id] && (
+                  <div className="auth-item-totp">
+                    <div className="totp-code">{totpMap[entry.id].code}</div>
+                    <div className="totp-timer">
+                      剩余 {totpMap[entry.id].remaining_seconds} 秒
+                    </div>
+                  </div>
+                )}
+
+                <div className="auth-item-actions">
+                  <button
+                    className="btn-icon"
+                    onClick={() => copyCode(totpMap[entry.id]?.code || "")}
+                    title="复制验证码"
+                  >
+                    📋
+                  </button>
+                  <button
+                    className="btn-icon"
+                    onClick={() => generateTotp(entry, true)}
+                    title="刷新验证码"
+                  >
+                    🔄
+                  </button>
+                  <button
+                    className="btn-icon"
+                    onClick={() => editEntry(entry)}
+                    title="编辑"
+                  >
+                    ✏️
+                  </button>
+                  <button
+                    className="btn-icon btn-danger"
+                    onClick={() => {
+                      setSelectedEntry(entry);
+                      setShowDeleteConfirm(true);
+                    }}
+                    title="删除"
+                  >
+                    🗑️
+                  </button>
+                </div>
+              </div>
+            ))
+          ) : (
+            <div className="empty-state">暂无认证条目</div>
+          )}
         </div>
-      </Show>
+      )}
 
       {/* 表单视图 */}
-      <Show when={viewMode() === "add" || viewMode() === "edit"}>
-        <div class="auth-form-container">
-          <div class="auth-form-content">
+      {(viewMode === "add" || viewMode === "edit") && (
+        <div className="auth-form-container">
+          <div className="auth-form-content">
             {/* 标题栏 */}
-            <div class="auth-form-header">
-              <h2>{viewMode() === "add" ? "添加认证" : "编辑认证"}</h2>
-              <button class="btn-secondary" onClick={() => setViewMode("list")}>
+            <div className="auth-form-header">
+              <h2>{viewMode === "add" ? "添加认证" : "编辑认证"}</h2>
+              <button
+                className="btn-secondary"
+                onClick={() => setViewMode("list")}
+              >
                 ✕ 返回列表
               </button>
             </div>
 
-            <div class="form-group">
+            <div className="form-group">
               <label>发行方 *</label>
               <input
                 type="text"
-                value={formData().issuer || ""}
+                value={formData.issuer || ""}
                 onInput={(e) => {
-                  const value = e.currentTarget.value;
+                  const value = e.target.value;
                   setFormData((prev) => ({ ...prev, issuer: value }));
                   const error = validateField("issuer", value);
                   setFieldErrors((prev) => {
@@ -432,20 +444,20 @@ export default function AuthPlugin() {
                   });
                 }}
                 placeholder="例如: Google"
-                classList={{ "input-error": !!fieldErrors().issuer }}
+                className={fieldErrors.issuer ? "input-error" : ""}
               />
-              <Show when={fieldErrors().issuer}>
-                <div class="field-error">{fieldErrors().issuer}</div>
-              </Show>
+              {fieldErrors.issuer && (
+                <div className="field-error">{fieldErrors.issuer}</div>
+              )}
             </div>
 
-            <div class="form-group">
+            <div className="form-group">
               <label>账户名称 *</label>
               <input
                 type="text"
-                value={formData().name || ""}
+                value={formData.name || ""}
                 onInput={(e) => {
-                  const value = e.currentTarget.value;
+                  const value = e.target.value;
                   setFormData((prev) => ({ ...prev, name: value }));
                   const error = validateField("name", value);
                   setFieldErrors((prev) => {
@@ -456,21 +468,21 @@ export default function AuthPlugin() {
                   });
                 }}
                 placeholder="例如: user@example.com"
-                classList={{ "input-error": !!fieldErrors().name }}
+                className={fieldErrors.name ? "input-error" : ""}
               />
-              <Show when={fieldErrors().name}>
-                <div class="field-error">{fieldErrors().name}</div>
-              </Show>
+              {fieldErrors.name && (
+                <div className="field-error">{fieldErrors.name}</div>
+              )}
             </div>
 
-            <div class="form-group">
+            <div className="form-group">
               <label>密钥 *</label>
-              <div class="input-with-button">
+              <div className="input-with-button">
                 <input
                   type="text"
-                  value={formData().secret || ""}
+                  value={formData.secret || ""}
                   onInput={(e) => {
-                    const value = e.currentTarget.value;
+                    const value = e.target.value;
                     setFormData((prev) => ({ ...prev, secret: value }));
                     const error = validateField("secret", value);
                     setFieldErrors((prev) => {
@@ -481,28 +493,29 @@ export default function AuthPlugin() {
                     });
                   }}
                   placeholder="输入或生成密钥"
-                  classList={{ "input-error": !!fieldErrors().secret }}
+                  className={fieldErrors.secret ? "input-error" : ""}
                 />
-                <button class="btn-secondary" onClick={generateSecret}>
+                <button className="btn-secondary" onClick={generateSecret}>
                   生成
                 </button>
               </div>
-              <Show when={fieldErrors().secret}>
-                <div class="field-error">{fieldErrors().secret}</div>
-              </Show>
+              {fieldErrors.secret && (
+                <div className="field-error">{fieldErrors.secret}</div>
+              )}
             </div>
 
-            <div class="form-row">
-              <div class="form-group">
+            <div className="form-row">
+              <div className="form-group">
                 <label>算法</label>
                 <select
-                  value={formData().algorithm || "SHA1"}
-                  onChange={(e) =>
+                  value={formData.algorithm || "SHA1"}
+                  onChange={(e) => {
+                    const value = e.target.value;
                     setFormData((prev) => ({
                       ...prev,
-                      algorithm: e.currentTarget.value,
-                    }))
-                  }
+                      algorithm: value,
+                    }));
+                  }}
                 >
                   <option value="SHA1">SHA1</option>
                   <option value="SHA256">SHA256</option>
@@ -510,64 +523,71 @@ export default function AuthPlugin() {
                 </select>
               </div>
 
-              <div class="form-group">
+              <div className="form-group">
                 <label>位数</label>
                 <input
                   type="number"
-                  value={formData().digits || 6}
-                  onInput={(e) =>
+                  value={formData.digits || 6}
+                  onChange={(e) => {
+                    const value = parseInt(e.target.value) || 6;
                     setFormData((prev) => ({
                       ...prev,
-                      digits: parseInt(e.currentTarget.value) || 6,
-                    }))
-                  }
+                      digits: value,
+                    }));
+                  }}
                 />
               </div>
 
-              <div class="form-group">
+              <div className="form-group">
                 <label>周期(秒)</label>
                 <input
                   type="number"
-                  value={formData().period || 30}
-                  onInput={(e) =>
+                  value={formData.period || 30}
+                  onChange={(e) => {
+                    const value = parseInt(e.target.value) || 30;
                     setFormData((prev) => ({
                       ...prev,
-                      period: parseInt(e.currentTarget.value) || 30,
-                    }))
-                  }
+                      period: value,
+                    }));
+                  }}
                 />
               </div>
             </div>
 
-            <div class="form-actions">
+            <div className="form-actions">
               <button
-                class="btn-primary"
+                className="btn-primary"
                 onClick={saveEntry}
-                disabled={!isFormValid()}
-                classList={{ disabled: !isFormValid() }}
+                disabled={!isFormValid}
+                style={
+                  !isFormValid ? { opacity: 0.5, cursor: "not-allowed" } : {}
+                }
               >
-                {viewMode() === "add" ? "添加" : "保存"}
+                {viewMode === "add" ? "添加" : "保存"}
               </button>
-              <button class="btn-secondary" onClick={() => setViewMode("list")}>
+              <button
+                className="btn-secondary"
+                onClick={() => setViewMode("list")}
+              >
                 取消
               </button>
             </div>
           </div>
         </div>
-      </Show>
+      )}
 
       {/* 删除确认对话框 */}
-      <Show when={showDeleteConfirm()}>
-        <div class="modal-overlay">
-          <div class="modal">
+      {showDeleteConfirm && (
+        <div className="modal-overlay">
+          <div className="modal">
             <h3>确认删除</h3>
             <p>确定要删除这个认证条目吗?</p>
-            <div class="modal-actions">
-              <button class="btn-danger" onClick={deleteEntry}>
+            <div className="modal-actions">
+              <button className="btn-danger" onClick={deleteEntry}>
                 删除
               </button>
               <button
-                class="btn-secondary"
+                className="btn-secondary"
                 onClick={() => setShowDeleteConfirm(false)}
               >
                 取消
@@ -575,7 +595,9 @@ export default function AuthPlugin() {
             </div>
           </div>
         </div>
-      </Show>
+      )}
     </div>
   );
 }
+
+export default AuthPlugin;

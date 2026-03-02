@@ -20,7 +20,7 @@ const PLUGIN_REGISTRY: Record<string, PluginRegistration> = {
     description: "本地安全存储和管理密码",
     version: "1.0.0",
     icon: "🔐",
-    componentLoader: () => import("../components/PasswordManagerReact"),
+    componentLoader: () => import("../components/PasswordManager"),
   },
   auth: {
     id: "auth",
@@ -28,7 +28,7 @@ const PLUGIN_REGISTRY: Record<string, PluginRegistration> = {
     description: "TOTP 双因素认证",
     version: "1.0.0",
     icon: "🔐",
-    componentLoader: () => import("../components/AuthPluginReact"),
+    componentLoader: () => import("../components/AuthPlugin"),
   },
 };
 

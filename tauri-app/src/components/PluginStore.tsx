@@ -1,4 +1,4 @@
-import { createSignal, For, Show } from "solid-js";
+import React, { useState, useEffect, useMemo } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
 import "./PluginStore.css";
@@ -36,10 +36,10 @@ interface PluginStoreProps {
 }
 
 export default function PluginStore(props: PluginStoreProps) {
-  const [plugins, setPlugins] = createSignal<PluginInfo[]>([]);
-  const [searchQuery, setSearchQuery] = createSignal("");
-  const [loading, setLoading] = createSignal(true);
-  const [importing, setImporting] = createSignal(false);
+  const [plugins, setPlugins] = useState<PluginInfo[]>([]);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [importing, setImporting] = useState(false);
 
   // 加载可用插件列表
   const loadPlugins = async () => {
@@ -66,6 +66,11 @@ export default function PluginStore(props: PluginStoreProps) {
       setLoading(false);
     }
   };
+
+  // 组件挂载时加载插件列表
+  useEffect(() => {
+    loadPlugins();
+  }, []);
 
   // 导入插件包
   const importPlugin = async () => {
@@ -131,81 +136,71 @@ export default function PluginStore(props: PluginStoreProps) {
   };
 
   // 搜索过滤
-  const filteredPlugins = () => {
-    const query = searchQuery().toLowerCase();
-    return plugins().filter(
+  const filteredPlugins = useMemo(() => {
+    const query = searchQuery.toLowerCase();
+    return plugins.filter(
       (p) =>
         p.name.toLowerCase().includes(query) ||
         p.description.toLowerCase().includes(query) ||
         p.id.toLowerCase().includes(query),
     );
-  };
-
-  // 组件挂载时加载插件列表
-  loadPlugins();
+  }, [plugins, searchQuery]);
 
   return (
-    <div class="plugin-store">
+    <div className="plugin-store">
       {/* 搜索栏 */}
-      <div class="search-bar">
+      <div className="search-bar">
         <input
           type="text"
           placeholder="搜索插件..."
-          value={searchQuery()}
+          value={searchQuery}
           onInput={(e) => setSearchQuery(e.currentTarget.value)}
-          class="search-input"
+          className="search-input"
         />
         <button
           onClick={importPlugin}
-          disabled={importing()}
-          class="import-button"
+          disabled={importing}
+          className="import-button"
         >
-          {importing() ? "导入中..." : "导入插件"}
+          {importing ? "导入中..." : "导入插件"}
         </button>
       </div>
 
       {/* 加载状态 */}
-      <Show when={loading()}>
-        <div class="loading">加载中...</div>
-      </Show>
+      {loading && <div className="loading">加载中...</div>}
 
       {/* 插件列表 */}
-      <Show when={!loading()}>
-        <div class="plugin-list">
-          <Show
-            when={filteredPlugins().length > 0}
-            fallback={
-              <div class="empty-state">
-                {searchQuery() ? "未找到匹配的插件" : "暂无可用插件"}
-              </div>
-            }
-          >
-            <For each={filteredPlugins()}>
-              {(plugin) => (
-                <div class="plugin-card">
-                  <div class="plugin-icon">{plugin.icon || "🔌"}</div>
-                  <div class="plugin-info">
-                    <h3 class="plugin-name">{plugin.name}</h3>
-                    <p class="plugin-description">{plugin.description}</p>
-                    <div class="plugin-meta">
-                      <span class="version">v{plugin.version}</span>
-                      <Show when={plugin.author}>
-                        <span class="author">by {plugin.author}</span>
-                      </Show>
-                    </div>
+      {!loading && (
+        <div className="plugin-list">
+          {filteredPlugins.length === 0 ? (
+            <div className="empty-state">
+              {searchQuery ? "未找到匹配的插件" : "暂无可用插件"}
+            </div>
+          ) : (
+            filteredPlugins.map((plugin) => (
+              <div key={plugin.id} className="plugin-card">
+                <div className="plugin-icon">{plugin.icon || "🔌"}</div>
+                <div className="plugin-info">
+                  <h3 className="plugin-name">{plugin.name}</h3>
+                  <p className="plugin-description">{plugin.description}</p>
+                  <div className="plugin-meta">
+                    <span className="version">v{plugin.version}</span>
+                    {plugin.author && (
+                      <span className="author">by {plugin.author}</span>
+                    )}
                   </div>
-                  <button
-                    class={`action-button ${plugin.installed ? "uninstall" : "install"}`}
-                    onClick={() => togglePlugin(plugin)}
-                  >
-                    {plugin.installed ? "卸载" : "安装"}
-                  </button>
                 </div>
-              )}
-            </For>
-          </Show>
+                <button
+                  className={`action-button ${plugin.installed ? "uninstall" : "install"}`}
+                  onClick={() => togglePlugin(plugin)}
+                >
+                  {plugin.installed ? "卸载" : "安装"}
+                </button>
+              </div>
+            ))
+          )}
         </div>
-      </Show>
+      )}
     </div>
   );
 }
