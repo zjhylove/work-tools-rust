@@ -10,10 +10,8 @@ interface PluginViewProps {
 
 export default (props: PluginViewProps) => {
   const [html, setHtml] = createSignal<string>("");
-  const [assetsUrl, setAssetsUrl] = createSignal<string>("");
   const [loading, setLoading] = createSignal(true);
   const [error, setError] = createSignal<string>("");
-  const [useIframe, setUseIframe] = createSignal(false);
 
   // 使用 createEffect 代替 onMount,以便在 pluginId 变化时重新加载
   createEffect(async () => {
@@ -24,7 +22,6 @@ export default (props: PluginViewProps) => {
     try {
       setLoading(true);
       setError("");
-      setUseIframe(false);
 
       // 首先尝试获取插件前端资源
       try {
@@ -35,11 +32,78 @@ export default (props: PluginViewProps) => {
 
         console.log("[PluginView] 获取到前端资源 HTML,长度:", indexHtml.length);
 
-        // 设置 iframe 内容使用 srcdoc
-        setHtml(indexHtml);
-        setUseIframe(true);
+        // 读取并内联 JS
+        let processedHtml = indexHtml;
+
+        try {
+          // 读取 CSS
+          const styles = await invoke<string>("read_plugin_asset", {
+            pluginId: pluginId,
+            assetPath: "styles.css",
+          });
+
+          // 读取 JS
+          const script = await invoke<string>("read_plugin_asset", {
+            pluginId: pluginId,
+            assetPath: "main.js",
+          });
+
+          // 移除外部链接,因为我们会在主文档中渲染
+          processedHtml = processedHtml.replace(
+            /<link rel="stylesheet" href="styles.css">/,
+            "",
+          );
+
+          // 将 CSS 注入到主文档的 head 中(使用一个特殊的 style 标签)
+          const styleId = `plugin-styles-${pluginId}`;
+          // 先移除旧的样式
+          const oldStyle = document.getElementById(styleId);
+          if (oldStyle) oldStyle.remove();
+
+          // 添加新的样式
+          const styleEl = document.createElement("style");
+          styleEl.id = styleId;
+          styleEl.textContent = styles;
+          document.head.appendChild(styleEl);
+
+          // 将 JS 内联到 HTML 中
+          processedHtml = processedHtml.replace(
+            /<script src="main.js"><\/script>/,
+            `<script>${script}<\/script>`,
+          );
+
+          console.log("[PluginView] CSS 已注入到主文档,JS 已内联");
+        } catch (err) {
+          console.warn("[PluginView] 无法加载 CSS/JS:", err);
+        }
+
+        // 直接使用 innerHTML 渲染,不使用 iframe
+        setHtml(processedHtml);
         setLoading(false);
-        console.log("[PluginView] 使用 iframe srcdoc 模式加载插件");
+
+        // 等待 DOM 更新后创建插件桥
+        setTimeout(async () => {
+          const bridge = createPluginBridge(pluginId);
+          bridge.exposeToWindow();
+          console.log("[PluginView] 插件桥已暴露到 window");
+
+          // 对于 password-manager,自动加载数据
+          if (pluginId === "password-manager") {
+            try {
+              const result = await bridge.call("list_passwords");
+              console.log("[PluginView] 密码列表:", result);
+
+              // 调用页面上的初始化函数(如果存在)
+              if ((window as any).initPasswordManager) {
+                (window as any).initPasswordManager(result.entries || []);
+              }
+            } catch (err) {
+              console.error("[PluginView] 加载初始数据失败:", err);
+            }
+          }
+        }, 100);
+
+        console.log("[PluginView] 使用 innerHTML 模式加载插件");
         return;
       } catch (err) {
         console.log("[PluginView] 未找到前端资源,使用传统 HTML 模式:", err);
@@ -115,18 +179,8 @@ export default (props: PluginViewProps) => {
         <div class="error">加载失败: {error()}</div>
       </Show>
 
-      <Show when={!loading() && !error()}>
-        <Show when={useIframe() && html()}>
-          <iframe
-            srcdoc={html()}
-            class="plugin-iframe"
-            sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-modals"
-          />
-        </Show>
-
-        <Show when={!useIframe() && html()}>
-          <div innerHTML={html()} class="plugin-content" />
-        </Show>
+      <Show when={!loading() && !error() && html()}>
+        <div innerHTML={html()} class="plugin-content" />
       </Show>
     </div>
   );

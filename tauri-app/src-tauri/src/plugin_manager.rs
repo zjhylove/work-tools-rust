@@ -55,23 +55,60 @@ impl PluginManager {
 
             // 查找动态库文件
             if path.is_dir() {
-                if let Some(plugin_name) = path.file_name().and_then(|n| n.to_str()) {
-                    // 根据平台查找动态库文件
-                    let lib_name = if cfg!(target_os = "macos") {
-                        format!("lib{}.dylib", plugin_name.replace('-', "_"))
-                    } else if cfg!(target_os = "linux") {
-                        format!("lib{}.so", plugin_name.replace('-', "_"))
-                    } else if cfg!(target_os = "windows") {
-                        format!("{}.dll", plugin_name.replace('-', "_"))
+                // 尝试从 manifest.json 读取动态库文件名
+                let manifest_path = path.join("manifest.json");
+                let lib_path = if manifest_path.exists() {
+                    // 读取 manifest.json 获取动态库文件名
+                    if let Ok(content) = std::fs::read_to_string(&manifest_path) {
+                        if let Ok(manifest) = serde_json::from_str::<serde_json::Value>(&content) {
+                            if let Some(files) = manifest.get("files") {
+                                let lib_name = if cfg!(target_os = "macos") {
+                                    files.get("macos").and_then(|v| v.as_str())
+                                } else if cfg!(target_os = "linux") {
+                                    files.get("linux").and_then(|v| v.as_str())
+                                } else if cfg!(target_os = "windows") {
+                                    files.get("windows").and_then(|v| v.as_str())
+                                } else {
+                                    None
+                                };
+
+                                if let Some(name) = lib_name {
+                                    tracing::info!("从 manifest.json 读取动态库文件名: {}", name);
+                                    path.join(name)
+                                } else {
+                                    continue;
+                                }
+                            } else {
+                                continue;
+                            }
+                        } else {
+                            continue;
+                        }
                     } else {
                         continue;
-                    };
+                    }
+                } else {
+                    // 回退到旧的命名规则
+                    if let Some(plugin_name) = path.file_name().and_then(|n| n.to_str()) {
+                        let lib_name = if cfg!(target_os = "macos") {
+                            format!("lib{}.dylib", plugin_name.replace('-', "_"))
+                        } else if cfg!(target_os = "linux") {
+                            format!("lib{}.so", plugin_name.replace('-', "_"))
+                        } else if cfg!(target_os = "windows") {
+                            format!("{}.dll", plugin_name.replace('-', "_"))
+                        } else {
+                            continue;
+                        };
 
-                    let lib_path = path.join(&lib_name);
-                    if lib_path.exists() {
-                        if let Err(e) = self.load_plugin(&lib_path).await {
-                            tracing::warn!("加载插件失败 {:?}: {}", lib_path, e);
-                        }
+                        path.join(&lib_name)
+                    } else {
+                        continue;
+                    }
+                };
+
+                if lib_path.exists() {
+                    if let Err(e) = self.load_plugin(&lib_path).await {
+                        tracing::warn!("加载插件失败 {:?}: {}", lib_path, e);
                     }
                 }
             }

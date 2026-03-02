@@ -154,12 +154,9 @@ impl Plugin for AuthPlugin {
     }
 
     fn get_view(&self) -> String {
-        r#"
-        <div id="auth-app">
-            <h2>双因素验证</h2>
-            <p>Auth Plugin (开发中)</p>
-        </div>
-        "#.to_string()
+        // 插件已迁移到使用独立前端资源 (assets/index.html)
+        // 此方法仅作为向后兼容的占位符
+        "<div>插件前端资源加载中...</div>".to_string()
     }
 
     fn handle_call(&mut self, method: &str, params: Value) -> Result<Value, Box<dyn std::error::Error + Send + Sync>> {

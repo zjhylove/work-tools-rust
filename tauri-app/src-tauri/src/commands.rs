@@ -661,9 +661,56 @@ pub async fn uninstall_plugin(
     let user_dirs = directories::UserDirs::new()
         .ok_or_else(|| "无法找到用户主目录".to_string())?;
 
-    let plugin_dir = user_dirs.home_dir()
-        .join(".worktools/plugins")
-        .join(&plugin_id);
+    let plugins_base_dir = user_dirs.home_dir().join(".worktools/plugins");
+
+    // 首先尝试直接删除 plugin_id 对应的目录
+    let plugin_dir = plugins_base_dir.join(&plugin_id);
+
+    let mut deleted_dir = false;
+    if plugin_dir.exists() {
+        fs::remove_dir_all(&plugin_dir)
+            .map_err(|e| format!("删除插件目录失败: {}", e))?;
+        deleted_dir = true;
+        tracing::info!("删除插件目录: {:?}", plugin_dir);
+    } else {
+        // 如果标准路径不存在,扫描所有子目录查找匹配的 manifest.json
+        if plugins_base_dir.exists() {
+            let entries = fs::read_dir(&plugins_base_dir)
+                .map_err(|e| format!("读取插件目录失败: {}", e))?;
+
+            for entry in entries {
+                let entry = entry.map_err(|e| format!("读取目录项失败: {}", e))?;
+                let path = entry.path();
+
+                if path.is_dir() {
+                    let manifest_path = path.join("manifest.json");
+                    if manifest_path.exists() {
+                        // 读取 manifest.json 检查 ID 是否匹配
+                        if let Ok(content) = fs::read_to_string(&manifest_path) {
+                            if let Ok(manifest) = serde_json::from_str::<serde_json::Value>(&content) {
+                                if manifest.get("id")
+                                    .and_then(|v| v.as_str())
+                                    .map(|id| id == plugin_id)
+                                    .unwrap_or(false)
+                                {
+                                    // 找到匹配的插件目录,删除它
+                                    fs::remove_dir_all(&path)
+                                        .map_err(|e| format!("删除插件目录失败: {}", e))?;
+                                    deleted_dir = true;
+                                    tracing::info!("删除插件目录(扫描找到): {:?}", path);
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    if !deleted_dir {
+        tracing::warn!("未找到插件 {} 的目录", plugin_id);
+    }
 
     // 从注册表移除
     let mut registry = PluginRegistry::new()
@@ -671,12 +718,6 @@ pub async fn uninstall_plugin(
 
     registry.unregister(&plugin_id)
         .map_err(|e| format!("从注册表移除插件失败: {}", e))?;
-
-    // 删除插件目录
-    if plugin_dir.exists() {
-        fs::remove_dir_all(&plugin_dir)
-            .map_err(|e| format!("删除插件目录失败: {}", e))?;
-    }
 
     // 重新加载插件管理器
     manager.init().await
