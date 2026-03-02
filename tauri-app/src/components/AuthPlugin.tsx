@@ -433,7 +433,7 @@ function AuthPlugin() {
                 type="text"
                 value={formData.issuer || ""}
                 onInput={(e) => {
-                  const value = e.target.value;
+                  const value = (e.target as HTMLInputElement).value;
                   setFormData((prev) => ({ ...prev, issuer: value }));
                   const error = validateField("issuer", value);
                   setFieldErrors((prev) => {
@@ -457,7 +457,7 @@ function AuthPlugin() {
                 type="text"
                 value={formData.name || ""}
                 onInput={(e) => {
-                  const value = e.target.value;
+                  const value = (e.target as HTMLInputElement).value;
                   setFormData((prev) => ({ ...prev, name: value }));
                   const error = validateField("name", value);
                   setFieldErrors((prev) => {
