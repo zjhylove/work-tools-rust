@@ -2,6 +2,8 @@ import { For, Show, createSignal, onMount } from "solid-js";
 import { invoke } from "@tauri-apps/api/core";
 import PasswordManager from "./components/PasswordManager";
 import AuthPlugin from "./components/AuthPlugin";
+import PluginStore from "./components/PluginStore";
+import PluginView from "./components/PluginView";
 import { devError, devLog, devWarn } from "./utils/logger";
 import "./App.css";
 
@@ -36,7 +38,7 @@ function App() {
   const [showPluginMarket, setShowPluginMarket] = createSignal(false);
 
   // 加载插件列表
-  onMount(async () => {
+  const loadPlugins = async () => {
     // 检查是否在 Tauri 环境中
     const tauriAvailable =
       typeof window !== "undefined" && "__TAURI__" in window;
@@ -76,8 +78,18 @@ function App() {
         devLog(`加载了 ${installedPlugins.length} 个插件`);
         setPlugins(installedPlugins);
 
+        // 如果当前选中的插件不存在了,清除选择
+        const currentSelected = selectedPlugin();
+        if (
+          currentSelected &&
+          !installedPlugins.find((p) => p.id === currentSelected)
+        ) {
+          devLog("当前选中的插件已不存在,清除选择");
+          setSelectedPlugin(null);
+        }
+
         // 默认选中第一个插件
-        if (installedPlugins.length > 0) {
+        if (!selectedPlugin() && installedPlugins.length > 0) {
           setSelectedPlugin(installedPlugins[0].id);
         }
       } else {
@@ -102,6 +114,11 @@ function App() {
     } finally {
       setLoading(false);
     }
+  };
+
+  // 初始加载
+  onMount(() => {
+    loadPlugins();
   });
 
   const openPlugin = async (pluginId: string) => {
@@ -321,6 +338,25 @@ function App() {
           <Show when={selectedPlugin() === "auth"}>
             <AuthPlugin />
           </Show>
+          <Show when={selectedPlugin() === "test-plugin"}>
+            <PluginView
+              pluginId={selectedPlugin()!}
+              setSelectedPlugin={setSelectedPlugin}
+            />
+          </Show>
+          {/* 其他插件使用通用的 PluginView */}
+          <Show
+            when={
+              selectedPlugin() !== "password-manager" &&
+              selectedPlugin() !== "auth" &&
+              selectedPlugin() !== "test-plugin"
+            }
+          >
+            <PluginView
+              pluginId={selectedPlugin()!}
+              setSelectedPlugin={setSelectedPlugin}
+            />
+          </Show>
         </Show>
 
         {/* 无插件选中时的提示 */}
@@ -434,8 +470,8 @@ function App() {
             style={{
               background: "white",
               "border-radius": "8px",
-              width: "600px",
-              height: "400px",
+              width: "800px",
+              height: "600px",
               "box-shadow": "0 4px 20px rgba(0,0,0,0.3)",
               display: "flex",
               "flex-direction": "column",
@@ -467,66 +503,11 @@ function App() {
             <div
               style={{
                 flex: 1,
-                padding: "20px",
+                padding: "0",
                 overflow: "auto",
               }}
             >
-              <For each={plugins()}>
-                {(plugin) => (
-                  <div
-                    style={{
-                      padding: "15px",
-                      margin: "0 0 10px 0",
-                      background: "#f8f9fa",
-                      "border-radius": "4px",
-                      border: "1px solid #dee2e6",
-                    }}
-                  >
-                    <div
-                      style={{
-                        display: "flex",
-                        "align-items": "center",
-                        gap: "15px",
-                      }}
-                    >
-                      <span style={{ "font-size": "32px" }}>{plugin.icon}</span>
-                      <div style={{ flex: 1 }}>
-                        <div
-                          style={{
-                            "font-weight": "600",
-                            "margin-bottom": "5px",
-                          }}
-                        >
-                          {plugin.name}
-                        </div>
-                        <div style={{ "font-size": "13px", color: "#666" }}>
-                          {plugin.description}
-                        </div>
-                        <div
-                          style={{
-                            "font-size": "12px",
-                            color: "#999",
-                            "margin-top": "5px",
-                          }}
-                        >
-                          版本: {plugin.version}
-                        </div>
-                      </div>
-                      <div
-                        style={{
-                          padding: "4px 12px",
-                          background: "#27ae60",
-                          color: "white",
-                          "border-radius": "4px",
-                          "font-size": "12px",
-                        }}
-                      >
-                        已安装
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </For>
+              <PluginStore onPluginsChange={loadPlugins} />
             </div>
           </div>
         </div>

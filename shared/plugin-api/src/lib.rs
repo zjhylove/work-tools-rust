@@ -38,6 +38,12 @@ pub trait Plugin: Send + Sync {
     ) -> Result<Value, Box<dyn std::error::Error + Send + Sync>> {
         Err("method not implemented".into())
     }
+
+    /// 获取插件前端资源路径 (相对于插件目录)
+    /// 默认返回 "assets",插件可以自定义
+    fn get_assets_path(&self) -> &str {
+        "assets"
+    }
 }
 
 /// 插件工厂函数类型定义

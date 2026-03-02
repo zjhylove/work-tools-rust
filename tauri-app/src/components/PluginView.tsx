@@ -10,8 +10,10 @@ interface PluginViewProps {
 
 export default (props: PluginViewProps) => {
   const [html, setHtml] = createSignal<string>("");
+  const [assetsUrl, setAssetsUrl] = createSignal<string>("");
   const [loading, setLoading] = createSignal(true);
   const [error, setError] = createSignal<string>("");
+  const [useIframe, setUseIframe] = createSignal(false);
 
   // 使用 createEffect 代替 onMount,以便在 pluginId 变化时重新加载
   createEffect(async () => {
@@ -22,7 +24,29 @@ export default (props: PluginViewProps) => {
     try {
       setLoading(true);
       setError("");
+      setUseIframe(false);
 
+      // 首先尝试获取插件前端资源
+      try {
+        const indexHtml = await invoke<string>("read_plugin_asset", {
+          pluginId: pluginId,
+          assetPath: "index.html",
+        });
+
+        console.log("[PluginView] 获取到前端资源 HTML,长度:", indexHtml.length);
+
+        // 设置 iframe 内容使用 srcdoc
+        setHtml(indexHtml);
+        setUseIframe(true);
+        setLoading(false);
+        console.log("[PluginView] 使用 iframe srcdoc 模式加载插件");
+        return;
+      } catch (err) {
+        console.log("[PluginView] 未找到前端资源,使用传统 HTML 模式:", err);
+        // 如果没有前端资源,回退到传统的 HTML 模式
+      }
+
+      // 传统模式:从插件获取 HTML
       const viewHtml = await invoke<string>("get_plugin_view", {
         pluginId: pluginId,
       });
@@ -91,8 +115,18 @@ export default (props: PluginViewProps) => {
         <div class="error">加载失败: {error()}</div>
       </Show>
 
-      <Show when={!loading() && !error() && html()}>
-        <div innerHTML={html()} class="plugin-content" />
+      <Show when={!loading() && !error()}>
+        <Show when={useIframe() && html()}>
+          <iframe
+            srcdoc={html()}
+            class="plugin-iframe"
+            sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-modals"
+          />
+        </Show>
+
+        <Show when={!useIframe() && html()}>
+          <div innerHTML={html()} class="plugin-content" />
+        </Show>
       </Show>
     </div>
   );

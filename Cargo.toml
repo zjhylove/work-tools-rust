@@ -4,7 +4,7 @@ members = [
     "shared/plugin-api",
     "plugins/password-manager",
     "plugins/auth-plugin",
-    "tauri-app/src-tauri",
+    "tauri-app/src-tauri", "test-plugin",
 ]
 resolver = "2"
 exclude = ["tauri-app"]

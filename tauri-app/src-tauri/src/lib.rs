@@ -2,6 +2,8 @@ pub mod plugin_manager;
 mod config;
 mod commands;
 mod crypto;
+mod plugin_package;
+mod plugin_registry;
 
 use anyhow::Result;
 use plugin_manager::PluginManager;
@@ -91,6 +93,14 @@ pub fn run() {
             commands::update_auth_entry,
             commands::delete_auth_entry_plugin,
             commands::generate_totp_code,
+            // 插件商店命令
+            commands::import_plugin_package,
+            commands::get_available_plugins,
+            commands::get_installed_plugins_from_registry,
+            commands::install_plugin,
+            commands::uninstall_plugin,
+            commands::get_plugin_assets_url,
+            commands::read_plugin_asset,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

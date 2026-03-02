@@ -1,0 +1,19 @@
+{
+  "id": "test-plugin",
+  "name": "测试插件",
+  "description": "这是一个测试插件,用于验证插件商店功能",
+  "version": "1.0.0",
+  "icon": "🧪",
+  "author": "Work Tools Team",
+  "homepage": "https://github.com/work-tools",
+  "min_app_version": "1.0.0",
+  "license": "MIT",
+  "files": {
+    "macos": "libtest_plugin.dylib"
+  },
+  "assets": {
+    "entry": "index.html"
+  },
+  "permissions": [],
+  "screenshots": []
+}

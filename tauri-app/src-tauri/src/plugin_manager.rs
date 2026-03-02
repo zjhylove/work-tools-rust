@@ -42,6 +42,9 @@ impl PluginManager {
     pub async fn init(&self) -> Result<()> {
         tracing::info!("初始化插件管理器,插件目录: {:?}", self.plugin_dir);
 
+        // 清空已加载的插件列表
+        self.plugins.write().await.clear();
+
         // 扫描插件目录
         let entries = std::fs::read_dir(&self.plugin_dir)
             .context("读取插件目录失败")?;
