@@ -1,0 +1,20 @@
+{
+  "id": "auth",
+  "name": "双因素验证",
+  "description": "TOTP 双因素认证",
+  "version": "1.0.0",
+  "icon": "🔐",
+  "author": "Work Tools Team",
+  "homepage": "https://github.com/your-repo/work-tools",
+  "files": {
+    "macos": "libauth_plugin.dylib",
+    "linux": "libauth_plugin.so",
+    "windows": "auth_plugin.dll"
+  },
+  "assets": {
+    "entry": "index.html"
+  },
+  "permissions": [
+    "clipboard"
+  ]
+}

@@ -1,0 +1,21 @@
+{
+  "id": "password-manager",
+  "name": "密码管理器",
+  "description": "本地安全存储和管理密码",
+  "version": "1.0.0",
+  "icon": "🔐",
+  "author": "Work Tools Team",
+  "homepage": "https://github.com/your-repo/work-tools",
+  "files": {
+    "macos": "libpassword_manager.dylib",
+    "linux": "libpassword_manager.so",
+    "windows": "password_manager.dll"
+  },
+  "assets": {
+    "entry": "index.html"
+  },
+  "permissions": [
+    "filesystem",
+    "clipboard"
+  ]
+}
