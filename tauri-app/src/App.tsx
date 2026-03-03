@@ -33,73 +33,77 @@ export default function App() {
   const [showLogs, setShowLogs] = useState(false);
   const [showPluginMarket, setShowPluginMarket] = useState(false);
 
-  // 加载插件列表
-  useEffect(() => {
-    const loadPlugins = async () => {
-      const tauriAvailable =
-        typeof window !== "undefined" && "__TAURI__" in window;
-      devLog("Tauri 环境检查:", tauriAvailable);
+  // 加载插件列表的函数
+  const loadPlugins = async () => {
+    const tauriAvailable =
+      typeof window !== "undefined" && "__TAURI__" in window;
+    devLog("Tauri 环境检查:", tauriAvailable);
 
-      if (!tauriAvailable) {
-        devWarn("不在 Tauri 环境,使用模拟数据");
-        const mockPlugins: PluginInfo[] = [
-          {
-            id: "password-manager",
-            name: "密码管理器",
-            description: "本地安全存储和管理密码",
-            version: "1.0.0",
-            icon: "🔐",
-          },
-          {
-            id: "auth",
-            name: "双因素验证",
-            description: "TOTP 双因素认证",
-            version: "1.0.0",
-            icon: "🔐",
-          },
-        ];
-        setPlugins(mockPlugins);
+    if (!tauriAvailable) {
+      devWarn("不在 Tauri 环境,使用模拟数据");
+      const mockPlugins: PluginInfo[] = [
+        {
+          id: "password-manager",
+          name: "密码管理器",
+          description: "本地安全存储和管理密码",
+          version: "1.0.0",
+          icon: "🔐",
+        },
+        {
+          id: "auth",
+          name: "双因素验证",
+          description: "TOTP 双因素认证",
+          version: "1.0.0",
+          icon: "🔐",
+        },
+      ];
+      setPlugins(mockPlugins);
+      if (!selectedPlugin) {
         setSelectedPlugin(mockPlugins[0].id);
-        setLoading(false);
-        return;
       }
+      setLoading(false);
+      return;
+    }
 
-      try {
-        const installedPlugins = await safeInvoke<PluginInfo[]>(
-          "get_installed_plugins",
-        );
+    try {
+      const installedPlugins = await safeInvoke<PluginInfo[]>(
+        "get_installed_plugins",
+      );
 
-        if (Array.isArray(installedPlugins)) {
-          devLog(`加载了 ${installedPlugins.length} 个插件`);
-          setPlugins(installedPlugins);
+      if (Array.isArray(installedPlugins)) {
+        devLog(`加载了 ${installedPlugins.length} 个插件`);
+        setPlugins(installedPlugins);
 
-          if (!selectedPlugin && installedPlugins.length > 0) {
-            setSelectedPlugin(installedPlugins[0].id);
-          }
-        } else {
-          devError(
-            "get_installed_plugins 返回的不是数组:",
-            typeof installedPlugins,
-          );
+        if (!selectedPlugin && installedPlugins.length > 0) {
+          setSelectedPlugin(installedPlugins[0].id);
         }
-      } catch (error) {
-        devError("加载插件失败:", error);
-
-        setPlugins([
-          {
-            id: "password-manager",
-            name: "密码管理器",
-            description: "本地安全存储和管理密码",
-            version: "1.0.0",
-            icon: "🔐",
-          },
-        ]);
-      } finally {
-        setLoading(false);
+      } else {
+        devError(
+          "get_installed_plugins 返回的不是数组:",
+          typeof installedPlugins,
+        );
       }
-    };
+    } catch (error) {
+      devError("加载插件失败:", error);
 
+      setPlugins([
+        {
+          id: "password-manager",
+          name: "密码管理器",
+          description: "本地安全存储和管理密码",
+          version: "1.0.0",
+          icon: "🔐",
+        },
+      ]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // 组件挂载时加载插件列表
+  useEffect(() => {
     loadPlugins();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const openPlugin = async (pluginId: string) => {
@@ -457,7 +461,7 @@ export default function App() {
                 overflow: "auto",
               }}
             >
-              <PluginStore onPluginsChange={() => {}} />
+              <PluginStore onPluginsChange={loadPlugins} />
             </div>
           </div>
         </div>

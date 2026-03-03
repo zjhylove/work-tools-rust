@@ -7233,7 +7233,7 @@ function App() {
     try {
       yield navigator.clipboard.writeText(code);
       setError("✓ 验证码已复制");
-      setTimeout(() => setError(""), 2e3);
+      setTimeout(() => setError(""), 1500);
     } catch (err) {
       setError("复制失败");
     }
@@ -7342,8 +7342,7 @@ function App() {
     error && /* @__PURE__ */ jsxRuntimeExports.jsx(
       "div",
       {
-        className: "error-message",
-        style: String(error).startsWith("✓") ? { backgroundColor: "#d4edda", color: "#155724" } : {},
+        className: `error-message${String(error).startsWith("✓") ? " success" : ""}${String(error).startsWith("⏳") ? " info" : ""}${String(error).startsWith("⚠️") ? " warning" : ""}`,
         children: String(error)
       }
     ),

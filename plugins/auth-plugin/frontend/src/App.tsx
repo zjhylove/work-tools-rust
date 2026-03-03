@@ -285,7 +285,7 @@ function App() {
     try {
       await navigator.clipboard.writeText(code);
       setError("✓ 验证码已复制");
-      setTimeout(() => setError(""), 2000);
+      setTimeout(() => setError(""), 1500);
     } catch (err) {
       devError("复制失败:", err);
       setError("复制失败");
@@ -423,15 +423,16 @@ function App() {
         </div>
       )}
 
-      {/* 错误提示 */}
+      {/* Toast 提示 */}
       {error && (
         <div
-          className="error-message"
-          style={
-            String(error).startsWith("✓")
-              ? { backgroundColor: "#d4edda", color: "#155724" }
-              : {}
-          }
+          className={`error-message${
+            String(error).startsWith("✓") ? " success" : ""
+          }${
+            String(error).startsWith("⏳") ? " info" : ""
+          }${
+            String(error).startsWith("⚠️") ? " warning" : ""
+          }`}
         >
           {String(error)}
         </div>

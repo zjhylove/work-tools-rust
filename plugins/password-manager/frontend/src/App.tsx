@@ -212,7 +212,7 @@ function App() {
         }
       }
       setError("✓ 密码已复制");
-      setTimeout(() => setError(""), 2000);
+      setTimeout(() => setError(""), 1500);
     } catch (err) {
       devError("复制失败:", err);
       setError("复制失败,请手动复制");
@@ -353,8 +353,6 @@ function App() {
 
   // 导出密码 (不使用 confirm,直接导出)
   const handleExportPasswords = async () => {
-    setError("⏳ 正在导出密码...");
-
     try {
       if (!window.pluginAPI) {
         throw new Error("pluginAPI 未初始化");
@@ -381,18 +379,10 @@ function App() {
       URL.revokeObjectURL(url);
 
       setError("✅ 密码已导出 - 请记得安全存储后删除文件");
-
-      // 5秒后清除提示
-      setTimeout(() => {
-        setError("");
-      }, 5000);
+      setTimeout(() => setError(""), 1500);
     } catch (err) {
       setError("❌ 导出失败: " + (err as Error).message);
-
-      // 8秒后清除错误提示
-      setTimeout(() => {
-        setError("");
-      }, 8000);
+      setTimeout(() => setError(""), 1500);
     }
   };
 
@@ -447,7 +437,7 @@ function App() {
             }
           } catch (err) {
             setError("❌ 导入失败: 文件格式不正确 - " + (err as Error).message);
-            setTimeout(() => setError(""), 5000);
+            setTimeout(() => setError(""), 1500);
             safeRemoveChild(input);
             return;
           }
@@ -456,7 +446,7 @@ function App() {
 
           if (count === 0) {
             setError("⚠️ 文件中没有密码条目");
-            setTimeout(() => setError(""), 3000);
+            setTimeout(() => setError(""), 1500);
             safeRemoveChild(input);
             return;
           }
@@ -470,10 +460,10 @@ function App() {
             });
             await loadPasswords();
             setError(`✅ 已成功导入 ${count} 个密码`);
-            setTimeout(() => setError(""), 5000);
+            setTimeout(() => setError(""), 1500);
           } catch (err) {
             setError("❌ 导入失败: " + (err as Error).message);
-            setTimeout(() => setError(""), 8000);
+            setTimeout(() => setError(""), 1500);
           }
         } finally {
           // 安全清理 DOM 元素
@@ -499,15 +489,16 @@ function App() {
         </div>
       )}
 
-      {/* 错误提示 */}
+      {/* Toast 提示 */}
       {error && (
         <div
-          className="error-message"
-          style={
-            String(error).startsWith("✓")
-              ? { backgroundColor: "#d4edda", color: "#155724" }
-              : {}
-          }
+          className={`error-message${
+            String(error).startsWith("✓") ? " success" : ""
+          }${
+            String(error).startsWith("⏳") ? " info" : ""
+          }${
+            String(error).startsWith("⚠️") ? " warning" : ""
+          }`}
         >
           {String(error)}
         </div>

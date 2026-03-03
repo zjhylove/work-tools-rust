@@ -21,6 +21,7 @@
   color: var(--text-primary);
 }
 
+/* Toast 提示消息 */
 .error-message {
   position: fixed;
   top: 20px;
@@ -28,19 +29,35 @@
   transform: translateX(-50%);
   padding: 12px 20px;
   background: #fee;
-  border: 1px solid #fcc;
-  border-radius: 8px;
+  border: 2px solid #f88;
+  border-radius: 10px;
   color: #c33;
-  font-size: 13px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  font-size: 14px;
+  font-weight: 500;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.18);
   z-index: 1000;
   animation: slideDown 0.3s ease;
 }
 
+/* 成功提示样式 */
 .error-message.success {
-  background: #efe;
-  border-color: #cfc;
-  color: #3c3;
+  background: #f0f9f4;
+  border-color: #4caf50;
+  color: #2e7d32;
+}
+
+/* 警告提示样式 */
+.error-message.warning {
+  background: #fff8e1;
+  border-color: #ffa726;
+  color: #ef6c00;
+}
+
+/* 信息提示样式 */
+.error-message.info {
+  background: #e3f2fd;
+  border-color: #42a5f5;
+  color: #1565c0;
 }
 
 @keyframes slideDown {
@@ -144,6 +161,8 @@
   border: 1px solid var(--border-color);
   overflow: auto;
   box-shadow: var(--shadow-sm);
+  position: relative;
+  z-index: 10;
 }
 
 .auth-form-content {
