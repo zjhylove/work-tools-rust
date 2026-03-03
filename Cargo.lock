@@ -5661,6 +5661,7 @@ dependencies = [
  "tauri-plugin-fs",
  "tauri-plugin-opener",
  "tauri-plugin-shell",
+ "tempfile",
  "tokio",
  "tracing",
  "tracing-appender",
@@ -5674,8 +5675,12 @@ dependencies = [
 name = "worktools-plugin-api"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
+ "directories",
+ "dirs 5.0.1",
  "serde",
  "serde_json",
+ "tracing",
 ]
 
 [[package]]

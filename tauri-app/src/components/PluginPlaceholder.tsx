@@ -59,57 +59,73 @@ export default function PluginPlaceholder({
 
           console.log("[PluginPlaceholder] 插件资源读取成功");
 
-          // 组合完整的 HTML 内容
-          const fullHtml = html
-            .replace("./main.js", "data:text/javascript;base64," + btoa(mainJs))
-            .replace("./styles.css", "data:text/css;base64," + btoa(styles));
+          // 获取父页面的 CSS 变量
+          const cssVars = `
+            :root {
+              --bg-primary: #ffffff;
+              --bg-secondary: #fafafa;
+              --bg-tertiary: #f5f5f5;
+              --hover-bg: #f0f0f0;
+              --text-primary: #000000;
+              --text-secondary: #666666;
+              --text-tertiary: #999999;
+              --border-color: #e5e5e5;
+              --border-light: #f0f0f0;
+              --accent: #007aff;
+              --accent-hover: #0063d1;
+              --accent-light: #e5f1ff;
+              --success-color: #34c759;
+              --warning-color: #ff9500;
+              --error-color: #ff3b30;
+              --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.04);
+              --shadow-md: 0 2px 8px rgba(0, 0, 0, 0.06);
+              --shadow-lg: 0 4px 16px rgba(0, 0, 0, 0.08);
+              --radius-sm: 4px;
+              --radius-md: 8px;
+              --radius-lg: 12px;
+              --radius-xl: 16px;
+            }
+            * {
+              box-sizing: border-box;
+            }
+            body {
+              margin: 0;
+              padding: 0;
+              font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            }
+          `;
+
+          // 直接在 HTML 中内联 CSS 和 JavaScript
+          // 使用 split + join 方法只替换第一个匹配项
+          const parts = html.split(
+            '<script type="module" crossorigin src="./main.js"></script>',
+          );
+          const fullHtml =
+            parts[0] +
+            `<style>${cssVars}${styles}</style><script type="module">${mainJs}</script>` +
+            parts
+              .slice(1)
+              .join(
+                '<script type="module" crossorigin src="./main.js"></script>',
+              )
+              .split('<link rel="stylesheet" crossorigin href="./styles.css">')
+              .join("");
+
+          console.log("[PluginPlaceholder] HTML 长度:", fullHtml.length);
+          console.log(
+            "[PluginPlaceholder] HTML 包含 <script>:",
+            fullHtml.includes('<script type="module">'),
+          );
+          console.log(
+            "[PluginPlaceholder] HTML 包含 <style>:",
+            fullHtml.includes("<style>"),
+          );
+          console.log(
+            "[PluginPlaceholder] HTML 前 200 字符:",
+            fullHtml.substring(0, 200),
+          );
 
           setHtmlContent(fullHtml);
-
-          // 设置 window.pluginAPI 供插件使用
-          setTimeout(() => {
-            if (iframeRef.current) {
-              const iframe = iframeRef.current;
-              try {
-                // 向 iframe 注入 pluginAPI
-                if (iframe.contentWindow) {
-                  iframe.contentWindow.window.pluginAPI = {
-                    call: async (
-                      method: string,
-                      params: Record<string, unknown>,
-                    ) => {
-                      console.log(
-                        `[PluginAPI] 调用 ${pluginId}.${method}`,
-                        params,
-                      );
-                      return await invoke("call_plugin_method", {
-                        pluginId,
-                        method,
-                        params,
-                      });
-                    },
-                    get_plugin_config: async (id: string) => {
-                      return await invoke("get_plugin_config", {
-                        pluginId: id,
-                      });
-                    },
-                    set_plugin_config: async (
-                      id: string,
-                      config: Record<string, unknown>,
-                    ) => {
-                      return await invoke("set_plugin_config", {
-                        pluginId: id,
-                        config,
-                      });
-                    },
-                  };
-                  console.log("[PluginPlaceholder] pluginAPI 注入成功");
-                }
-              } catch (err) {
-                console.error("[PluginPlaceholder] 注入 pluginAPI 失败:", err);
-              }
-            }
-          }, 100);
         } catch (err) {
           console.error("[PluginPlaceholder] 读取插件资源失败:", err);
           if (err instanceof Error) {
@@ -190,14 +206,50 @@ export default function PluginPlaceholder({
   if (htmlContent) {
     return (
       <iframe
+        key={`plugin-iframe-${pluginId}`}
         ref={iframeRef}
         srcDoc={htmlContent}
+        onLoad={() => {
+          // iframe 加载完成后注入 pluginAPI
+          if (iframeRef.current?.contentWindow) {
+            iframeRef.current.contentWindow.window.pluginAPI = {
+              call: async (
+                pluginId: string,
+                method: string,
+                params: Record<string, unknown>,
+              ) => {
+                console.log(`[PluginAPI] 调用 ${pluginId}.${method}`, params);
+                return await invoke("call_plugin_method", {
+                  pluginId,
+                  method,
+                  params,
+                });
+              },
+              get_plugin_config: async (pluginId: string) => {
+                return await invoke("get_plugin_config", {
+                  pluginId: pluginId,
+                });
+              },
+              set_plugin_config: async (
+                pluginId: string,
+                config: Record<string, unknown>,
+              ) => {
+                return await invoke("set_plugin_config", {
+                  pluginId: pluginId,
+                  config,
+                });
+              },
+            };
+            console.log("[PluginPlaceholder] pluginAPI 注入成功");
+          }
+        }}
         style={{
           width: "100%",
           height: "100%",
           border: "none",
           padding: 0,
           margin: 0,
+          display: "block",
         }}
         title={`Plugin: ${pluginId}`}
       />

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import PluginStore from "./components/PluginStore";
 import PluginPlaceholder from "./components/PluginPlaceholder";
+import ErrorBoundary from "./components/ErrorBoundary";
 import { devError, devLog, devWarn } from "./utils/logger";
 
 // 安全的 invoke 包装函数
@@ -111,10 +112,12 @@ export default function App() {
     if (!selectedPlugin) return null;
 
     return (
-      <PluginPlaceholder
-        pluginId={selectedPlugin}
-        setSelectedPlugin={setSelectedPlugin}
-      />
+      <ErrorBoundary>
+        <PluginPlaceholder
+          pluginId={selectedPlugin}
+          setSelectedPlugin={setSelectedPlugin}
+        />
+      </ErrorBoundary>
     );
   };
 

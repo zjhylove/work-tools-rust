@@ -1,20 +1,24 @@
-import { defineConfig } from 'vite';
-import react from '@vitejs/plugin-react';
+import { defineConfig } from "vite";
+import react from "@vitejs/plugin-react";
 
 export default defineConfig({
   plugins: [react()],
-  base: './',
+  base: "./",
   build: {
-    outDir: '../assets',
+    outDir: "../assets",
     emptyOutDir: true,
+    minify: false,
+    sourcemap: false,
+    target: "es2015",
     rollupOptions: {
       output: {
-        entryFileNames: 'main.js',
-        chunkFileNames: 'chunks/[name].js',
+        inlineDynamicImports: true,
+        entryFileNames: "main.js",
+        chunkFileNames: "chunks/[name].js",
         assetFileNames: (assetInfo) => {
-          if (assetInfo.name === 'index.html') return 'index.html';
-          if (assetInfo.name?.endsWith('.css')) return 'styles.css';
-          return 'assets/[name][extname]';
+          if (assetInfo.name === "index.html") return "index.html";
+          if (assetInfo.name?.endsWith(".css")) return "styles.css";
+          return "assets/[name][extname]";
         }
       }
     }

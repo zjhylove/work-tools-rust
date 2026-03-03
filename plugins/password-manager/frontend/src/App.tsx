@@ -102,7 +102,7 @@ function App() {
       devLog("开始加载密码列表...");
       const result = (await window.pluginAPI?.call(
         "password-manager",
-        "get_passwords",
+        "list_passwords",
         {},
       )) as PasswordEntry[];
       devLog("密码列表加载成功,条目数:", result.length);
@@ -441,12 +441,12 @@ function App() {
         <div
           className="error-message"
           style={
-            error.startsWith("✓")
+            String(error).startsWith("✓")
               ? { backgroundColor: "#d4edda", color: "#155724" }
               : {}
           }
         >
-          {error}
+          {String(error)}
         </div>
       )}
 

@@ -101,11 +101,20 @@ function App() {
         "auth",
         "list_entries",
         {},
-      )) as AuthEntry[];
-      setEntries(result || []);
+      )) as unknown;
+
+      // 验证返回的数据格式
+      if (Array.isArray(result)) {
+        console.log("[AuthPlugin] 加载了", result.length, "个认证条目");
+        setEntries(result);
+      } else {
+        console.error("[AuthPlugin] 返回数据格式错误:", typeof result, result);
+        setEntries([]);
+      }
     } catch (err) {
       devError("加载认证条目失败:", err);
       setError("加载认证条目失败");
+      setEntries([]);
     } finally {
       setLoading(false);
     }
@@ -357,12 +366,12 @@ function App() {
         <div
           className="error-message"
           style={
-            error.startsWith("✓")
+            String(error).startsWith("✓")
               ? { backgroundColor: "#d4edda", color: "#155724" }
               : {}
           }
         >
-          {error}
+          {String(error)}
         </div>
       )}
 

@@ -7,6 +7,8 @@ export default defineConfig({
   build: {
     outDir: "../assets",
     emptyOutDir: true,
+    minify: "esbuild",
+    sourcemap: false,
     rollupOptions: {
       output: {
         entryFileNames: "main.js",
@@ -15,8 +17,14 @@ export default defineConfig({
           if (assetInfo.name === "index.html") return "index.html";
           if (assetInfo.name?.endsWith(".css")) return "styles.css";
           return "assets/[name][extname]";
-        },
-      },
-    },
+        }
+      }
+    }
   },
+  esbuild: {
+    logOverride: { "this-is-undefined-in-esm": "silent" }
+  },
+  optimizeDeps: {
+    include: ["react", "react-dom"]
+  }
 });
