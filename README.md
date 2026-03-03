@@ -1,26 +1,26 @@
 # Work Tools Platform (Rust Edition)
 
-> 基于 Tauri + Rust 的可扩展工具平台,采用动态库插件架构
+> 基于 Tauri + Rust 的可扩展工具平台,采用完全解耦的动态库插件架构
 
 ## 🌟 项目特色
 
-- **🔌 动态库插件架构** - 插件编译为动态库,主程序通过 libloading 动态加载
-- **⚡ 同进程通信** - 插件与主程序在同进程,通过函数直接调用,性能优异
+- **🔌 完全解耦架构** - 主程序零插件细节,插件完全独立
+- **⚡ 同进程通信** - 插件与主程序在同进程,通过函数直接调用
+- **📦 插件包分发** - ZIP 格式打包 (.wtplugin.zip),包含动态库和前端资源
 - **🎨 现代化前端** - 使用 React 19 + TypeScript + Tailwind CSS
 - **🔒 安全加密** - 基于 AES-256-GCM 的密码加密服务
-- **📦 插件包格式** - ZIP 格式打包 (.wtplugin.zip),包含动态库和前端资源
 - **🚀 跨平台支持** - 支持 macOS (Intel/Apple Silicon)、Windows、Linux
 
 ## 📋 目录
 
 - [快速开始](#快速开始)
+- [下载安装](#下载安装)
 - [技术栈](#技术栈)
 - [项目结构](#项目结构)
 - [开发指南](#开发指南)
 - [插件开发](#插件开发)
 - [构建发布](#构建发布)
 - [架构设计](#架构设计)
-- [测试](#测试)
 - [已知问题](#已知问题)
 - [贡献指南](#贡献指南)
 
@@ -76,11 +76,77 @@ npm run tauri dev
 
 ---
 
+## 📥 下载安装
+
+### macOS 安装包
+
+**版本**: 1.0.0
+**平台**: macOS Apple Silicon (M1/M2/M3)
+**大小**: 5.4 MB
+**下载**: [Work Tools_1.0.0_aarch64.dmg](release/Work Tools_1.0.0_aarch64.dmg)
+
+#### 安装步骤
+
+1. 下载 `Work Tools_1.0.0_aarch64.dmg`
+2. 双击打开 DMG 文件
+3. 将 "Work Tools.app" 拖到 "Applications" 文件夹
+4. 从启动台启动应用
+
+### 插件安装
+
+#### 密码管理器
+
+**版本**: 1.0.0
+**大小**: 373 KB
+**下载**: [password-manager.wtplugin.zip](release/password-manager.wtplugin.zip)
+
+**功能**:
+- 本地安全存储密码
+- 导入/导出功能 (JSON 格式)
+- 密码搜索和过滤
+- URL 快速打开
+- 剪贴板复制
+
+#### 双因素验证
+
+**版本**: 1.0.0
+**大小**: 377 KB
+**下载**: [auth.wtplugin.zip](release/auth.wtplugin.zip)
+
+**功能**:
+- TOTP (Time-based One-Time Password) 支持
+- 6 位和 8 位验证码
+- 自动刷新倒计时
+- 二维码扫描导入
+- 剪贴板复制
+
+#### 安装插件
+
+**方式一: 通过插件商店** (推荐)
+
+1. 启动 Work Tools 应用
+2. 点击底部工具栏的 **🧩** 按钮
+3. 选择对应的 `.wtplugin.zip` 文件导入
+
+**方式二: 手动安装**
+
+```bash
+# 创建插件目录
+mkdir -p ~/.worktools/plugins/password-manager
+mkdir -p ~/.worktools/plugins/auth
+
+# 解压插件包
+unzip release/password-manager.wtplugin.zip -d ~/.worktools/plugins/password-manager/
+unzip release/auth.wtplugin.zip -d ~/.worktools/plugins/auth/
+```
+
+---
+
 ## 🛠 技术栈
 
 ### 后端
 - **Rust** 1.70+ - 系统编程语言
-- **Tauri** 2.x - 跨平台桌面应用框架
+- **Tauri** 2.10.2 - 跨平台桌面应用框架
 - **libloading** 0.8 - 动态库加载
 - **serde** - 序列化/反序列化
 - **AES-256-GCM** - 密码加密
@@ -93,7 +159,7 @@ npm run tauri dev
 
 ### 插件架构
 - **动态库** (.dylib/.so/.dll) - 后端逻辑
-- **HTML/CSS/JS** - 前端界面
+- **React 组件** - 前端界面
 - **ZIP** - 插件包格式
 
 ---
@@ -105,45 +171,55 @@ work-tools-rust/
 ├── tauri-app/              # Tauri 主应用
 │   ├── src/               # React 前端源码
 │   │   ├── components/    # UI 组件
-│   │   │   ├── PasswordManager.tsx    # 密码管理器
-│   │   │   ├── AuthPlugin.tsx         # 双因素验证
-│   │   │   ├── PluginView.tsx         # 动态渲染器
+│   │   │   ├── ErrorBoundary.tsx      # 错误边界
+│   │   │   ├── LogViewer.tsx          # 日志查看器
+│   │   │   ├── PluginPlaceholder.tsx  # 插件通用加载器
 │   │   │   ├── PluginStore.tsx        # 插件商店
-│   │   │   └── Sidebar.tsx            # 侧边栏
+│   │   │   ├── Dialog.css             # 对话框样式
+│   │   │   └── PluginStore.css        # 插件商店样式
 │   │   ├── utils/         # 工具函数
-│   │   │   ├── pluginRegistry.ts      # 插件注册表
-│   │   │   ├── pluginBridge.ts        # 插件通信桥
-│   │   │   └── logger.ts              # 日志工具
-│   │   └── App.tsx        # 主应用入口
+│   │   │   ├── logger.ts              # 日志工具
+│   │   │   └── pluginBridge.ts        # 插件通信桥
+│   │   ├── assets/        # 静态资源
+│   │   ├── App.tsx        # 主应用 (13 KB, 完全解耦)
+│   │   ├── App.css        # 全局样式
+│   │   └── main-react.tsx # React 入口
 │   └── src-tauri/         # Rust 后端
 │       ├── src/
-│       │   ├── plugin_manager.rs    # 插件管理器
-│       │   ├── plugin_package.rs    # 插件包解析
-│       │   ├── plugin_registry.rs   # 插件注册表
-│       │   ├── commands.rs          # Tauri 命令
-│       │   ├── crypto.rs            # 加密服务
-│       │   └── config.rs            # 配置管理
+│       │   ├── plugin_manager.rs       # 插件管理器 (8 KB)
+│       │   ├── plugin_package.rs       # 插件包解析 (6 KB)
+│       │   ├── plugin_registry.rs      # 插件注册表 (7.5 KB)
+│       │   ├── commands.rs             # Tauri 命令 (24 KB)
+│       │   ├── crypto.rs               # 加密服务 (5 KB)
+│       │   ├── config.rs               # 配置管理 (4 KB)
+│       │   ├── lib.rs                  # 库入口
+│       │   └── main.rs                 # 主函数
 │       └── Cargo.toml
 ├── plugins/                # 插件项目
 │   ├── password-manager/   # 密码管理器
 │   │   ├── src/           # Rust 动态库源码
-│   │   ├── assets/        # 前端资源
-│   │   └── frontend/      # 前端构建源码
+│   │   ├── assets/        # 前端资源 (构建后)
+│   │   ├── frontend/      # React 前端源码
+│   │   └── manifest.json  # 插件配置
 │   └── auth-plugin/        # 双因素验证
-│       ├── src/
-│       ├── assets/
-│       └── frontend/
+│       ├── src/           # Rust 动态库源码
+│       ├── assets/        # 前端资源 (构建后)
+│       ├── frontend/      # React 前端源码
+│       └── manifest.json  # 插件配置
 ├── shared/                 # 共享库
 │   ├── types/             # 共享数据类型
 │   └── plugin-api/        # 插件 API 定义
-├── scripts/               # 构建和环境检查脚本
-├── docs/                  # 文档
-│   ├── plans/             # 开发计划
-│   ├── fixes/             # 修复记录
-│   └── testing/           # 测试文档
+├── scripts/               # 构建脚本
+│   ├── build-plugins.sh   # 插件打包脚本
+│   └── check-env.sh       # 环境检查脚本
 ├── release/               # 发布产物
-│   ├── *.wtplugin.zip     # 插件包
-│   └── *.dmg              # 安装包
+│   ├── Work Tools_1.0.0_aarch64.dmg     # macOS 安装包
+│   ├── password-manager.wtplugin.zip    # 密码管理器插件
+│   ├── auth.wtplugin.zip                # 双因素验证插件
+│   └── BUILD_SUMMARY.md                 # 构建说明
+├── docs/                  # 文档
+│   ├── CLEANUP_OPTIMIZATION_GUIDE.md
+│   └── fixes/             # 修复记录
 └── Cargo.toml            # Workspace 配置
 ```
 
@@ -179,8 +255,7 @@ cd tauri-app
 npm run tauri build
 
 # 构建插件
-cd plugins
-./build-all.sh
+./scripts/build-plugins.sh
 ```
 
 #### Lint 和格式化
@@ -315,48 +390,75 @@ pub extern "C" fn plugin_create() -> *mut Box<dyn Plugin> {
 }
 ```
 
-#### 5. 编译并打包
+#### 5. 创建前端
+
+在 `frontend/` 目录创建 React 应用:
+
+```typescript
+// frontend/src/main.tsx
+import React from 'react';
+import ReactDOM from 'react-dom/client';
+import App from './App';
+
+ReactDOM.createRoot(document.getElementById('root') as HTMLElement).render(
+  <React.StrictMode>
+    <App />
+  </React.StrictMode>
+);
+```
+
+```typescript
+// frontend/src/App.tsx
+import React, { useState, useEffect } from 'react';
+
+declare global {
+  interface Window {
+    pluginAPI: {
+      call: (pluginId: string, method: string, params: any) => Promise<any>;
+    };
+  }
+}
+
+export default function App() {
+  const [data, setData] = useState<any>(null);
+
+  useEffect(() => {
+    // 调用插件后端方法
+    window.pluginAPI.call('my-plugin', 'my_method', { param: 'World' })
+      .then(result => setData(result));
+  }, []);
+
+  return (
+    <div>
+      <h1>My Plugin</h1>
+      <pre>{JSON.stringify(data, null, 2)}</pre>
+    </div>
+  );
+}
+```
+
+#### 6. 编译并打包
 
 ```bash
 # 编译动态库
 cargo build --release
 
-# 打包为 .wtplugin.zip
-zip -r my-plugin.wtplugin.zip \
-  manifest.json \
-  target/release/libmy_plugin.dylib \
-  assets/
-
-# 复制到 release 目录
-cp my-plugin.wtplugin.zip ../../release/
-```
-
-#### 6. 测试插件
-
-启动应用,通过插件商店导入 `my-plugin.wtplugin.zip`。
-
-### 插件通信
-
-前端通过 `window.pluginAPI.call()` 调用插件方法:
-
-```typescript
-// 调用插件方法
-const result = await window.pluginAPI.call(
-  pluginId,      // 插件 ID,如 "password-manager"
-  method,        // 方法名,如 "list_passwords"
-  params         // 参数对象,如 {}
-);
-
-// 读取插件配置
-const config = await window.pluginAPI.get_plugin_config(pluginId);
-
-// 保存插件配置
-await window.pluginAPI.set_plugin_config(pluginId, config);
+# 使用打包脚本
+cd ../..
+./scripts/build-plugins.sh
 ```
 
 ---
 
 ## 🏗 构建发布
+
+### 清理缓存
+
+```bash
+# 清理所有构建缓存
+cargo clean
+rm -rf tauri-app/dist/
+```
 
 ### macOS 构建
 
@@ -365,27 +467,14 @@ cd tauri-app
 npm run tauri build
 
 # 构建产物:
-# - src-tauri/target/release/bundle/macos/Work Tools.app
-# - src-tauri/target/release/bundle/dmg/Work Tools_<version>_aarch64.dmg
+# - target/release/bundle/macos/Work Tools.app
+# - target/release/bundle/dmg/Work Tools_1.0.0_aarch64.dmg
 ```
 
-**创建通用二进制 (Universal Binary,支持 Intel + Apple Silicon)**:
-
-```bash
-# 添加 Intel target
-rustup target add x86_64-apple-darwin
-
-# 构建 Intel 版本
-cargo build --target x86_64-apple-darwin --release
-
-# 构建 Apple Silicon 版本
-cargo build --target aarch64-apple-darwin --release
-
-# 合并为通用二进制
-lipo -create -output target/release/Work-Tools \
-    target/x86_64-apple-darwin/release/Work-Tools \
-    target/aarch64-apple-darwin/release/Work-Tools
-```
+**当前版本**:
+- 架构: aarch64 (Apple Silicon M1/M2/M3)
+- 大小: 5.4 MB
+- 位置: `release/Work Tools_1.0.0_aarch64.dmg`
 
 ### Windows 构建
 
@@ -394,8 +483,8 @@ cd tauri-app
 npm run tauri build
 
 # 构建产物:
-# - src-tauri/target/release/bundle/msi/Work Tools_<version>_x64_en-US.msi
-# - src-tauri/target/release/bundle/nsis/Work Tools_<version>_x64-setup.exe
+# - src-tauri/target/release/bundle/msi/Work Tools_1.0.0_x64_en-US.msi
+# - src-tauri/target/release/bundle/nsis/Work Tools_1.0.0_x64-setup.exe
 ```
 
 ### Linux 构建
@@ -410,24 +499,27 @@ cd tauri-app
 npm run tauri build
 
 # 构建产物:
-# - src-tauri/target/release/bundle/deb/work-tools_<version>_amd64.deb
-# - src-tauri/target/release/bundle/appimage/work-tools_<version>_amd64.AppImage
+# - src-tauri/target/release/bundle/deb/work-tools_1.0.0_amd64.deb
+# - src-tauri/target/release/bundle/appimage/work-tools_1.0.0_amd64.AppImage
 ```
 
 ---
 
 ## 🎨 架构设计
 
-### 插件系统架构
+### 完全解耦架构
 
+**主程序 (App.tsx - 13 KB)**:
 ```
-主程序 (App.tsx)
-├── 插件加载器 (动态导入)
-├── 插件注册表 (运行时发现)
-├── 通信桥梁 (统一接口)
+├── 插件加载器 (PluginPlaceholder)
+├── 插件商店 (PluginStore)
+├── 错误边界 (ErrorBoundary)
+├── 日志查看器 (LogViewer)
 └── 新增插件无需修改主程序
+```
 
-插件 (独立包)
+**插件 (独立包)**:
+```
 ├── 前端组件 (React + TypeScript)
 │   ├── 界面逻辑
 │   ├── 校验逻辑
@@ -438,6 +530,12 @@ npm run tauri build
 │   └── 加密解密
 └── 插件配置 (manifest.json)
 ```
+
+**优势**:
+- ✅ 主程序 = 空壳框架,零插件细节
+- ✅ 新增插件 = 打包上传,无需修改主程序
+- ✅ 插件完全独立,自包含所有逻辑
+- ✅ 可扩展性极强
 
 ### 数据流向
 
@@ -450,44 +548,26 @@ npm run tauri build
   → 业务逻辑
 ```
 
-### 核心设计原则
+### 核心文件说明
 
-1. **插件自治** - 插件包含自己的前端资源和后端逻辑
-2. **通用渲染** - 主程序不包含插件特定业务逻辑
-3. **完全解耦** - 新增插件无需修改主程序代码
+#### 主应用
 
----
+| 文件 | 大小 | 作用 |
+|------|------|------|
+| **App.tsx** | 13 KB | 主应用,完全解耦,零插件细节 |
+| **PluginPlaceholder.tsx** | 8 KB | 通用插件加载器,动态加载任何插件 |
+| **PluginStore.tsx** | 5.6 KB | 插件商店,管理插件导入导出 |
+| **commands.rs** | 24 KB | Tauri 命令,前后端通信接口 |
+| **plugin_manager.rs** | 8 KB | 插件管理器,动态库加载 |
+| **plugin_package.rs** | 6 KB | 插件包解析,ZIP 解压 |
+| **plugin_registry.rs** | 7.5 KB | 插件注册表,管理插件元数据 |
 
-## 🧪 测试
+#### 插件
 
-### 单元测试
-
-```bash
-# 测试单个插件
-cargo test -p password-manager
-cargo test -p auth-plugin
-
-# 测试所有 workspace
-cargo test
-```
-
-### 功能测试
-
-```bash
-# 测试所有已安装的插件
-./scripts/test-all-plugins.sh
-
-# 测试特定插件
-./scripts/test-password-manager.sh
-./scripts/test-auth-plugin.sh
-```
-
-### 前端类型检查
-
-```bash
-cd tauri-app
-npx tsc --noEmit
-```
+| 插件 | 动态库 | 前端 | 功能 |
+|------|--------|------|------|
+| **密码管理器** | libpassword_manager.dylib | React | 密码存储管理 |
+| **双因素验证** | libauth_plugin.dylib | React | TOTP 验证码 |
 
 ---
 
@@ -535,10 +615,19 @@ pub trait Plugin: Send + Sync {
 
 ## 📚 文档
 
-- **[CLAUDE.md](CLAUDE.md)** - 项目详细说明 (给 Claude Code 的指令)
-- **[docs/plans/](docs/plans/)** - 开发计划和架构设计
-- **[docs/fixes/](docs/fixes/)** - 问题修复记录
-- **[docs/testing/](docs/testing/)** - 测试文档
+- **[CLAUDE.md](CLAUDE.md)** - 项目详细说明 (给 AI 的指令)
+- **[CHANGELOG.md](CHANGELOG.md)** - 项目变更日志
+- **[release/BUILD_SUMMARY.md](release/BUILD_SUMMARY.md)** - 构建说明
+- **[docs/CLEANUP_OPTIMIZATION_GUIDE.md](docs/CLEANUP_OPTIMIZATION_GUIDE.md)** - 清理优化指南
+
+---
+
+## 🔗 相关资源
+
+- [Tauri 官方文档](https://tauri.app/)
+- [React 文档](https://react.dev/)
+- [Rust 官方文档](https://www.rust-lang.org/)
+- [libloading 文档](https://docs.rs/libloading/)
 
 ---
 
@@ -572,15 +661,6 @@ MIT License - 详见 [LICENSE](LICENSE) 文件
 
 ---
 
-## 🔗 相关资源
-
-- [Tauri 官方文档](https://tauri.app/)
-- [React 文档](https://react.dev/)
-- [Rust 官方文档](https://www.rust-lang.org/)
-- [libloading 文档](https://docs.rs/libloading/)
-
----
-
 ## 📮 联系方式
 
 如有问题或建议,欢迎提 Issue 或 Pull Request。
@@ -588,5 +668,5 @@ MIT License - 详见 [LICENSE](LICENSE) 文件
 ---
 
 **当前版本**: 1.0.0
-**最后更新**: 2026-03-03
-**维护者**: ZhengJun
+**最后更新**: 2026-03-04
+**维护者**: Work Tools Team
