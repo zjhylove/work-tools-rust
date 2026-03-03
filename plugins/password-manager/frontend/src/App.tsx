@@ -426,11 +426,13 @@ function App() {
         }
 
         try {
+          setError("⏳ 正在读取文件...");
           const text = await file.text();
 
           // 预览导入内容
           let preview;
           try {
+            setError("⏳ 正在解析文件格式...");
             const parsed = JSON.parse(text);
 
             // 支持两种格式：
@@ -459,31 +461,20 @@ function App() {
             return;
           }
 
-          // 显示确认对话框（如果 confirm 可用）
-          let confirmed = true;
+          setError(`⏳ 找到 ${count} 个密码，正在导入...`);
+
+          // 直接导入，不使用 confirm
           try {
-            confirmed = confirm(
-              `即将导入 ${count} 个密码条目。\n\n` +
-                `⚠️ 注意:\n` +
-                `• 现有密码可能会被覆盖\n` +
-                `• 请确保备份文件来源可信\n\n` +
-                `是否继续导入?`,
-            );
-          } catch {
-            // confirm 被阻止，自动继续
+            await window.pluginAPI?.call("password-manager", "import_passwords", {
+              data: text,
+            });
+            await loadPasswords();
+            setError(`✅ 已成功导入 ${count} 个密码`);
+            setTimeout(() => setError(""), 5000);
+          } catch (err) {
+            setError("❌ 导入失败: " + (err as Error).message);
+            setTimeout(() => setError(""), 8000);
           }
-
-          if (!confirmed) {
-            safeRemoveChild(input);
-            return;
-          }
-
-          await window.pluginAPI?.call("password-manager", "import_passwords", {
-            data: text,
-          });
-          await loadPasswords();
-          setError(`✅ 已成功导入 ${count} 个密码`);
-          setTimeout(() => setError(""), 5000);
         } finally {
           // 安全清理 DOM 元素
           safeRemoveChild(input);
