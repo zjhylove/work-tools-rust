@@ -370,8 +370,8 @@ function App() {
         "password-manager",
         "export_passwords",
         {},
-      )) as string;
-      const blob = new Blob([result], { type: "application/json" });
+      )) as { data: string };
+      const blob = new Blob([result.data], { type: "application/json" });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
@@ -395,6 +395,9 @@ function App() {
       const input = document.createElement("input");
       input.type = "file";
       input.accept = "application/json";
+      input.style.position = "absolute";
+      input.style.left = "-9999px";
+      input.style.visibility = "hidden";
 
       input.onchange = async (e) => {
         const file = (e.target as HTMLInputElement).files?.[0];
