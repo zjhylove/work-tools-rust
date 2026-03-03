@@ -1,8 +1,6 @@
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
-use std::fs::{File, OpenOptions};
-use std::path::PathBuf;
-use worktools_plugin_api::Plugin;
+use worktools_plugin_api::{Plugin, storage::PluginStorage};
 use serde_json::Value;
 
 /// 密码条目 (加密版本)
@@ -18,90 +16,28 @@ pub struct PasswordEntry {
 }
 
 /// 数据存储结构
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Default, Serialize, Deserialize)]
 struct PasswordData {
     entries: Vec<PasswordEntry>,
-}
-
-impl Default for PasswordData {
-    fn default() -> Self {
-        Self {
-            entries: Vec::new(),
-        }
-    }
 }
 
 /// 密码管理器插件
 pub struct PasswordManager;
 
 impl PasswordManager {
-    /// 获取数据文件路径
-    fn get_data_file_path() -> Result<PathBuf> {
-        let home = std::env::var("HOME")
-            .map_err(|_| anyhow::anyhow!("无法获取用户主目录"))?;
-
-        let mut data_dir = std::path::PathBuf::from(home);
-        data_dir.push(".worktools/history/plugins");
-
-        // 创建目录(如果不存在)
-        std::fs::create_dir_all(&data_dir)?;
-
-        data_dir.push("password-manager.json");
-        Ok(data_dir)
+    /// 获取数据存储实例
+    fn storage() -> PluginStorage {
+        PluginStorage::new("password-manager", "password-manager.json")
     }
 
     /// 加载数据
     fn load_data() -> Result<PasswordData> {
-        let data_path = Self::get_data_file_path()?;
-
-        if !data_path.exists() {
-            return Ok(PasswordData::default());
-        }
-
-        let file = File::open(&data_path)?;
-        let data: PasswordData = serde_json::from_reader(file)?;
-        Ok(data)
+        Self::storage().load_json()
     }
 
     /// 保存数据
     fn save_data(data: &PasswordData) -> Result<()> {
-        let data_path = Self::get_data_file_path()?;
-
-        // 读取现有配置以保留 salt 和 validation_token
-        let existing_config = if data_path.exists() {
-            let file = File::open(&data_path)?;
-            serde_json::from_reader::<_, Value>(file).ok()
-        } else {
-            None
-        };
-
-        // 使用临时文件模式确保原子性写入
-        let temp_path = data_path.with_extension("tmp");
-        let file = OpenOptions::new()
-            .write(true)
-            .create(true)
-            .truncate(true)
-            .open(&temp_path)?;
-
-        // 合并数据:保留 salt 和 validation_token,更新 entries
-        let mut output = serde_json::to_value(data)?;
-        if let Some(config) = existing_config {
-            // 保留 salt 和 validation_token
-            if let Some(salt) = config.get("salt") {
-                output["salt"] = salt.clone();
-            }
-            if let Some(validation_token) = config.get("validation_token") {
-                output["validation_token"] = validation_token.clone();
-            }
-        }
-
-        serde_json::to_writer_pretty(&file, &output)?;
-        file.sync_all()?;
-
-        // 原子性替换文件
-        std::fs::rename(&temp_path, &data_path)?;
-
-        Ok(())
+        Self::storage().save_json_preserving(data, &["salt", "validation_token"])
     }
 }
 
@@ -139,15 +75,16 @@ impl Plugin for PasswordManager {
                 let entries: Vec<Value> = data.entries.into_iter().map(|entry| {
                     serde_json::json!({
                         "id": entry.id,
-                        "url": entry.url.as_ref().unwrap_or(&String::new()),
+                        "url": entry.url.as_deref().unwrap_or_default(),
                         "service": entry.service,
                         "username": entry.username,
                         "password": entry.password,
                         "created_at": entry.created_at,
-                        "updated_at": entry.updated_at.as_ref().unwrap_or(&String::new()),
+                        "updated_at": entry.updated_at.as_deref().unwrap_or_default(),
                     })
                 }).collect();
-                Ok(serde_json::json!({ "entries": entries }))
+                // 直接返回数组,而不是包装在对象中
+                Ok(serde_json::to_value(entries)?)
             }
             "add_password" => {
                 let service = params.get("service")
@@ -180,12 +117,12 @@ impl Plugin for PasswordManager {
 
                 Ok(serde_json::json!({
                     "id": entry.id,
-                    "url": entry.url.as_ref().unwrap_or(&String::new()),
+                    "url": entry.url.as_deref().unwrap_or_default(),
                     "service": entry.service,
                     "username": entry.username,
                     "password": entry.password,
                     "created_at": entry.created_at,
-                    "updated_at": entry.updated_at.as_ref().unwrap_or(&String::new()),
+                    "updated_at": entry.updated_at.as_deref().unwrap_or_default(),
                 }))
             }
             "update_password" => {
@@ -230,12 +167,12 @@ impl Plugin for PasswordManager {
 
                 Ok(serde_json::json!({
                     "id": entry.id,
-                    "url": entry.url.as_ref().unwrap_or(&String::new()),
+                    "url": entry.url.as_deref().unwrap_or_default(),
                     "service": entry.service,
                     "username": entry.username,
                     "password": entry.password,
                     "created_at": entry.created_at,
-                    "updated_at": entry.updated_at.as_ref().unwrap_or(&String::new()),
+                    "updated_at": entry.updated_at.as_deref().unwrap_or_default(),
                 }))
             }
             "delete_password" => {
@@ -282,7 +219,7 @@ impl Plugin for PasswordManager {
                 Self::save_data(&data)?;
                 Ok(serde_json::json!({ "success": true }))
             }
-            _ => Err(format!("未知方法: {}", method).into()),
+            _ => Err(format!("未知方法: {method}").into()),
         }
     }
 }

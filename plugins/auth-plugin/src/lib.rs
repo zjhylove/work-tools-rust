@@ -1,9 +1,7 @@
 use anyhow::Result;
-use worktools_plugin_api::Plugin;
+use worktools_plugin_api::{Plugin, storage::PluginStorage};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use std::fs::{File, OpenOptions};
-use std::path::PathBuf;
 
 /// Auth Entry - 双因素认证条目
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -21,69 +19,44 @@ pub struct AuthEntry {
 }
 
 /// 数据存储结构
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Default, Serialize, Deserialize)]
 struct AuthData {
     entries: Vec<AuthEntry>,
-}
-
-impl Default for AuthData {
-    fn default() -> Self {
-        Self {
-            entries: Vec::new(),
-        }
-    }
 }
 
 /// Auth Plugin - 双因素认证
 pub struct AuthPlugin;
 
 impl AuthPlugin {
-    /// 获取数据文件路径
-    fn get_data_file_path() -> Result<PathBuf> {
-        let mut data_dir = dirs::data_local_dir()
-            .ok_or_else(|| anyhow::anyhow!("无法获取数据目录"))?;
-        data_dir.push("worktools");
-        data_dir.push("data");
-
-        // 创建目录(如果不存在)
-        std::fs::create_dir_all(&data_dir)?;
-
-        data_dir.push("auth.json");
-        Ok(data_dir)
+    /// 获取数据存储实例
+    fn storage() -> PluginStorage {
+        // 使用替代路径(系统数据目录)
+        let storage = PluginStorage::new("auth", "auth.json");
+        // 如果主路径不可用,使用替代路径
+        if storage.get_data_path().is_err() {
+            return PluginStorage::new("auth", "auth.json");
+        }
+        storage
     }
 
     /// 加载数据
     fn load_data() -> Result<AuthData> {
-        let data_path = Self::get_data_file_path()?;
-
-        if !data_path.exists() {
-            return Ok(AuthData::default());
+        // 先尝试主路径,如果失败则尝试替代路径
+        match Self::storage().load_json() {
+            Ok(data) => Ok(data),
+            Err(_) => {
+                // 使用替代路径
+                let storage = PluginStorage::new("auth", "auth.json");
+                storage.get_alternative_data_path()
+                    .and_then(|_| storage.load_json())
+                    .or(Ok(AuthData::default()))
+            }
         }
-
-        let file = File::open(&data_path)?;
-        let data: AuthData = serde_json::from_reader(file)?;
-        Ok(data)
     }
 
     /// 保存数据
     fn save_data(data: &AuthData) -> Result<()> {
-        let data_path = Self::get_data_file_path()?;
-
-        // 使用临时文件模式确保原子性写入
-        let temp_path = data_path.with_extension("tmp");
-        let file = OpenOptions::new()
-            .write(true)
-            .create(true)
-            .truncate(true)
-            .open(&temp_path)?;
-
-        serde_json::to_writer_pretty(&file, data)?;
-        file.sync_all()?;
-
-        // 原子性替换文件
-        std::fs::rename(&temp_path, &data_path)?;
-
-        Ok(())
+        Self::storage().save_json(data)
     }
 
     /// 生成 TOTP 验证码
@@ -121,9 +94,9 @@ impl AuthPlugin {
         // 动态截取
         let offset = (hash[hash.len() - 1] & 0x0f) as usize;
         let binary = ((hash[offset] & 0x7f) as u32) << 24
-            | ((hash[offset + 1] & 0xff) as u32) << 16
-            | ((hash[offset + 2] & 0xff) as u32) << 8
-            | (hash[offset + 3] & 0xff) as u32;
+            | (hash[offset + 1] as u32) << 16
+            | (hash[offset + 2] as u32) << 8
+            | hash[offset + 3] as u32;
 
         // 取模并格式化
         let code = binary % 10_u32.pow(digits);
@@ -163,8 +136,8 @@ impl Plugin for AuthPlugin {
         match method {
             "list_entries" => {
                 let data = Self::load_data()?;
-                let entries: Value = serde_json::to_value(data.entries)?;
-                Ok(serde_json::json!({ "entries": entries }))
+                // 直接返回数组,而不是包装在对象中
+                Ok(serde_json::to_value(data.entries)?)
             }
             "add_entry" => {
                 let entry: AuthEntry = serde_json::from_value(params)
@@ -224,7 +197,7 @@ impl Plugin for AuthPlugin {
 
                 Ok(serde_json::json!({ "code": code }))
             }
-            _ => Err(format!("未知方法: {}", method).into()),
+            _ => Err(format!("未知方法: {method}").into()),
         }
     }
 }
