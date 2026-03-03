@@ -122,6 +122,7 @@ impl PluginPackage {
     }
 
     /// 获取前端资源入口路径
+    #[allow(dead_code)]
     pub fn get_assets_entry_path(&self, plugin_dir: &Path) -> PathBuf {
         plugin_dir.join("assets").join(&self.manifest.assets.entry)
     }

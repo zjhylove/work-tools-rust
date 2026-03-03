@@ -114,7 +114,6 @@ pub async fn set_app_config(config: crate::config::AppConfig) -> Result<(), Stri
 }
 
 /// ============= 密码管理器命令 =============
-
 /// 获取所有密码条目 (自动解密) - 调用插件
 #[tauri::command]
 pub async fn get_password_entries(
@@ -244,7 +243,6 @@ pub async fn clear_all_password_entries(
 }
 
 /// ============= 双因素认证命令 =============
-
 /// 获取所有双因素认证条目
 #[tauri::command]
 pub async fn get_auth_entries() -> Result<Vec<AuthEntry>, String> {
@@ -617,8 +615,8 @@ pub async fn install_plugin(
 
     // 获取动态库路径
     let lib_name = manifest.files.macos.as_ref()
-        .or_else(|| manifest.files.linux.as_ref())
-        .or_else(|| manifest.files.windows.as_ref())
+        .or(manifest.files.linux.as_ref())
+        .or(manifest.files.windows.as_ref())
         .ok_or_else(|| "未找到动态库配置".to_string())?;
 
     let library_path = plugin_dir.join(lib_name);

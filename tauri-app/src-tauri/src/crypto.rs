@@ -3,16 +3,10 @@ use aes::cipher::{KeyInit, BlockEncrypt, BlockDecrypt, generic_array::GenericArr
 use sha2::{Sha256, Digest};
 use anyhow::Result;
 
-/// 加密配置（简化版本，不再需要 salt 和 validation_token）
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+/// 加密配置(简化版本,不再需要 salt 和 validation_token)
+#[derive(Debug, Default, Clone, serde::Serialize, serde::Deserialize)]
 pub struct CryptoConfig {
     // 预留扩展字段
-}
-
-impl Default for CryptoConfig {
-    fn default() -> Self {
-        Self {}
-    }
 }
 
 /// 密码加密器（使用固定密钥）
@@ -52,7 +46,7 @@ impl PasswordEncryptor {
 
         // PKCS7 风格填充
         let block_size = 16;
-        let padding_len = if plaintext_bytes.len() % block_size == 0 {
+        let padding_len = if plaintext_bytes.len().is_multiple_of(block_size) {
             block_size // 如果正好是 16 的倍数,填充 16 个字节
         } else {
             block_size - (plaintext_bytes.len() % block_size)
@@ -108,8 +102,9 @@ impl PasswordEncryptor {
         }
 
         // 验证所有填充字节的值都等于 padding_len
-        for i in (decrypted_data.len() - padding_len)..decrypted_data.len() {
-            if decrypted_data[i] != padding_len as u8 {
+        let padding_start = decrypted_data.len() - padding_len;
+        for byte in &decrypted_data[padding_start..] {
+            if *byte != padding_len as u8 {
                 return Err(anyhow::anyhow!("填充数据无效"));
             }
         }

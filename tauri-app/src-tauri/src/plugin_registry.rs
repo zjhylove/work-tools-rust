@@ -92,6 +92,7 @@ impl PluginRegistry {
     }
 
     /// 更新插件启用状态
+    #[allow(dead_code)]
     pub fn set_enabled(&mut self, plugin_id: &str, enabled: bool) -> Result<()> {
         if let Some(plugin) = self.installed.get_mut(plugin_id) {
             plugin.enabled = enabled;
@@ -114,11 +115,13 @@ impl PluginRegistry {
     }
 
     /// 检查插件是否已安装
+    #[allow(dead_code)]
     pub fn is_installed(&self, plugin_id: &str) -> bool {
         self.installed.contains_key(plugin_id)
     }
 
     /// 检查插件是否已启用
+    #[allow(dead_code)]
     pub fn is_enabled(&self, plugin_id: &str) -> bool {
         self.installed
             .get(plugin_id)
@@ -138,6 +141,7 @@ impl PluginRegistry {
     }
 
     /// 验证已安装插件的文件是否仍然存在
+    #[allow(dead_code)]
     pub fn verify_installations(&mut self) -> Result<()> {
         let mut to_remove = Vec::new();
 
@@ -235,7 +239,7 @@ mod tests {
         registry.register(plugin).unwrap();
 
         // 重新加载注册表
-        let registry2 = PluginRegistry {
+        let _registry2 = PluginRegistry {
             registry_file,
             installed: HashMap::new(),
         };
