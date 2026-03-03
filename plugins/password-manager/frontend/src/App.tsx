@@ -351,38 +351,23 @@ function App() {
     }
   };
 
-  // 导出密码 (带安全警告)
+  // 导出密码 (不使用 confirm,直接导出)
   const handleExportPasswords = async () => {
-    devLog("[导出密码] 函数被调用");
-
-    // 显示安全警告
-    const confirmed = confirm(
-      "⚠️ 安全警告\n\n" +
-        "导出的文件将包含所有密码的明文。请确保:\n" +
-        "1. 将文件存储在安全位置\n" +
-        "2. 导入后立即删除导出文件\n" +
-        "3. 不要与他人分享此文件\n\n" +
-        "是否继续导出?",
-    );
-
-    if (!confirmed) {
-      devLog("[导出密码] 用户取消操作");
-      return;
-    }
-
-    devLog("[导出密码] 用户确认导出,开始调用插件方法");
+    setError("⏳ 正在导出密码...");
 
     try {
-      devLog("[导出密码] 调用插件API前,pluginAPI存在?", !!window.pluginAPI);
-      const result = (await window.pluginAPI?.call(
+      if (!window.pluginAPI) {
+        throw new Error("pluginAPI 未初始化");
+      }
+
+      const result = (await window.pluginAPI.call(
         "password-manager",
         "export_passwords",
         {},
       )) as { data: string };
-      devLog("[导出密码] 插件返回结果:", result);
 
       if (!result || !result.data) {
-        throw new Error("插件返回数据格式错误");
+        throw new Error("插件返回数据格式错误: " + JSON.stringify(result));
       }
 
       const blob = new Blob([result.data], { type: "application/json" });
@@ -395,12 +380,19 @@ function App() {
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
 
-      devLog("[导出密码] 文件下载成功");
-      setError("✓ 密码已导出 - 请记得安全存储后删除文件");
-      setTimeout(() => setError(""), 5000);
+      setError("✅ 密码已导出 - 请记得安全存储后删除文件");
+
+      // 5秒后清除提示
+      setTimeout(() => {
+        setError("");
+      }, 5000);
     } catch (err) {
-      devError("[导出密码] 失败:", err);
-      setError("导出失败: " + (err as Error).message);
+      setError("❌ 导出失败: " + (err as Error).message);
+
+      // 8秒后清除错误提示
+      setTimeout(() => {
+        setError("");
+      }, 8000);
     }
   };
 
@@ -427,26 +419,47 @@ function App() {
           // 预览导入内容
           let preview;
           try {
-            preview = JSON.parse(text);
-            if (!Array.isArray(preview)) {
+            const parsed = JSON.parse(text);
+
+            // 支持两种格式：
+            // 1. 旧格式：直接是数组 [{"id": "...", "service": "...", ...}]
+            // 2. 新格式：{"entries": [{"id": "...", "service": "...", ...}]}
+            if (Array.isArray(parsed)) {
+              preview = parsed;
+            } else if (parsed.entries && Array.isArray(parsed.entries)) {
+              preview = parsed.entries;
+            } else {
               throw new Error("无效的格式");
             }
-          } catch {
-            setError("导入失败: 文件格式不正确");
+          } catch (err) {
+            setError("❌ 导入失败: 文件格式不正确 - " + (err as Error).message);
+            setTimeout(() => setError(""), 5000);
             document.body.removeChild(input);
             return;
           }
 
           const count = preview.length;
 
-          // 显示确认对话框
-          const confirmed = confirm(
-            `即将导入 ${count} 个密码条目。\n\n` +
-              `⚠️ 注意:\n` +
-              `• 现有密码可能会被覆盖\n` +
-              `• 请确保备份文件来源可信\n\n` +
-              `是否继续导入?`,
-          );
+          if (count === 0) {
+            setError("⚠️ 文件中没有密码条目");
+            setTimeout(() => setError(""), 3000);
+            document.body.removeChild(input);
+            return;
+          }
+
+          // 显示确认对话框（如果 confirm 可用）
+          let confirmed = true;
+          try {
+            confirmed = confirm(
+              `即将导入 ${count} 个密码条目。\n\n` +
+                `⚠️ 注意:\n` +
+                `• 现有密码可能会被覆盖\n` +
+                `• 请确保备份文件来源可信\n\n` +
+                `是否继续导入?`,
+            );
+          } catch {
+            // confirm 被阻止，自动继续
+          }
 
           if (!confirmed) {
             document.body.removeChild(input);
@@ -457,8 +470,8 @@ function App() {
             data: text,
           });
           await loadPasswords();
-          setError(`✓ 已成功导入 ${count} 个密码`);
-          setTimeout(() => setError(""), 3000);
+          setError(`✅ 已成功导入 ${count} 个密码`);
+          setTimeout(() => setError(""), 5000);
         } finally {
           // 清理 DOM 元素,防止内存泄漏
           document.body.removeChild(input);
@@ -469,7 +482,8 @@ function App() {
       input.click();
     } catch (err) {
       devError("导入失败:", err);
-      setError("导入失败");
+      setError("❌ 导入失败: " + (err as Error).message);
+      setTimeout(() => setError(""), 5000);
     }
   };
 
