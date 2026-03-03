@@ -318,9 +318,25 @@ function App() {
           updated_at: new Date().toISOString(),
         };
 
-        await window.pluginAPI?.call("password-manager", "save_password", {
-          entry,
-        });
+        // 根据是否是编辑模式调用不同的方法
+        if (isEdit && selectedEntry) {
+          // 更新现有密码
+          await window.pluginAPI?.call("password-manager", "update_password", {
+            id: entry.id,
+            service: entry.service,
+            username: entry.username,
+            password: entry.password,
+            url: entry.url,
+          });
+        } else {
+          // 添加新密码
+          await window.pluginAPI?.call("password-manager", "add_password", {
+            service: entry.service,
+            username: entry.username,
+            password: entry.password,
+            url: entry.url,
+          });
+        }
         await loadPasswords();
         setViewMode("list");
         setSelectedEntry(null);
