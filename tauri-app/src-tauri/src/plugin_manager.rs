@@ -22,6 +22,47 @@ pub struct PluginManager {
 }
 
 impl PluginManager {
+    /// 获取当前平台的动态库文件扩展名
+    fn get_platform_extension() -> &'static str {
+        if cfg!(target_os = "macos") {
+            "dylib"
+        } else if cfg!(target_os = "linux") {
+            "so"
+        } else if cfg!(target_os = "windows") {
+            "dll"
+        } else {
+            "unknown"
+        }
+    }
+
+    /// 获取当前平台的动态库前缀
+    fn get_platform_prefix() -> &'static str {
+        if cfg!(target_os = "windows") {
+            ""
+        } else {
+            "lib"
+        }
+    }
+
+    /// 从 manifest 读取当前平台的动态库文件名
+    fn get_library_from_manifest(manifest: &serde_json::Value) -> Option<String> {
+        let platform = if cfg!(target_os = "macos") {
+            "macos"
+        } else if cfg!(target_os = "linux") {
+            "linux"
+        } else if cfg!(target_os = "windows") {
+            "windows"
+        } else {
+            return None;
+        };
+
+        manifest
+            .get("files")
+            .and_then(|f| f.get(platform))
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string())
+    }
+
     /// 创建新的插件管理器
     pub fn new() -> Result<Self> {
         let user_dirs = directories::UserDirs::new()
@@ -59,51 +100,32 @@ impl PluginManager {
                 let manifest_path = path.join("manifest.json");
                 let lib_path = if manifest_path.exists() {
                     // 读取 manifest.json 获取动态库文件名
-                    if let Ok(content) = std::fs::read_to_string(&manifest_path) {
-                        if let Ok(manifest) = serde_json::from_str::<serde_json::Value>(&content) {
-                            if let Some(files) = manifest.get("files") {
-                                let lib_name = if cfg!(target_os = "macos") {
-                                    files.get("macos").and_then(|v| v.as_str())
-                                } else if cfg!(target_os = "linux") {
-                                    files.get("linux").and_then(|v| v.as_str())
-                                } else if cfg!(target_os = "windows") {
-                                    files.get("windows").and_then(|v| v.as_str())
-                                } else {
-                                    None
-                                };
-
-                                if let Some(name) = lib_name {
-                                    tracing::info!("从 manifest.json 读取动态库文件名: {}", name);
-                                    path.join(name)
-                                } else {
-                                    continue;
-                                }
-                            } else {
-                                continue;
-                            }
-                        } else {
-                            continue;
-                        }
-                    } else {
-                        continue;
-                    }
+                    std::fs::read_to_string(&manifest_path)
+                        .ok()
+                        .and_then(|content| serde_json::from_str::<serde_json::Value>(&content).ok())
+                        .and_then(|manifest| Self::get_library_from_manifest(&manifest))
+                        .map(|name| {
+                            tracing::info!("从 manifest.json 读取动态库文件名: {}", name);
+                            path.join(name)
+                        })
                 } else {
                     // 回退到旧的命名规则
-                    if let Some(plugin_name) = path.file_name().and_then(|n| n.to_str()) {
-                        let lib_name = if cfg!(target_os = "macos") {
-                            format!("lib{}.dylib", plugin_name.replace('-', "_"))
-                        } else if cfg!(target_os = "linux") {
-                            format!("lib{}.so", plugin_name.replace('-', "_"))
-                        } else if cfg!(target_os = "windows") {
-                            format!("{}.dll", plugin_name.replace('-', "_"))
-                        } else {
-                            continue;
-                        };
+                    path.file_name()
+                        .and_then(|n| n.to_str())
+                        .map(|plugin_name| {
+                            let lib_name = format!(
+                                "{}{}.{}",
+                                Self::get_platform_prefix(),
+                                plugin_name.replace('-', "_"),
+                                Self::get_platform_extension()
+                            );
+                            path.join(lib_name)
+                        })
+                };
 
-                        path.join(&lib_name)
-                    } else {
-                        continue;
-                    }
+                let lib_path = match lib_path {
+                    Some(path) => path,
+                    None => continue,
                 };
 
                 if lib_path.exists() {
