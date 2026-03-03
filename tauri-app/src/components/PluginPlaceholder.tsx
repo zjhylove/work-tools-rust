@@ -239,6 +239,10 @@ export default function PluginPlaceholder({
                   config,
                 });
               },
+              open_url: async (url: string) => {
+                console.log(`[PluginAPI] 打开链接: ${url}`);
+                return await invoke("open_url", { url });
+              },
             };
             console.log("[PluginPlaceholder] pluginAPI 注入成功");
           }

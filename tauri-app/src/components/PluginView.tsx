@@ -1,4 +1,4 @@
-import { createSignal, onMount, Show, Setter, createEffect } from "solid-js";
+import { createSignal, onMount, Show, Setter, createEffect, on } from "solid-js";
 import { invoke } from "@tauri-apps/api/core";
 import { createPluginBridge } from "../utils/pluginBridge";
 import "./PluginView.css";
@@ -9,165 +9,142 @@ interface PluginViewProps {
 }
 
 export default (props: PluginViewProps) => {
-  const [html, setHtml] = createSignal<string>("");
   const [loading, setLoading] = createSignal(true);
   const [error, setError] = createSignal<string>("");
+  let iframeRef: HTMLIFrameElement | undefined;
 
   // 使用 createEffect 代替 onMount,以便在 pluginId 变化时重新加载
-  createEffect(async () => {
-    const pluginId = props.pluginId;
-    if (!pluginId) return;
+  createEffect(
+    on(
+      () => props.pluginId,
+      async (pluginId) => {
+        if (!pluginId) return;
 
-    console.log("[PluginView] 开始加载插件:", pluginId);
-    try {
-      setLoading(true);
-      setError("");
-
-      // 首先尝试获取插件前端资源
-      try {
-        const indexHtml = await invoke<string>("read_plugin_asset", {
-          pluginId: pluginId,
-          assetPath: "index.html",
-        });
-
-        console.log("[PluginView] 获取到前端资源 HTML,长度:", indexHtml.length);
-
-        // 读取并内联 JS
-        let processedHtml = indexHtml;
-
+        console.log("[PluginView] 开始加载插件:", pluginId);
         try {
-          // 读取 CSS
-          const styles = await invoke<string>("read_plugin_asset", {
-            pluginId: pluginId,
-            assetPath: "styles.css",
-          });
+          setLoading(true);
+          setError("");
 
-          // 读取 JS
-          const script = await invoke<string>("read_plugin_asset", {
-            pluginId: pluginId,
-            assetPath: "main.js",
-          });
+          // 等待 iframe 准备就绪
+          await new Promise((resolve) => setTimeout(resolve, 100));
 
-          // 移除外部链接,因为我们会在主文档中渲染
-          processedHtml = processedHtml.replace(
-            /<link rel="stylesheet" href="styles.css">/,
-            "",
-          );
+          const iframe = iframeRef;
+          if (!iframe) {
+            throw new Error("iframe 元素未找到");
+          }
 
-          // 将 CSS 注入到主文档的 head 中(使用一个特殊的 style 标签)
-          const styleId = `plugin-styles-${pluginId}`;
-          // 先移除旧的样式
-          const oldStyle = document.getElementById(styleId);
-          if (oldStyle) oldStyle.remove();
+          // 获取 iframe 的 document
+          const iframeDoc =
+            iframe.contentDocument || iframe.contentWindow?.document;
+          if (!iframeDoc) {
+            throw new Error("无法访问 iframe document");
+          }
 
-          // 添加新的样式
-          const styleEl = document.createElement("style");
-          styleEl.id = styleId;
-          styleEl.textContent = styles;
-          document.head.appendChild(styleEl);
+          // 首先尝试获取插件前端资源
+          try {
+            const indexHtml = await invoke<string>("read_plugin_asset", {
+              pluginId: pluginId,
+              assetPath: "index.html",
+            });
 
-          // 将 JS 内联到 HTML 中
-          processedHtml = processedHtml.replace(
-            /<script src="main.js"><\/script>/,
-            `<script>${script}<\/script>`,
-          );
+            console.log(
+              "[PluginView] 获取到前端资源 HTML,长度:",
+              indexHtml.length,
+            );
 
-          console.log("[PluginView] CSS 已注入到主文档,JS 已内联");
-        } catch (err) {
-          console.warn("[PluginView] 无法加载 CSS/JS:", err);
-        }
+            // 读取并内联 JS/CSS
+            let processedHtml = indexHtml;
 
-        // 直接使用 innerHTML 渲染,不使用 iframe
-        setHtml(processedHtml);
-        setLoading(false);
-
-        // 等待 DOM 更新后创建插件桥
-        setTimeout(async () => {
-          const bridge = createPluginBridge(pluginId);
-          bridge.exposeToWindow();
-          console.log("[PluginView] 插件桥已暴露到 window");
-
-          // 对于 password-manager,自动加载数据
-          if (pluginId === "password-manager") {
             try {
-              const result = await bridge.call("list_passwords");
-              console.log("[PluginView] 密码列表:", result);
+              // 读取 CSS
+              const styles = await invoke<string>("read_plugin_asset", {
+                pluginId: pluginId,
+                assetPath: "styles.css",
+              });
 
-              // 调用页面上的初始化函数(如果存在)
-              if ((window as any).initPasswordManager) {
-                (window as any).initPasswordManager(result.entries || []);
-              }
+              // 读取 JS
+              const script = await invoke<string>("read_plugin_asset", {
+                pluginId: pluginId,
+                assetPath: "main.js",
+              });
+
+              // 将 CSS 注入到 iframe 的 head 中
+              const styleEl = iframeDoc.createElement("style");
+              styleEl.textContent = styles;
+              iframeDoc.head.appendChild(styleEl);
+
+              // 将 JS 内联到 HTML 中
+              processedHtml = processedHtml.replace(
+                /<script src="main.js"><\/script>/,
+                `<script>${script}<\/script>`,
+              );
+
+              console.log(
+                "[PluginView] CSS 已注入到 iframe,JS 已内联",
+              );
             } catch (err) {
-              console.error("[PluginView] 加载初始数据失败:", err);
+              console.warn("[PluginView] 无法加载 CSS/JS:", err);
             }
-          }
-        }, 100);
 
-        console.log("[PluginView] 使用 innerHTML 模式加载插件");
-        return;
-      } catch (err) {
-        console.log("[PluginView] 未找到前端资源,使用传统 HTML 模式:", err);
-        // 如果没有前端资源,回退到传统的 HTML 模式
-      }
+            // 写入 iframe 的 HTML
+            iframeDoc.open();
+            iframeDoc.write(processedHtml);
+            iframeDoc.close();
 
-      // 传统模式:从插件获取 HTML
-      const viewHtml = await invoke<string>("get_plugin_view", {
-        pluginId: pluginId,
-      });
+            console.log("[PluginView] 使用 iframe 模式加载插件");
 
-      console.log(
-        "[PluginView] 获取到 HTML 内容:",
-        viewHtml.substring(0, 100) + "...",
-      );
-      setHtml(viewHtml);
-
-      // 创建插件桥并暴露到 window
-      const bridge = createPluginBridge(pluginId);
-      bridge.exposeToWindow();
-      console.log("[PluginView] 插件桥已暴露到 window");
-
-      // 等待DOM更新后自动加载初始数据
-      setTimeout(async () => {
-        try {
-          // 对于 password-manager,自动加载数据
-          if (pluginId === "password-manager") {
-            console.log("[PluginView] 开始加载密码列表...");
-            const result = await bridge.call("list_passwords");
-            console.log("[PluginView] 密码列表:", result);
-
-            // 更新DOM显示数据
-            const listEl = document.getElementById("password-list");
-            console.log("[PluginView] 找到 password-list 元素:", listEl);
-
-            if (listEl && result.entries) {
-              if (result.entries.length === 0) {
-                listEl.innerHTML = "<p>暂无密码条目</p>";
-              } else {
-                listEl.innerHTML = result.entries
-                  .map(
-                    (entry: any) => `
-                  <div style="padding: 10px; border: 1px solid #ddd; margin-bottom: 5px; border-radius: 4px;">
-                    <strong>${entry.service}</strong> - ${entry.username}
-                  </div>
-                `,
-                  )
-                  .join("");
+            // 等待 iframe 中的脚本执行
+            setTimeout(async () => {
+              // 创建插件桥并暴露到 iframe 的 window
+              const bridge = createPluginBridge(pluginId);
+              if (iframe.contentWindow) {
+                (iframe.contentWindow as any).pluginAPI = bridge.getAPI();
+                console.log("[PluginView] 插件桥已暴露到 iframe");
               }
-            }
-          }
-        } catch (err) {
-          console.error("[PluginView] 加载初始数据失败:", err);
-        }
-      }, 100);
+            }, 200);
 
-      setLoading(false);
-      console.log("[PluginView] 插件加载完成");
-    } catch (err) {
-      console.error("[PluginView] 加载插件失败:", err);
-      setError(err as string);
-      setLoading(false);
-    }
-  });
+            setLoading(false);
+            return;
+          } catch (err) {
+            console.log(
+              "[PluginView] 未找到前端资源,使用传统 HTML 模式:",
+              err,
+            );
+            // 如果没有前端资源,回退到传统的 HTML 模式
+          }
+
+          // 传统模式:从插件获取 HTML
+          const viewHtml = await invoke<string>("get_plugin_view", {
+            pluginId: pluginId,
+          });
+
+          console.log(
+            "[PluginView] 获取到 HTML 内容:",
+            viewHtml.substring(0, 100) + "...",
+          );
+
+          // 写入 iframe 的 HTML
+          iframeDoc.open();
+          iframeDoc.write(viewHtml);
+          iframeDoc.close();
+
+          // 创建插件桥并暴露到 iframe 的 window
+          const bridge = createPluginBridge(pluginId);
+          if (iframe.contentWindow) {
+            (iframe.contentWindow as any).pluginAPI = bridge.getAPI();
+            console.log("[PluginView] 插件桥已暴露到 iframe");
+          }
+
+          setLoading(false);
+          console.log("[PluginView] 插件加载完成");
+        } catch (err) {
+          console.error("[PluginView] 加载插件失败:", err);
+          setError(err as string);
+          setLoading(false);
+        }
+      },
+    ),
+  );
 
   return (
     <div class="plugin-view">
@@ -179,8 +156,18 @@ export default (props: PluginViewProps) => {
         <div class="error">加载失败: {error()}</div>
       </Show>
 
-      <Show when={!loading() && !error() && html()}>
-        <div innerHTML={html()} class="plugin-content" />
+      <Show when={!loading() && !error()}>
+        <iframe
+          ref={iframeRef}
+          class="plugin-content"
+          style={{
+            width: "100%",
+            height: "100%",
+            border: "none",
+            "background-color": "var(--content-area-bg, #ffffff)",
+          }}
+          sandbox="allow-scripts allow-same-origin allow-forms allow-modals"
+        />
       </Show>
     </div>
   );

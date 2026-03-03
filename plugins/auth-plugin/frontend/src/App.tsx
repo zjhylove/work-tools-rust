@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import "./App.css";
 import "./types";
 
@@ -29,6 +29,8 @@ const devError = (...args: unknown[]) => {
 
 function App() {
   const [entries, setEntries] = useState<AuthEntry[]>([]);
+  const entriesRef = useRef<AuthEntry[]>([]); // 用于在 setInterval 中访问最新的 entries
+  const isMountedRef = useRef(true); // 用于跟踪组件是否已挂载
   const [loading, setLoading] = useState(true);
   const [viewMode, setViewMode] = useState<"list" | "add" | "edit">("list");
   const [selectedEntry, setSelectedEntry] = useState<AuthEntry | null>(null);
@@ -44,6 +46,19 @@ function App() {
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [error, setError] = useState("");
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+
+  // 组件卸载时标记
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
+
+  // 同步 entries 到 ref
+  useEffect(() => {
+    entriesRef.current = entries;
+  }, [entries]);
 
   // 验证规则定义
   const validationRules = {
@@ -94,7 +109,7 @@ function App() {
   }, [formData, fieldErrors]);
 
   // 加载认证条目列表
-  const loadEntries = async () => {
+  const loadEntries = useCallback(async () => {
     try {
       setLoading(true);
       const result = (await window.pluginAPI?.call(
@@ -102,6 +117,9 @@ function App() {
         "list_entries",
         {},
       )) as unknown;
+
+      // 检查组件是否仍然挂载
+      if (!isMountedRef.current) return;
 
       // 验证返回的数据格式
       if (Array.isArray(result)) {
@@ -112,17 +130,24 @@ function App() {
         setEntries([]);
       }
     } catch (err) {
-      devError("加载认证条目失败:", err);
-      setError("加载认证条目失败");
-      setEntries([]);
+      if (isMountedRef.current) {
+        devError("加载认证条目失败:", err);
+        setError("加载认证条目失败");
+        setEntries([]);
+      }
     } finally {
-      setLoading(false);
+      if (isMountedRef.current) {
+        setLoading(false);
+      }
     }
-  };
+  }, []); // 空依赖数组，不依赖任何外部变量
 
   // 生成 TOTP 验证码
   const generateTotp = useCallback(
     async (entry: AuthEntry, forceRefresh = false) => {
+      // 检查组件是否仍然挂载
+      if (!isMountedRef.current) return;
+
       try {
         // 安全:不要记录 TOTP 秘密或验证码
 
@@ -131,12 +156,16 @@ function App() {
           await new Promise((resolve) => setTimeout(resolve, 100));
         }
 
-        const code = (await window.pluginAPI?.call("auth", "generate_totp", {
+        const response = await window.pluginAPI?.call("auth", "generate_totp", {
           secret: entry.secret,
           digits: entry.digits,
           period: entry.period,
-        })) as string;
+        });
+        const code = (response as { code: string }).code;
         // 安全:不要记录验证码
+
+        // 再次检查组件是否仍然挂载
+        if (!isMountedRef.current) return;
 
         // 计算剩余时间
         const now = Math.floor(Date.now() / 1000);
@@ -148,75 +177,108 @@ function App() {
         }));
 
         // 如果是强制刷新，显示反馈
-        if (forceRefresh) {
+        if (forceRefresh && isMountedRef.current) {
           setError("✓ 验证码已刷新");
-          setTimeout(() => setError(""), 1500);
+          setTimeout(() => {
+            if (isMountedRef.current) setError("");
+          }, 1500);
         }
       } catch (err) {
-        devError("生成验证码失败:", entry.issuer, err);
-        setError("生成验证码失败");
+        if (isMountedRef.current) {
+          devError("生成验证码失败:", entry.issuer, err);
+          setError("生成验证码失败");
+        }
       }
     },
     [],
   ); // 空依赖数组,因为不依赖任何外部变量
 
-  // 刷新所有验证码
-  const refreshAllCodes = useCallback(() => {
-    entries.forEach((entry) => generateTotp(entry));
-  }, [entries, generateTotp]);
-
-  // 自动刷新验证码
+  // 自动刷新验证码 - 简化版本,只递归调用 setTimeout
   useEffect(() => {
-    let interval: ReturnType<typeof setInterval> | null = null;
-    let isMounted = true;
+    let cancelled = false;
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
 
-    const init = async () => {
+    // 加载初始数据
+    const loadInitialData = async () => {
+      if (cancelled) return;
       await loadEntries();
+
+      if (cancelled) return;
       // 加载完条目后,立即生成所有验证码
-      if (isMounted) {
-        setTimeout(() => {
-          if (isMounted) {
-            refreshAllCodes();
-          }
-        }, 100);
+      setTimeout(() => {
+        if (cancelled) return;
+        entriesRef.current.forEach((entry) => generateTotp(entry));
+      }, 100);
 
-        // 每秒刷新倒计时
-        interval = setInterval(() => {
-          if (!isMounted) return;
+      // 递归的定时器 - 每次 tick 只更新倒计时,不触发异步操作
+      const tick = () => {
+        if (cancelled) return;
 
-          setTotpMap((prev) => {
-            const updatedMap: Record<string, TotpInfo> = {};
+        const currentEntries = entriesRef.current;
 
-            entries.forEach((entry) => {
-              const current = prev[entry.id];
-              if (current) {
-                const newRemaining = current.remaining_seconds - 1;
-                if (newRemaining <= 0) {
-                  // 重新生成验证码 (异步操作不影响状态更新)
-                  generateTotp(entry);
-                } else {
-                  updatedMap[entry.id] = {
-                    code: current.code,
-                    remaining_seconds: newRemaining,
-                  };
-                }
+        setTotpMap((prev) => {
+          const updatedMap: Record<string, TotpInfo> = {};
+          let needsRefresh: string[] = [];
+
+          currentEntries.forEach((entry) => {
+            const current = prev[entry.id];
+            if (current) {
+              const newRemaining = current.remaining_seconds - 1;
+              if (newRemaining <= 0) {
+                // 需要刷新验证码 - 计算正确的剩余时间
+                const now = Math.floor(Date.now() / 1000);
+                const remaining = entry.period - (now % entry.period);
+                needsRefresh.push(entry.id);
+                updatedMap[entry.id] = {
+                  code: current.code,
+                  remaining_seconds: remaining,
+                };
+              } else {
+                updatedMap[entry.id] = {
+                  code: current.code,
+                  remaining_seconds: newRemaining,
+                };
               }
-            });
-
-            // 只更新需要更新的条目,减少不必要的重新渲染
-            return { ...prev, ...updatedMap };
+            }
           });
-        }, 1000);
-      }
+
+          // 在状态更新完成后,异步刷新需要更新的验证码
+          if (needsRefresh.length > 0 && !cancelled) {
+            // 使用 queueMicrotask 确保在状态更新后执行
+            queueMicrotask(() => {
+              if (cancelled) return;
+              needsRefresh.forEach((id) => {
+                const entry = currentEntries.find((e) => e.id === id);
+                if (entry) {
+                  generateTotp(entry);
+                }
+              });
+            });
+          }
+
+          return { ...prev, ...updatedMap };
+        });
+
+        // 继续下一次 tick
+        if (!cancelled) {
+          timeoutId = setTimeout(tick, 1000);
+        }
+      };
+
+      // 启动定时器
+      timeoutId = setTimeout(tick, 1000);
     };
 
-    init();
+    loadInitialData();
 
     return () => {
-      isMounted = false;
-      if (interval) clearInterval(interval);
+      cancelled = true;
+      if (timeoutId !== null) {
+        clearTimeout(timeoutId);
+      }
     };
-  }, [entries.length]); // 只在 entries 数量变化时重新初始化
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // 空依赖数组，只在组件挂载时运行一次
 
   // 复制验证码
   const copyCode = async (code: string) => {

@@ -38,6 +38,16 @@ export class PluginBridge {
       call: this.call.bind(this),
     };
   }
+
+  /**
+   * 获取插件 API 对象
+   * 用于手动暴露到 iframe 的 window 对象
+   */
+  getAPI() {
+    return {
+      call: this.call.bind(this),
+    };
+  }
 }
 
 /**

@@ -755,3 +755,11 @@ pub async fn read_plugin_asset(plugin_id: String, asset_path: String) -> Result<
     Ok(content)
 }
 
+/// 打开外部 URL
+#[tauri::command]
+pub async fn open_url(url: String) -> Result<(), String> {
+    // 使用 opener crate 打开 URL (跨平台)
+    opener::open(&url)
+        .map_err(|e| format!("打开链接失败: {}", e))
+}
+

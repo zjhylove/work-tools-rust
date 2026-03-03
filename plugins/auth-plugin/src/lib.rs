@@ -140,8 +140,17 @@ impl Plugin for AuthPlugin {
                 Ok(serde_json::to_value(data.entries)?)
             }
             "add_entry" => {
-                let entry: AuthEntry = serde_json::from_value(params)
+                // 从 params 中提取 entry 对象
+                let entry_value = params.get("entry")
+                    .ok_or_else(|| anyhow::anyhow!("缺少 entry 参数"))?;
+
+                let mut entry: AuthEntry = serde_json::from_value(entry_value.clone())
                     .map_err(|e| anyhow::anyhow!("解析参数失败: {}", e))?;
+
+                // 生成 UUID (如果前端没有提供)
+                if entry.id.is_empty() {
+                    entry.id = uuid::Uuid::new_v4().to_string();
+                }
 
                 let mut data = Self::load_data()?;
                 data.entries.push(entry.clone());
@@ -150,7 +159,11 @@ impl Plugin for AuthPlugin {
                 Ok(serde_json::to_value(entry)?)
             }
             "update_entry" => {
-                let entry: AuthEntry = serde_json::from_value(params)
+                // 从 params 中提取 entry 对象
+                let entry_value = params.get("entry")
+                    .ok_or_else(|| anyhow::anyhow!("缺少 entry 参数"))?;
+
+                let entry: AuthEntry = serde_json::from_value(entry_value.clone())
                     .map_err(|e| anyhow::anyhow!("解析参数失败: {}", e))?;
 
                 let mut data = Self::load_data()?;
@@ -179,6 +192,15 @@ impl Plugin for AuthPlugin {
                 Self::save_data(&data)?;
 
                 Ok(serde_json::json!({ "success": true }))
+            }
+            "generate_secret" => {
+                // 生成 20 字节(160 位)的随机密钥,编码为 Base32
+                use rand::Rng;
+                let mut rng = rand::thread_rng();
+                let secret_bytes: [u8; 20] = rng.gen();
+                let secret = base32::encode(base32::Alphabet::Rfc4648 { padding: true }, &secret_bytes);
+
+                Ok(serde_json::to_value(secret)?)
             }
             "generate_totp" => {
                 let secret = params.get("secret")

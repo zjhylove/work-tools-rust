@@ -222,9 +222,21 @@ function App() {
   // 打开 URL
   const handleOpenUrl = async (url: string) => {
     try {
-      window.open(url, "_blank");
+      // 优先使用 pluginAPI.open_url (通过 Tauri shell 插件)
+      if (window.pluginAPI?.open_url) {
+        await window.pluginAPI.open_url(url);
+      } else {
+        // 降级处理:使用 window.open
+        window.open(url, "_blank");
+      }
     } catch (err) {
       devError("打开链接失败:", err);
+      // 最终降级处理
+      try {
+        window.open(url, "_blank");
+      } catch (fallbackErr) {
+        devError("降级打开链接也失败:", fallbackErr);
+      }
     }
   };
 
