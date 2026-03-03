@@ -15,9 +15,7 @@
   "dependencies": {
     "@tauri-apps/api": "^2",
     "@tauri-apps/plugin-dialog": "^2.6.0",
-    "@tauri-apps/plugin-fs": "^2.4.5",
     "@tauri-apps/plugin-opener": "^2",
-    "@tauri-apps/plugin-shell": "^2.3.5",
     "react": "^19.2.4",
     "react-dom": "^19.2.4"
   },
@@ -25,6 +23,7 @@
     "@tauri-apps/cli": "^2",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
+    "archiver": "^7.0.1",
     "typescript": "~5.6.2",
     "vite": "^6.0.3"
   }
