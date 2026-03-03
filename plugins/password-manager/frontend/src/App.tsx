@@ -377,7 +377,7 @@ function App() {
       a.download = `passwords-backup-${new Date().toISOString().split("T")[0]}.json`;
       document.body.appendChild(a);
       a.click();
-      document.body.removeChild(a);
+      safeRemoveChild(a);
       URL.revokeObjectURL(url);
 
       setError("✅ 密码已导出 - 请记得安全存储后删除文件");
@@ -396,6 +396,18 @@ function App() {
     }
   };
 
+  // 安全移除 DOM 元素的辅助函数
+  const safeRemoveChild = (element: HTMLElement) => {
+    try {
+      if (element && element.parentNode) {
+        element.parentNode.removeChild(element);
+      }
+    } catch (err) {
+      // 忽略移除错误，元素可能已经被移除
+      devError("移除元素失败:", err);
+    }
+  };
+
   // 导入密码 (带确认和预览)
   const handleImportPasswords = async () => {
     try {
@@ -409,7 +421,7 @@ function App() {
       input.onchange = async (e) => {
         const file = (e.target as HTMLInputElement).files?.[0];
         if (!file) {
-          document.body.removeChild(input);
+          safeRemoveChild(input);
           return;
         }
 
@@ -434,7 +446,7 @@ function App() {
           } catch (err) {
             setError("❌ 导入失败: 文件格式不正确 - " + (err as Error).message);
             setTimeout(() => setError(""), 5000);
-            document.body.removeChild(input);
+            safeRemoveChild(input);
             return;
           }
 
@@ -443,7 +455,7 @@ function App() {
           if (count === 0) {
             setError("⚠️ 文件中没有密码条目");
             setTimeout(() => setError(""), 3000);
-            document.body.removeChild(input);
+            safeRemoveChild(input);
             return;
           }
 
@@ -462,7 +474,7 @@ function App() {
           }
 
           if (!confirmed) {
-            document.body.removeChild(input);
+            safeRemoveChild(input);
             return;
           }
 
@@ -473,8 +485,8 @@ function App() {
           setError(`✅ 已成功导入 ${count} 个密码`);
           setTimeout(() => setError(""), 5000);
         } finally {
-          // 清理 DOM 元素,防止内存泄漏
-          document.body.removeChild(input);
+          // 安全清理 DOM 元素
+          safeRemoveChild(input);
         }
       };
 
