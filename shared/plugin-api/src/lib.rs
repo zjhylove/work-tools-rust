@@ -1,5 +1,10 @@
 use serde_json::Value;
 
+pub mod storage;
+pub mod error;
+
+pub use error::{PluginError, PluginResult};
+
 /// 插件 Trait - 所有插件必须实现此接口
 pub trait Plugin: Send + Sync {
     /// 插件唯一标识符
