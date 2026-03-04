@@ -2693,6 +2693,7 @@ dependencies = [
  "anyhow",
  "chrono",
  "hex",
+ "once_cell",
  "serde",
  "serde_json",
  "sha2",
