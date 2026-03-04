@@ -195,9 +195,9 @@ impl Plugin for AuthPlugin {
             }
             "generate_secret" => {
                 // 生成 20 字节(160 位)的随机密钥,编码为 Base32
-                use rand::Rng;
-                let mut rng = rand::thread_rng();
-                let secret_bytes: [u8; 20] = rng.gen();
+                let mut secret_bytes = [0u8; 20];
+                getrandom::getrandom(&mut secret_bytes)
+                    .map_err(|e| anyhow::anyhow!("生成随机数失败: {}", e))?;
                 let secret = base32::encode(base32::Alphabet::Rfc4648 { padding: true }, &secret_bytes);
 
                 Ok(serde_json::to_value(secret)?)
