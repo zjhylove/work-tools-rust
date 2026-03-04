@@ -2689,10 +2689,13 @@ dependencies = [
 name = "password-manager"
 version = "1.0.0"
 dependencies = [
+ "aes",
  "anyhow",
  "chrono",
+ "hex",
  "serde",
  "serde_json",
+ "sha2",
  "uuid",
  "worktools-plugin-api",
 ]

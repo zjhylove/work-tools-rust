@@ -2,6 +2,8 @@ use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use worktools_plugin_api::{Plugin, storage::PluginStorage};
 use serde_json::Value;
+mod crypto;
+use crypto::{PasswordEncryptor, CryptoConfig};
 
 /// 密码条目 (加密版本)
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -28,6 +30,11 @@ impl PasswordManager {
     /// 获取数据存储实例
     fn storage() -> PluginStorage {
         PluginStorage::new("password-manager", "password-manager.json")
+    }
+
+    /// 获取加密器实例
+    fn encryptor() -> PasswordEncryptor {
+        PasswordEncryptor::new(CryptoConfig::default())
     }
 
     /// 加载数据
@@ -72,13 +79,18 @@ impl Plugin for PasswordManager {
         match method {
             "list_passwords" => {
                 let data = Self::load_data()?;
+                let encryptor = Self::encryptor();
                 let entries: Vec<Value> = data.entries.into_iter().map(|entry| {
+                    // 尝试解密密码,如果失败则返回原始密码(可能是明文或旧格式)
+                    let password = encryptor.decrypt_password(&entry.password)
+                        .unwrap_or_else(|_| entry.password.clone());
+
                     serde_json::json!({
                         "id": entry.id,
                         "url": entry.url.as_deref().unwrap_or_default(),
                         "service": entry.service,
                         "username": entry.username,
-                        "password": entry.password,
+                        "password": password,
                         "created_at": entry.created_at,
                         "updated_at": entry.updated_at.as_deref().unwrap_or_default(),
                     })
@@ -101,12 +113,17 @@ impl Plugin for PasswordManager {
 
                 let url = params.get("url").and_then(|v| v.as_str());
 
+                // 尝试加密密码,如果失败则保存明文密码
+                let encryptor = Self::encryptor();
+                let encrypted_password = encryptor.encrypt_password(password)
+                    .unwrap_or_else(|_| password.to_string());
+
                 let entry = PasswordEntry {
                     id: uuid::Uuid::new_v4().to_string(),
                     url: url.map(|s| s.to_string()),
                     service: service.to_string(),
                     username: username.to_string(),
-                    password: password.to_string(),
+                    password: encrypted_password,
                     created_at: chrono::Utc::now().to_rfc3339(),
                     updated_at: None,
                 };
@@ -120,7 +137,7 @@ impl Plugin for PasswordManager {
                     "url": entry.url.as_deref().unwrap_or_default(),
                     "service": entry.service,
                     "username": entry.username,
-                    "password": entry.password,
+                    "password": password, // 返回明文密码给前端
                     "created_at": entry.created_at,
                     "updated_at": entry.updated_at.as_deref().unwrap_or_default(),
                 }))
@@ -144,6 +161,11 @@ impl Plugin for PasswordManager {
 
                 let url = params.get("url").and_then(|v| v.as_str());
 
+                // 尝试加密密码,如果失败则保存明文密码
+                let encryptor = Self::encryptor();
+                let encrypted_password = encryptor.encrypt_password(password)
+                    .unwrap_or_else(|_| password.to_string());
+
                 let mut data = Self::load_data()?;
                 let index = data.entries
                     .iter()
@@ -157,7 +179,7 @@ impl Plugin for PasswordManager {
                     url: url.map(|s| s.to_string()),
                     service: service.to_string(),
                     username: username.to_string(),
-                    password: password.to_string(),
+                    password: encrypted_password,
                     created_at,
                     updated_at: Some(chrono::Utc::now().to_rfc3339()),
                 };
@@ -170,7 +192,7 @@ impl Plugin for PasswordManager {
                     "url": entry.url.as_deref().unwrap_or_default(),
                     "service": entry.service,
                     "username": entry.username,
-                    "password": entry.password,
+                    "password": password, // 返回明文密码给前端
                     "created_at": entry.created_at,
                     "updated_at": entry.updated_at.as_deref().unwrap_or_default(),
                 }))

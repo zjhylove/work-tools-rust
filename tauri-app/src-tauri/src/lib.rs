@@ -1,6 +1,5 @@
 mod commands;
 mod config;
-mod crypto;
 pub mod plugin_manager;
 mod plugin_package;
 mod plugin_registry;
