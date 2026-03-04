@@ -4,6 +4,7 @@ use worktools_plugin_api::{Plugin, storage::PluginStorage};
 use serde_json::Value;
 mod crypto;
 use crypto::{PasswordEncryptor, CryptoConfig};
+use once_cell::sync::Lazy;
 
 /// 密码条目 (加密版本)
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -26,15 +27,34 @@ struct PasswordData {
 /// 密码管理器插件
 pub struct PasswordManager;
 
+/// 全局共享的加密器实例 (单例模式,避免重复创建)
+static ENCRYPTOR: Lazy<PasswordEncryptor> = Lazy::new(|| {
+    PasswordEncryptor::new(CryptoConfig::default())
+});
+
 impl PasswordManager {
     /// 获取数据存储实例
     fn storage() -> PluginStorage {
         PluginStorage::new("password-manager", "password-manager.json")
     }
 
-    /// 获取加密器实例
-    fn encryptor() -> PasswordEncryptor {
-        PasswordEncryptor::new(CryptoConfig::default())
+    /// 获取加密器实例 (返回全局单例)
+    fn encryptor() -> &'static PasswordEncryptor {
+        &ENCRYPTOR
+    }
+
+    /// 加密密码,失败时返回明文
+    fn encrypt_or_plain(password: &str) -> String {
+        Self::encryptor()
+            .encrypt_password(password)
+            .unwrap_or_else(|_| password.to_string())
+    }
+
+    /// 解密密码,失败时返回原始值
+    fn decrypt_or_original(encrypted: &str) -> String {
+        Self::encryptor()
+            .decrypt_password(encrypted)
+            .unwrap_or_else(|_| encrypted.to_string())
     }
 
     /// 加载数据
@@ -79,11 +99,8 @@ impl Plugin for PasswordManager {
         match method {
             "list_passwords" => {
                 let data = Self::load_data()?;
-                let encryptor = Self::encryptor();
                 let entries: Vec<Value> = data.entries.into_iter().map(|entry| {
-                    // 尝试解密密码,如果失败则返回原始密码(可能是明文或旧格式)
-                    let password = encryptor.decrypt_password(&entry.password)
-                        .unwrap_or_else(|_| entry.password.clone());
+                    let password = Self::decrypt_or_original(&entry.password);
 
                     serde_json::json!({
                         "id": entry.id,
@@ -114,9 +131,7 @@ impl Plugin for PasswordManager {
                 let url = params.get("url").and_then(|v| v.as_str());
 
                 // 尝试加密密码,如果失败则保存明文密码
-                let encryptor = Self::encryptor();
-                let encrypted_password = encryptor.encrypt_password(password)
-                    .unwrap_or_else(|_| password.to_string());
+                let encrypted_password = Self::encrypt_or_plain(password);
 
                 let entry = PasswordEntry {
                     id: uuid::Uuid::new_v4().to_string(),
@@ -162,9 +177,7 @@ impl Plugin for PasswordManager {
                 let url = params.get("url").and_then(|v| v.as_str());
 
                 // 尝试加密密码,如果失败则保存明文密码
-                let encryptor = Self::encryptor();
-                let encrypted_password = encryptor.encrypt_password(password)
-                    .unwrap_or_else(|_| password.to_string());
+                let encrypted_password = Self::encrypt_or_plain(password);
 
                 let mut data = Self::load_data()?;
                 let index = data.entries
