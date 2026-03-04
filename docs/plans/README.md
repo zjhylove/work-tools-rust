@@ -8,33 +8,37 @@
 
 - **后端**: Rust + Tauri 2.x
 - **前端**: Solid.js + TypeScript
-- **插件通信**: JSON-RPC 2.0 over stdin/stdout
-- **数据存储**: JSON 文件(与 Java 版本兼容)
+- **插件架构**: 动态库加载 (libloading)
+- **插件通信**: 同进程函数调用
+- **插件包**: ZIP 格式 (.wtplugin.zip) 包含动态库 + 前端资源
+- **数据存储**: JSON 文件,存储在 `~/.worktools/`
 - **构建工具**: Cargo + Vite
 
 ### 架构设计
 
 ```
 work-tools-rust/
-├── tauri-app/              # Tauri 主应用
-│   ├── src/               # Solid.js 前端
+├── tauri-app/              # Tauri 主应用 (Solid.js 前端 + Rust 后端)
+│   ├── src/               # Solid.js 前端源码
+│   │   ├── components/    # UI 组件
+│   │   │   ├── ContentArea.tsx      # 通用插件容器
+│   │   │   ├── PluginView.tsx       # 动态渲染器
+│   │   │   └── UiFieldComponent.tsx # UI 组件库
+│   │   └── App.tsx        # 主应用 (简化后仅 144 行)
 │   └── src-tauri/         # Rust 后端
-│       ├── lib.rs         # Tauri 入口
-│       ├── plugin_manager.rs  # 插件管理器
-│       ├── commands.rs    # Tauri 命令
-│       └── config.rs      # 配置管理
-├── shared/                # 共享库
-│   ├── types/            # 共享类型定义
-│   └── rpc-protocol/     # JSON-RPC 协议
-└── plugins/              # 插件实现
-    ├── password-manager/
-    ├── auth-plugin/
-    ├── db-doc-plugin/
-    ├── ip-forward-plugin/
-    ├── object-storage-plugin/
-    ├── ai-chat-plugin/
-    ├── api-doc-plugin/
-    └── db-router-plugin/
+│       ├── plugin_manager.rs    # 插件管理器 (动态库加载)
+│       ├── plugin_package.rs    # 插件包管理 (ZIP 解析)
+│       ├── plugin_registry.rs   # 插件注册表
+│       ├── commands.rs          # Tauri 命令定义
+│       └── crypto.rs            # 密码加密服务
+├── plugins/                # 插件项目 (动态库)
+│   ├── password-manager/   # 密码管理器
+│   └── auth-plugin/        # 双因素验证 (TOTP)
+├── shared/                 # 共享库
+│   ├── types/             # 共享数据类型
+│   └── plugin-api/        # 插件 API 定义 (Plugin trait)
+├── scripts/               # 构建和环境检查脚本
+└── docs/plans/            # 开发计划和规范
 ```
 
 ## 插件列表 (8 个)
@@ -606,8 +610,88 @@ signtool sign /f certificate.pfx /p password \
 
 ---
 
-**文档版本**: 1.3
-**最后更新**: 2026-03-01
+## 最新架构变更 (2026-03-04)
+
+### 插件系统重构完成
+
+成功完成从 JSON-RPC 进程通信到动态库同进程调用的架构迁移:
+
+#### 架构对比
+
+| 维度 | 旧架构 (JSON-RPC) | 新架构 (动态库) |
+|------|------------------|----------------|
+| 插件形式 | 独立可执行文件 | 动态库 (.dylib/.so/.dll) |
+| 加载方式 | Command::spawn | libloading::Library |
+| 通信方式 | JSON-RPC over stdin/stdout | 同进程函数调用 |
+| UI 渲染 | 硬编码组件 | HTML + WebView |
+| 性能 | 5-10ms 调用开销 | <1ms 直接调用 |
+
+#### 代码优化成果
+
+**删除了 241 行冗余代码 (~21%)**:
+
+1. **删除 9 个插件特定命令**
+   - 5 个绕过插件系统的直接配置操作命令
+   - 4 个简单包装命令 (无业务逻辑价值)
+
+2. **保留有价值的命令**
+   - password-manager: 8 个命令 (包含加密/解密逻辑)
+   - crypto: 2 个通用加密服务命令
+
+3. **App.tsx 简化**
+   - 从 2063 行减少到 144 行 (-93%)
+   - 完全移除插件特定代码
+   - 使用通用 ContentArea 组件
+
+#### 架构原则
+
+✅ **插件自治** - 插件完全控制自己的数据和业务逻辑
+✅ **职责分离** - tauri-app 提供基础设施,插件提供业务功能
+✅ **开放封闭** - 添加新插件无需修改主应用代码
+✅ **单一数据源** - 每个插件只有一种访问方式,消除数据一致性风险
+
+#### 插件包格式
+
+插件现在打包为 `.wtplugin.zip` 文件:
+
+```
+my-plugin.wtplugin.zip
+├── manifest.json          # 插件元数据
+├── libmy_plugin.dylib     # 动态库 (macOS)
+├── libmy_plugin.so        # 动态库 (Linux)
+├── my_plugin.dll          # 动态库 (Windows)
+└── assets/                # 前端资源
+    ├── index.html
+    ├── main.js
+    └── styles.css
+```
+
+#### 数据流向
+
+```
+前端 (Solid.js)
+  → window.pluginAPI.call(method, params)
+  → Tauri: call_plugin_method command
+  → PluginManager::call_plugin_method()
+  → Plugin::handle_call() (同进程函数调用)
+  → 业务逻辑
+```
+
+### 下一步工作
+
+1. **完善现有插件**
+   - auth-plugin 完整界面
+   - password-manager 增强 (密码生成器、强度指示器)
+
+2. **开发新插件**
+   - object-storage-plugin (对象存储管理)
+   - ai-chat-plugin (AI 对话助手)
+   - db-doc-plugin (数据库文档生成)
+
+---
+
+**文档版本**: 2.0
+**最后更新**: 2026-03-04
 **维护者**: zjhy
 
 ## 新架构使用指南
