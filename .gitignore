@@ -40,3 +40,4 @@ logs/
 # Tauri
 src-tauri/capabilities/
 src-tauri/gen/
+plugins/.DS_Store
