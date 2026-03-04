@@ -122,7 +122,7 @@ impl Plugin for AuthPlugin {
     }
 
     fn icon(&self) -> &str {
-        "🔐"
+        "🔢"
     }
 
     fn get_view(&self) -> String {

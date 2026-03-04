@@ -57,23 +57,22 @@ pub struct AssetsConfig {
 impl PluginPackage {
     /// 从 ZIP 文件路径加载插件包
     pub fn from_zip(zip_path: &Path) -> Result<Self> {
-        let zip_data = std::fs::read(zip_path)
-            .context("读取插件包文件失败")?;
+        let zip_data = std::fs::read(zip_path).context("读取插件包文件失败")?;
         Self::from_zip_bytes(&zip_data)
     }
 
     /// 从 ZIP 字节数据加载插件包
     pub fn from_zip_bytes(data: &[u8]) -> Result<Self> {
         let cursor = Cursor::new(data);
-        let mut archive = ZipArchive::new(cursor)
-            .context("解析 ZIP 文件失败")?;
+        let mut archive = ZipArchive::new(cursor).context("解析 ZIP 文件失败")?;
 
         // 读取并解析 manifest.json
-        let manifest_file = archive.by_name("manifest.json")
+        let manifest_file = archive
+            .by_name("manifest.json")
             .context("插件包中未找到 manifest.json")?;
 
-        let manifest: PluginManifest = serde_json::from_reader(manifest_file)
-            .context("解析 manifest.json 失败")?;
+        let manifest: PluginManifest =
+            serde_json::from_reader(manifest_file).context("解析 manifest.json 失败")?;
 
         Ok(Self {
             manifest,
@@ -89,12 +88,10 @@ impl PluginPackage {
         let mut archive = ZipArchive::new(cursor)?;
 
         // 创建插件目录
-        std::fs::create_dir_all(plugin_dir)
-            .context("创建插件目录失败")?;
+        std::fs::create_dir_all(plugin_dir).context("创建插件目录失败")?;
 
         // 解压所有文件
-        archive.extract(plugin_dir)
-            .context("解压插件包失败")?;
+        archive.extract(plugin_dir).context("解压插件包失败")?;
 
         tracing::info!("插件 {} 安装成功", self.manifest.id);
         Ok(())
@@ -115,7 +112,8 @@ impl PluginPackage {
 
     /// 获取动态库的完整路径
     pub fn get_library_path(&self, plugin_dir: &Path) -> Result<PathBuf> {
-        let lib_name = self.get_library_filename()
+        let lib_name = self
+            .get_library_filename()
             .ok_or_else(|| anyhow::anyhow!("当前平台不受支持"))?;
 
         Ok(plugin_dir.join(lib_name))
@@ -139,12 +137,18 @@ impl PluginPackage {
             anyhow::bail!("插件 ID 不能为空");
         }
 
-        if !self.manifest.id.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-') {
+        if !self
+            .manifest
+            .id
+            .chars()
+            .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-')
+        {
             anyhow::bail!("插件 ID 只能包含小写字母、数字和连字符");
         }
 
         // 检查动态库文件配置
-        let lib_name = self.get_library_filename()
+        let lib_name = self
+            .get_library_filename()
             .ok_or_else(|| anyhow::anyhow!("未配置当前平台的动态库文件"))?;
 
         let cursor = Cursor::new(&self.archive_data);
@@ -174,7 +178,10 @@ impl PluginPackage {
             anyhow::bail!("插件包缺少动态库文件: {}", lib_name);
         }
         if !assets_entry_found {
-            anyhow::bail!("插件包缺少前端入口文件: assets/{}", self.manifest.assets.entry);
+            anyhow::bail!(
+                "插件包缺少前端入口文件: assets/{}",
+                self.manifest.assets.entry
+            );
         }
 
         tracing::info!("插件包 {} 验证通过", self.manifest.id);

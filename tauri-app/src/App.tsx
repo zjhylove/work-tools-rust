@@ -4,6 +4,7 @@ import PluginStore from "./components/PluginStore";
 import PluginPlaceholder from "./components/PluginPlaceholder";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { devError, devLog, devWarn } from "./utils/logger";
+import type { PluginInfo } from "./types/plugin";
 
 // 安全的 invoke 包装函数
 const safeInvoke = async <T,>(
@@ -17,14 +18,6 @@ const safeInvoke = async <T,>(
     throw error;
   }
 };
-
-interface PluginInfo {
-  id: string;
-  name: string;
-  description: string;
-  version: string;
-  icon: string;
-}
 
 export default function App() {
   const [plugins, setPlugins] = useState<PluginInfo[]>([]);
@@ -54,7 +47,7 @@ export default function App() {
           name: "双因素验证",
           description: "TOTP 双因素认证",
           version: "1.0.0",
-          icon: "🔐",
+          icon: "🔢",
         },
       ];
       setPlugins(mockPlugins);

@@ -1,42 +1,15 @@
-import React, { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
 import "./PluginStore.css";
-
-interface PluginManifest {
-  id: string;
-  name: string;
-  description: string;
-  version: string;
-  icon?: string;
-  author?: string;
-  homepage?: string;
-}
-
-interface InstalledPlugin {
-  id: string;
-  name: string;
-  description: string;
-  version: string;
-  icon?: string;
-  author?: string;
-  homepage?: string;
-  installed_at: string;
-  enabled: boolean;
-  assets_path: string;
-  library_path: string;
-}
-
-interface PluginInfo extends PluginManifest {
-  installed: boolean;
-}
+import type { PluginManifest, InstalledPlugin, StorePluginInfo } from "../types/plugin";
 
 interface PluginStoreProps {
   onPluginsChange?: () => void;
 }
 
 export default function PluginStore(props: PluginStoreProps) {
-  const [plugins, setPlugins] = useState<PluginInfo[]>([]);
+  const [plugins, setPlugins] = useState<StorePluginInfo[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [loading, setLoading] = useState(true);
   const [importing, setImporting] = useState(false);
@@ -53,7 +26,7 @@ export default function PluginStore(props: PluginStoreProps) {
       const installedIds = new Set(installed.map((p) => p.id));
 
       // 合并并标记安装状态
-      const merged: PluginInfo[] = available.map((p) => ({
+      const merged: StorePluginInfo[] = available.map((p) => ({
         ...p,
         installed: installedIds.has(p.id),
       }));
@@ -110,7 +83,7 @@ export default function PluginStore(props: PluginStoreProps) {
   };
 
   // 安装/卸载插件
-  const togglePlugin = async (plugin: PluginInfo) => {
+  const togglePlugin = async (plugin: StorePluginInfo) => {
     try {
       if (plugin.installed) {
         const result = await invoke<string>("uninstall_plugin", {

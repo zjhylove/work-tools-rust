@@ -43,10 +43,8 @@ impl PluginRegistry {
     /// 使用指定的注册表文件路径创建
     pub fn with_path(registry_file: PathBuf) -> Result<Self> {
         let installed = if registry_file.exists() {
-            let content = fs::read_to_string(&registry_file)
-                .context("读取注册表文件失败")?;
-            serde_json::from_str(&content)
-                .context("解析注册表文件失败")?
+            let content = fs::read_to_string(&registry_file).context("读取注册表文件失败")?;
+            serde_json::from_str(&content).context("解析注册表文件失败")?
         } else {
             HashMap::new()
         };
@@ -61,12 +59,11 @@ impl PluginRegistry {
 
     /// 获取默认注册表文件路径
     fn default_registry_path() -> Result<PathBuf> {
-        let user_dirs = directories::UserDirs::new()
-            .ok_or_else(|| anyhow::anyhow!("无法找到用户主目录"))?;
+        let user_dirs =
+            directories::UserDirs::new().ok_or_else(|| anyhow::anyhow!("无法找到用户主目录"))?;
 
         let config_dir = user_dirs.home_dir().join(".worktools/config");
-        fs::create_dir_all(&config_dir)
-            .context("创建配置目录失败")?;
+        fs::create_dir_all(&config_dir).context("创建配置目录失败")?;
 
         Ok(config_dir.join("installed-plugins.json"))
     }
@@ -97,7 +94,11 @@ impl PluginRegistry {
         if let Some(plugin) = self.installed.get_mut(plugin_id) {
             plugin.enabled = enabled;
             self.save()?;
-            tracing::info!("插件 {} 状态已设置为: {}", plugin_id, if enabled { "启用" } else { "禁用" });
+            tracing::info!(
+                "插件 {} 状态已设置为: {}",
+                plugin_id,
+                if enabled { "启用" } else { "禁用" }
+            );
         } else {
             tracing::warn!("插件 {} 不存在于注册表中", plugin_id);
         }
@@ -131,11 +132,9 @@ impl PluginRegistry {
 
     /// 保存注册表到文件
     fn save(&self) -> Result<()> {
-        let content = serde_json::to_string_pretty(&self.installed)
-            .context("序列化注册表失败")?;
+        let content = serde_json::to_string_pretty(&self.installed).context("序列化注册表失败")?;
 
-        fs::write(&self.registry_file, content)
-            .context("写入注册表文件失败")?;
+        fs::write(&self.registry_file, content).context("写入注册表文件失败")?;
 
         Ok(())
     }

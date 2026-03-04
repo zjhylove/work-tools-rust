@@ -65,13 +65,12 @@ impl PluginManager {
 
     /// 创建新的插件管理器
     pub fn new() -> Result<Self> {
-        let user_dirs = directories::UserDirs::new()
-            .ok_or_else(|| anyhow::anyhow!("无法找到用户主目录"))?;
+        let user_dirs =
+            directories::UserDirs::new().ok_or_else(|| anyhow::anyhow!("无法找到用户主目录"))?;
         let plugin_dir = user_dirs.home_dir().join(".worktools/plugins");
 
         // 创建插件目录
-        std::fs::create_dir_all(&plugin_dir)
-            .context("创建插件目录失败")?;
+        std::fs::create_dir_all(&plugin_dir).context("创建插件目录失败")?;
 
         Ok(Self {
             plugins: RwLock::new(HashMap::new()),
@@ -87,8 +86,7 @@ impl PluginManager {
         self.plugins.write().await.clear();
 
         // 扫描插件目录
-        let entries = std::fs::read_dir(&self.plugin_dir)
-            .context("读取插件目录失败")?;
+        let entries = std::fs::read_dir(&self.plugin_dir).context("读取插件目录失败")?;
 
         for entry in entries {
             let entry = entry?;
@@ -102,7 +100,9 @@ impl PluginManager {
                     // 读取 manifest.json 获取动态库文件名
                     std::fs::read_to_string(&manifest_path)
                         .ok()
-                        .and_then(|content| serde_json::from_str::<serde_json::Value>(&content).ok())
+                        .and_then(|content| {
+                            serde_json::from_str::<serde_json::Value>(&content).ok()
+                        })
                         .and_then(|manifest| Self::get_library_from_manifest(&manifest))
                         .map(|name| {
                             tracing::info!("从 manifest.json 读取动态库文件名: {}", name);
@@ -149,11 +149,11 @@ impl PluginManager {
 
         unsafe {
             // 加载动态库
-            let library = Library::new(lib_path)
-                .context("加载动态库失败")?;
+            let library = Library::new(lib_path).context("加载动态库失败")?;
 
             // 获取 plugin_create 函数
-            let create: Symbol<PluginCreateFn> = library.get(b"plugin_create")
+            let create: Symbol<PluginCreateFn> = library
+                .get(b"plugin_create")
                 .context("未找到 plugin_create 导出函数")?;
 
             // 调用工厂函数创建插件实例
@@ -178,11 +178,7 @@ impl PluginManager {
                 icon: plugin.icon().to_string(),
             };
 
-            tracing::info!(
-                "插件加载成功: {} (v{})",
-                info.name,
-                info.version
-            );
+            tracing::info!("插件加载成功: {} (v{})", info.name, info.version);
 
             // 保存到已加载插件列表
             let mut plugins = self.plugins.write().await;

@@ -1,20 +1,19 @@
-pub mod plugin_manager;
-mod config;
 mod commands;
+mod config;
 mod crypto;
+pub mod plugin_manager;
 mod plugin_package;
 mod plugin_registry;
 
 use anyhow::Result;
 use plugin_manager::PluginManager;
-use crypto::PasswordEncryptor;
 use std::sync::Arc;
 use tauri::Manager;
 
 /// 初始化日志系统
 fn init_logging() -> Result<()> {
-    let user_dirs = directories::UserDirs::new()
-        .ok_or_else(|| anyhow::anyhow!("无法找到用户主目录"))?;
+    let user_dirs =
+        directories::UserDirs::new().ok_or_else(|| anyhow::anyhow!("无法找到用户主目录"))?;
     let log_dir = user_dirs.home_dir().join(".worktools/logs");
 
     std::fs::create_dir_all(&log_dir)?;
@@ -36,14 +35,7 @@ pub fn run() {
     }
 
     // 创建插件管理器
-    let plugin_manager = Arc::new(
-        PluginManager::new().expect("无法创建插件管理器")
-    );
-
-    // 创建密码加密器（使用固定密钥，无需主密码）
-    let password_encryptor = Arc::new(std::sync::Mutex::new(
-        PasswordEncryptor::new(crypto::CryptoConfig::default())
-    ));
+    let plugin_manager = Arc::new(PluginManager::new().expect("无法创建插件管理器"));
 
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
@@ -61,45 +53,21 @@ pub fn run() {
 
             // 设置插件管理器状态
             app.manage(plugin_manager);
-            // 设置密码加密器状态
-            app.manage(password_encryptor);
 
             println!("Work Tools 应用启动成功");
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
             commands::get_installed_plugins,
-            commands::get_plugin_view,
             commands::call_plugin_method,
             commands::get_plugin_config,
             commands::set_plugin_config,
-            commands::get_app_config,
-            commands::set_app_config,
-            commands::get_password_entries,
-            commands::save_password_entry,
-            commands::delete_password_entry,
-            commands::clear_all_password_entries,
-            commands::export_passwords,
-            commands::import_passwords,
-            commands::get_auth_entries,
-            commands::save_auth_entry,
-            commands::delete_auth_entry,
-            commands::generate_secret,
-            commands::encrypt_password,
-            commands::decrypt_password,
-            // Auth Plugin 命令
-            commands::list_auth_entries,
-            commands::add_auth_entry,
-            commands::update_auth_entry,
-            commands::delete_auth_entry_plugin,
-            commands::generate_totp_code,
             // 插件商店命令
             commands::import_plugin_package,
             commands::get_available_plugins,
             commands::get_installed_plugins_from_registry,
             commands::install_plugin,
             commands::uninstall_plugin,
-            commands::get_plugin_assets_url,
             commands::read_plugin_asset,
             commands::open_url,
         ])

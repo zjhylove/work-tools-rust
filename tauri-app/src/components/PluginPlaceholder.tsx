@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
 
 interface PluginPlaceholderProps {
@@ -110,20 +110,6 @@ export default function PluginPlaceholder({
               )
               .split('<link rel="stylesheet" crossorigin href="./styles.css">')
               .join("");
-
-          console.log("[PluginPlaceholder] HTML 长度:", fullHtml.length);
-          console.log(
-            "[PluginPlaceholder] HTML 包含 <script>:",
-            fullHtml.includes('<script type="module">'),
-          );
-          console.log(
-            "[PluginPlaceholder] HTML 包含 <style>:",
-            fullHtml.includes("<style>"),
-          );
-          console.log(
-            "[PluginPlaceholder] HTML 前 200 字符:",
-            fullHtml.substring(0, 200),
-          );
 
           setHtmlContent(fullHtml);
         } catch (err) {
