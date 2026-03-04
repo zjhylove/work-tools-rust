@@ -3,7 +3,12 @@
 
 set -e
 
+# 获取脚本所在目录的父目录(项目根目录)
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
+
 echo "🔍 检查开发环境..."
+echo "项目根目录: $PROJECT_ROOT"
 echo ""
 
 # 颜色定义
@@ -108,6 +113,9 @@ echo ""
 echo "📁 项目检查:"
 echo "-----------------------------------"
 
+# 切换到项目根目录进行检查
+cd "$PROJECT_ROOT"
+
 # 检查项目结构
 if [ -d "tauri-app" ]; then
     echo -e "${GREEN}✓${NC} tauri-app 目录存在"
@@ -187,7 +195,7 @@ if [ $MISSING_COUNT -eq 0 ]; then
     echo -e "${GREEN}✓ 所有检查通过! 可以开始构建。${NC}"
     echo ""
     echo "下一步:"
-    echo "  cd tauri-app"
+    echo "  cd $PROJECT_ROOT/tauri-app"
     echo "  npm run tauri dev    # 开发模式"
     echo "  npm run tauri build  # 生产构建"
     exit 0

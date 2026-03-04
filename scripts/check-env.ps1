@@ -1,6 +1,11 @@
 # 跨平台环境检查脚本 (Windows)
 
+# 获取脚本所在目录的父目录(项目根目录)
+$scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
+$projectRoot = Split-Path -Parent $scriptDir
+
 Write-Host "🔍 检查开发环境..." -ForegroundColor Cyan
+Write-Host "项目根目录: $projectRoot" -ForegroundColor Cyan
 Write-Host ""
 
 $missingCount = 0
@@ -61,6 +66,9 @@ Write-Host ""
 Write-Host "📁 项目检查:"
 Write-Host "-----------------------------------"
 
+# 切换到项目根目录进行检查
+Push-Location $projectRoot
+
 # 检查项目结构
 if (Test-Path "tauri-app") {
     Write-Host "✓ tauri-app 目录存在" -ForegroundColor Green
@@ -99,6 +107,9 @@ if (Test-Path "tauri-app\src-tauri\icons") {
     $missingCount++
 }
 
+# 恢复原来的目录
+Pop-Location
+
 Write-Host ""
 Write-Host "🎯 Rust Targets:"
 Write-Host "-----------------------------------"
@@ -121,7 +132,7 @@ if ($missingCount -eq 0) {
     Write-Host "✓ 所有检查通过! 可以开始构建。" -ForegroundColor Green
     Write-Host ""
     Write-Host "下一步:"
-    Write-Host "  cd tauri-app"
+    Write-Host "  cd $projectRoot\tauri-app"
     Write-Host "  npm run tauri dev    # 开发模式"
     Write-Host "  npm run tauri build  # 生产构建"
     exit 0
