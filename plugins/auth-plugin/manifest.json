@@ -3,7 +3,7 @@
   "name": "双因素验证",
   "description": "TOTP 双因素认证",
   "version": "1.0.0",
-  "icon": "🔐",
+  "icon": "🔢",
   "author": "Work Tools Team",
   "homepage": "https://github.com/your-repo/work-tools",
   "files": {

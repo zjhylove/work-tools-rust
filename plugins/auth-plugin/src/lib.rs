@@ -2,7 +2,6 @@ use anyhow::Result;
 use worktools_plugin_api::{Plugin, storage::PluginStorage};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-
 /// Auth Entry - 双因素认证条目
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AuthEntry {
