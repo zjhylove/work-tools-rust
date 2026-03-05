@@ -35,6 +35,7 @@ work-tools-rust/
 │       └── crypto.rs            # 密码加密服务
 ├── plugins/                # 插件项目 (动态库)
 │   ├── password-manager/   # 密码管理器
+│   ├── json-tools/         # JSON 工具
 │   └── auth-plugin/        # 双因素验证 (TOTP)
 ├── shared/                 # 共享库
 │   ├── types/             # 共享数据类型
@@ -241,6 +242,7 @@ my-plugin.wtplugin.zip
 │   │   ├── manifest.json
 │   │   ├── libpassword_manager.dylib
 │   │   └── assets/
+│   ├── json-tools/         # JSON 工具
 │   └── auth-plugin/
 │       ├── manifest.json
 │       ├── libauth_plugin.dylib
