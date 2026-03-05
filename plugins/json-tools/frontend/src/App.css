@@ -1,0 +1,8 @@
+.json-tools {
+  flex: 1;
+  padding: 24px;
+  height: 100%;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+}
