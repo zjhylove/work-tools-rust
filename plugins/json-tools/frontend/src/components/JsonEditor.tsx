@@ -1,4 +1,3 @@
-import React from 'react';
 import type { ValidationError } from '../utils/jsonUtils';
 
 interface JsonEditorProps {
@@ -7,7 +6,7 @@ interface JsonEditorProps {
   error: ValidationError | null;
 }
 
-export default function JsonEditor({ value, onChange, error }: JsonEditorProps) {
+export default function JsonEditor({ value, onChange }: JsonEditorProps) {
   return (
     <div className="json-editor-panel">
       <textarea
