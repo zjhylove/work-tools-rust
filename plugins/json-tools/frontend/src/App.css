@@ -37,11 +37,11 @@
 
 .toolbar-group {
   display: flex;
-  gap: 8px;
+  gap: 6px;
 }
 
 .btn-tool {
-  padding: 8px 14px;
+  padding: 8px 12px;
   background: var(--bg-primary);
   color: var(--text-primary);
   border: 1px solid var(--border-color);
@@ -124,6 +124,29 @@
   background: var(--bg-primary);
   overflow: auto;
   min-width: 0;
+}
+
+/* 隐藏滚动条但保持滚动功能 */
+.json-editor-panel::-webkit-scrollbar,
+.json-tree-panel::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.json-editor-panel::-webkit-scrollbar-track,
+.json-tree-panel::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.json-editor-panel::-webkit-scrollbar-thumb,
+.json-tree-panel::-webkit-scrollbar-thumb {
+  background: var(--border-color);
+  border-radius: 4px;
+}
+
+.json-editor-panel::-webkit-scrollbar-thumb:hover,
+.json-tree-panel::-webkit-scrollbar-thumb:hover {
+  background: var(--text-tertiary);
 }
 
 /* 文本编辑器 */
