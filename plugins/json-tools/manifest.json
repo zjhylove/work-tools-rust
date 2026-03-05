@@ -1,7 +1,7 @@
 {
   "id": "json-tools",
   "name": "JSON 工具",
-  "description": "JSON 格式化、编辑和可视化工具",
+  "description": "JSON 格式化与可视化",
   "version": "1.0.0",
   "icon": "{}",
   "author": "Work Tools Team",
