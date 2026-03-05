@@ -12,7 +12,7 @@ impl Plugin for JsonTools {
         "JSON 工具"
     }
     fn description(&self) -> &str {
-        "JSON 格式化、编辑和可视化工具"
+        "JSON格式化、编辑工具"
     }
     fn version(&self) -> &str {
         "1.0.0"
