@@ -1,5 +1,5 @@
 # 插件打包脚本 (PowerShell)
-# 用于构建并打包密码管理器和双因素验证插件
+# 用于构建并打包密码管理器、双因素验证和 JSON 工具插件
 
 $ErrorActionPreference = "Stop"
 
@@ -14,7 +14,7 @@ Write-Host "========================================" -ForegroundColor Blue
 Write-Host ""
 
 # 检查环境
-Write-Host "[1/5] 检查构建环境..." -ForegroundColor Yellow
+Write-Host "[1/6] 检查构建环境..." -ForegroundColor Yellow
 try {
     $null = Get-Command cargo -ErrorAction Stop
     $null = Get-Command zip -ErrorAction Stop
@@ -26,7 +26,7 @@ try {
 Write-Host ""
 
 # 编译 Rust 动态库
-Write-Host "[2/5] 编译 Rust 动态库..." -ForegroundColor Yellow
+Write-Host "[2/6] 编译 Rust 动态库..." -ForegroundColor Yellow
 Push-Location $PROJECT_ROOT
 cargo build --release
 Pop-Location
@@ -34,7 +34,7 @@ Write-Host "✓ 动态库编译完成" -ForegroundColor Green
 Write-Host ""
 
 # 构建密码管理器插件
-Write-Host "[3/5] 构建密码管理器插件..." -ForegroundColor Yellow
+Write-Host "[3/6] 构建密码管理器插件..." -ForegroundColor Yellow
 $PASSWORD_MANAGER_DIR = Join-Path $PLUGINS_DIR "password-manager"
 $PASSWORD_MANAGER_FRONTEND = Join-Path $PASSWORD_MANAGER_DIR "frontend"
 
@@ -72,7 +72,7 @@ if (Test-Path $PASSWORD_MANAGER_FRONTEND) {
 Write-Host ""
 
 # 构建双因素验证插件
-Write-Host "[4/5] 构建双因素验证插件..." -ForegroundColor Yellow
+Write-Host "[4/6] 构建双因素验证插件..." -ForegroundColor Yellow
 $AUTH_PLUGIN_DIR = Join-Path $PLUGINS_DIR "auth-plugin"
 $AUTH_PLUGIN_FRONTEND = Join-Path $AUTH_PLUGIN_DIR "frontend"
 
@@ -109,8 +109,46 @@ if (Test-Path $AUTH_PLUGIN_FRONTEND) {
 }
 Write-Host ""
 
+# 构建 JSON 工具插件
+Write-Host "[5/6] 构建 JSON 工具插件..." -ForegroundColor Yellow
+$JSON_TOOLS_DIR = Join-Path $PLUGINS_DIR "json-tools"
+$JSON_TOOLS_FRONTEND = Join-Path $JSON_TOOLS_DIR "frontend"
+
+if (Test-Path $JSON_TOOLS_FRONTEND) {
+    Write-Host "  → 构建 JSON 工具前端..."
+    Push-Location $JSON_TOOLS_FRONTEND
+    npm run build | Out-Null
+    Pop-Location
+    Write-Host "  ✓ 前端构建完成" -ForegroundColor Green
+
+    Write-Host "  → 打包 JSON 工具插件..."
+    Push-Location $JSON_TOOLS_DIR
+
+    # 删除旧的包
+    Remove-Item -Force "json-tools.wtplugin.zip" -ErrorAction SilentlyContinue
+
+    # 复制动态库 (Windows 使用 .dll)
+    $LIB_NAME = "json_tools.dll"
+    Copy-Item (Join-Path $TARGET_DIR $LIB_NAME) .
+
+    # 打包
+    zip -r json-tools.wtplugin.zip manifest.json $LIB_NAME assets/ | Out-Null
+
+    # 清理临时文件
+    Remove-Item -Force $LIB_NAME
+
+    # 显示包信息
+    $PACKAGE_SIZE = (Get-Item json-tools.wtplugin.zip).Length / 1KB
+    Write-Host "  ✓ 打包完成: json-tools.wtplugin.zip ($([math]::Round($PACKAGE_SIZE, 2)) KB)" -ForegroundColor Green
+
+    Pop-Location
+} else {
+    Write-Host "  ⚠ JSON 工具前端目录不存在,跳过" -ForegroundColor Yellow
+}
+Write-Host ""
+
 # 显示打包结果
-Write-Host "[5/5] 打包结果汇总" -ForegroundColor Yellow
+Write-Host "[6/6] 打包结果汇总" -ForegroundColor Yellow
 Write-Host "========================================" -ForegroundColor Blue
 
 $PASSWORD_MANAGER_ZIP = Join-Path $PASSWORD_MANAGER_DIR "password-manager.wtplugin.zip"
@@ -121,6 +159,11 @@ if (Test-Path $PASSWORD_MANAGER_ZIP) {
 $AUTH_PLUGIN_ZIP = Join-Path $AUTH_PLUGIN_DIR "auth.wtplugin.zip"
 if (Test-Path $AUTH_PLUGIN_ZIP) {
     Write-Host "✓ $AUTH_PLUGIN_ZIP" -ForegroundColor Green
+}
+
+$JSON_TOOLS_ZIP = Join-Path $JSON_TOOLS_DIR "json-tools.wtplugin.zip"
+if (Test-Path $JSON_TOOLS_ZIP) {
+    Write-Host "✓ $JSON_TOOLS_ZIP" -ForegroundColor Green
 }
 
 Write-Host "========================================" -ForegroundColor Blue

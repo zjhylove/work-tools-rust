@@ -21,6 +21,10 @@ cd "$SCRIPT_DIR/auth-plugin/frontend"
 npm run build
 echo "✓ auth-plugin 前端构建完成"
 
+cd "$SCRIPT_DIR/json-tools/frontend"
+npm run build
+echo "✓ json-tools 前端构建完成"
+
 # 2. 编译 Rust 动态库
 echo ""
 echo "🔨 编译 Rust 动态库..."
@@ -31,6 +35,10 @@ echo "✓ password-manager 动态库编译完成"
 cd "$SCRIPT_DIR/auth-plugin"
 cargo build --release
 echo "✓ auth-plugin 动态库编译完成"
+
+cd "$SCRIPT_DIR/json-tools"
+cargo build --release
+echo "✓ json-tools 动态库编译完成"
 
 # 3. 打包插件
 echo ""
@@ -44,3 +52,4 @@ echo ""
 echo "插件包位置:"
 echo "  - $SCRIPT_DIR/password-manager/password-manager.wtplugin.zip"
 echo "  - $SCRIPT_DIR/auth-plugin/auth.wtplugin.zip"
+echo "  - $SCRIPT_DIR/json-tools/json-tools.wtplugin.zip"
