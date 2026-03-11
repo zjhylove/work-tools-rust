@@ -34,7 +34,11 @@ pub fn run() {
     }
 
     // 创建插件管理器
-    let plugin_manager = Arc::new(PluginManager::new().expect("无法创建插件管理器"));
+    let plugin_manager = Arc::new(
+        PluginManager::new()
+            .inspect_err(|e| tracing::error!("创建插件管理器失败: {}", e))
+            .expect("无法创建插件管理器"),
+    );
 
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
@@ -46,7 +50,7 @@ pub fn run() {
             let manager = plugin_manager.clone();
             tauri::async_runtime::spawn(async move {
                 if let Err(e) = manager.init().await {
-                    eprintln!("插件管理器初始化失败: {}", e);
+                    tracing::error!("插件管理器初始化失败: {}", e);
                 }
             });
 

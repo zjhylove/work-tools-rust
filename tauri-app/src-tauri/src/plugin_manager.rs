@@ -65,12 +65,21 @@ impl PluginManager {
 
     /// 创建新的插件管理器
     pub fn new() -> Result<Self> {
-        let user_dirs =
-            directories::UserDirs::new().ok_or_else(|| anyhow::anyhow!("无法找到用户主目录"))?;
+        let user_dirs = directories::UserDirs::new()
+            .ok_or_else(|| anyhow::anyhow!("无法找到用户主目录"))?;
+
         let plugin_dir = user_dirs.home_dir().join(".worktools/plugins");
 
         // 创建插件目录
-        std::fs::create_dir_all(&plugin_dir).context("创建插件目录失败")?;
+        std::fs::create_dir_all(&plugin_dir)
+            .inspect_err(|e| {
+                tracing::error!(
+                    plugin_dir = %plugin_dir.display(),
+                    "创建插件目录失败: {}",
+                    e
+                );
+            })
+            .context("创建插件目录失败")?;
 
         Ok(Self {
             plugins: RwLock::new(HashMap::new()),
@@ -86,10 +95,23 @@ impl PluginManager {
         self.plugins.write().await.clear();
 
         // 扫描插件目录
-        let entries = std::fs::read_dir(&self.plugin_dir).context("读取插件目录失败")?;
+        let entries = std::fs::read_dir(&self.plugin_dir)
+            .inspect_err(|e| {
+                tracing::error!(
+                    plugin_dir = %self.plugin_dir.display(),
+                    "读取插件目录失败: {}",
+                    e
+                );
+            })
+            .context("读取插件目录失败")?;
 
         for entry in entries {
-            let entry = entry?;
+            let entry = entry
+                .inspect_err(|e| {
+                    tracing::error!("读取目录项失败: {}", e);
+                })
+                .context("读取目录项失败")?;
+
             let path = entry.path();
 
             // 查找动态库文件
@@ -149,16 +171,35 @@ impl PluginManager {
 
         unsafe {
             // 加载动态库
-            let library = Library::new(lib_path).context("加载动态库失败")?;
+            let library = Library::new(lib_path)
+                .inspect_err(|e| {
+                    tracing::error!(
+                        lib_path = %lib_path.display(),
+                        "加载动态库失败: {}",
+                        e
+                    );
+                })
+                .context("加载动态库失败")?;
 
             // 获取 plugin_create 函数
             let create: Symbol<PluginCreateFn> = library
                 .get(b"plugin_create")
+                .inspect_err(|e| {
+                    tracing::error!(
+                        lib_path = %lib_path.display(),
+                        "未找到 plugin_create 导出函数: {}",
+                        e
+                    );
+                })
                 .context("未找到 plugin_create 导出函数")?;
 
             // 调用工厂函数创建插件实例
             let plugin_ptr = create();
             if plugin_ptr.is_null() {
+                tracing::error!(
+                    lib_path = %lib_path.display(),
+                    "plugin_create 返回空指针"
+                );
                 anyhow::bail!("plugin_create 返回空指针");
             }
 
@@ -166,6 +207,11 @@ impl PluginManager {
 
             // 初始化插件
             if let Err(e) = plugin.init() {
+                tracing::error!(
+                    lib_path = %lib_path.display(),
+                    "插件初始化失败: {}",
+                    e
+                );
                 anyhow::bail!("插件初始化失败: {}", e);
             }
 
@@ -220,7 +266,10 @@ impl PluginManager {
 
         let plugin = plugins
             .get(plugin_id)
-            .ok_or_else(|| anyhow::anyhow!("插件不存在: {}", plugin_id))?;
+            .ok_or_else(|| {
+                tracing::error!(plugin_id = %plugin_id, "插件不存在");
+                anyhow::anyhow!("插件不存在: {}", plugin_id)
+            })?;
 
         Ok(plugin.instance.get_view())
     }
@@ -236,11 +285,26 @@ impl PluginManager {
 
         let plugin = plugins
             .get_mut(plugin_id)
-            .ok_or_else(|| anyhow::anyhow!("插件不存在: {}", plugin_id))?;
+            .ok_or_else(|| {
+                tracing::error!(
+                    plugin_id = %plugin_id,
+                    method = %method,
+                    "插件不存在"
+                );
+                anyhow::anyhow!("插件不存在: {}", plugin_id)
+            })?;
 
         plugin
             .instance
             .handle_call(method, params)
+            .inspect_err(|e| {
+                tracing::error!(
+                    plugin_id = %plugin_id,
+                    method = %method,
+                    "插件方法调用失败: {}",
+                    e
+                );
+            })
             .map_err(|e| anyhow::anyhow!("插件方法调用失败: {}", e))
     }
 }
