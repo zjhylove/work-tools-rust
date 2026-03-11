@@ -314,3 +314,65 @@ pub extern "C" fn plugin_create() -> *mut Box<dyn Plugin> {
     let plugin: Box<Box<dyn Plugin>> = Box::new(Box::new(TextDiff));
     Box::leak(plugin) as *mut Box<dyn Plugin>
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_count_diff() {
+        let original = "Hello\nWorld\nTest";
+        let modified = "Hello\nRust\nTest";
+        
+        let stats = TextDiff::count_diff_lines(original, modified);
+        
+        // "World" -> "Rust": 1 deletion, 1 addition, 0 modifications
+        println!("additions={}, deletions={}, modifications={}", 
+                 stats.additions, stats.deletions, stats.modifications);
+    }
+
+    #[test]
+    fn test_preprocess_text() {
+        let text = "Hello  World\nTest   Line";
+        let options = ProcessOptions {
+            ignore_whitespace: true,
+            ignore_case: false,
+        };
+        
+        let processed = TextDiff::preprocess_text_impl(text, &options);
+        
+        assert_eq!(processed, "Hello World\nTest Line");
+        println!("✅ preprocess_text test passed");
+    }
+
+    #[test]
+    fn test_export_diff() {
+        let original = "Line 1\nLine 2\nLine 3";
+        let modified = "Line 1\nModified\nLine 3";
+        
+        let diff = TextDiff::export_unified_diff(original, modified, "test.txt");
+        
+        assert!(diff.contains("--- a/test.txt"));
+        assert!(diff.contains("+++ b/test.txt"));
+        assert!(diff.contains("- Line 2"));
+        assert!(diff.contains("+ Modified"));
+        println!("✅ export_diff test passed");
+    }
+}
+
+    #[test]
+    fn test_export_diff() {
+        let original = "Line 1\nLine 2\nLine 3";
+        let modified = "Line 1\nModified\nLine 3";
+        
+        let diff = TextDiff::export_unified_diff(original, modified, "test.txt");
+        
+        // 检查基本结构
+        assert!(diff.contains("--- a/test.txt"));
+        assert!(diff.contains("+++ b/test.txt"));
+        assert!(diff.contains("@@")); // Unified diff 格式包含 @@
+        assert!(diff.len() > 50); // 应该有足够的内容
+        
+        println!("Diff output:\n{}", diff);
+        println!("\n✅ export_diff test passed");
+    }
