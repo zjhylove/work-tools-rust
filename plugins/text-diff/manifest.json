@@ -1,0 +1,21 @@
+{
+  "id": "text-diff",
+  "name": "文本比对",
+  "description": "实时文本比对工具,支持差异高亮、文件导入导出、差异导航",
+  "version": "1.0.0",
+  "icon": "🔍",
+  "author": "Work Tools Team",
+  "homepage": "https://github.com/worktools/text-diff",
+  "files": {
+    "macos": "libtext_diff.dylib",
+    "linux": "libtext_diff.so",
+    "windows": "text_diff.dll"
+  },
+  "assets": {
+    "entry": "index.html"
+  },
+  "permissions": [
+    "filesystem",
+    "clipboard"
+  ]
+}

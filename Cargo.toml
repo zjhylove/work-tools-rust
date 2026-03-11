@@ -5,6 +5,7 @@ members = [
     "plugins/password-manager",
     "plugins/auth-plugin",
     "plugins/json-tools",
+    "plugins/text-diff",
     "tauri-app/src-tauri",
 ]
 resolver = "2"
