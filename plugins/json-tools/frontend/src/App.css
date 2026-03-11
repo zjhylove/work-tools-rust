@@ -26,28 +26,116 @@
 
 /* 工具栏 */
 .json-toolbar {
-  padding: 8px 12px;
+  padding: 16px 20px;
   background: var(--bg-secondary);
   border-bottom: 1px solid var(--border-color);
   display: flex;
   justify-content: space-between;
   align-items: center;
   flex-shrink: 0;
-  min-height: 40px;
+  min-height: 56px;
 }
 
 .toolbar-group {
   display: flex;
-  gap: 4px;
+  gap: 12px;
 }
 
-.btn-tool {
-  padding: 6px 10px;
+.toolbar-group-left {
+  margin-right: auto;
+}
+
+.toolbar-group-right {
+  margin-left: 12px;
+}
+
+/* 主操作按钮 - 格式化 */
+.btn-tool-primary {
+  padding: 8px 16px;
+  background: var(--accent);
+  color: white;
+  border: 1px solid var(--accent);
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+
+.btn-tool-primary:hover:not(:disabled) {
+  background: var(--accent-hover);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-sm);
+}
+
+.btn-tool-primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  background: var(--text-tertiary);
+  border-color: var(--text-tertiary);
+}
+
+/* 次要操作按钮 - 压缩、转义、去转义 */
+.btn-tool-secondary {
+  padding: 8px 16px;
   background: var(--bg-primary);
   color: var(--text-primary);
   border: 1px solid var(--border-color);
   border-radius: 6px;
-  font-size: 12px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+
+.btn-tool-secondary:hover:not(:disabled) {
+  background: var(--hover-bg);
+  border-color: var(--accent);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-sm);
+}
+
+.btn-tool-secondary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* 辅助操作按钮 - 全展开、全折叠、删除选中 */
+.btn-tool-tertiary {
+  padding: 8px 12px;
+  background: var(--bg-primary);
+  color: var(--text-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+
+.btn-tool-tertiary:hover:not(:disabled) {
+  background: var(--hover-bg);
+  border-color: var(--text-secondary);
+  color: var(--text-primary);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-sm);
+}
+
+.btn-tool-tertiary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn-tool {
+  padding: 8px 16px;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  font-size: 13px;
   font-weight: 500;
   cursor: pointer;
   transition: all 0.2s;
@@ -66,43 +154,89 @@
   cursor: not-allowed;
 }
 
-/* 成功提示 */
+/* 成功提示 - 固定在页面顶部(与密码管理器一致) */
 .json-success {
-  padding: 6px 12px;
+  position: fixed;
+  top: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 12px 20px;
   background: #f0f9f4;
-  border: 1px solid #4caf50;
-  border-radius: 6px;
+  border: 2px solid #4caf50;
+  border-radius: 10px;
   color: #2e7d32;
-  font-size: 12px;
+  font-size: 14px;
   font-weight: 500;
-  margin: 6px 12px 0 12px;
   display: flex;
   align-items: center;
   gap: 6px;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.18);
+  z-index: 1000;
   animation: slideDown 0.3s ease;
-  flex-shrink: 0;
 }
 
-/* 错误提示 */
+/* 错误提示 - 绝对定位在编辑器下方 */
 .json-error {
-  padding: 6px 12px;
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  padding: 12px 20px;
   background: #fee;
-  border: 1px solid #f88;
-  border-radius: 6px;
+  border-top: 2px solid #f88;
+  border-radius: 0;
   color: #c33;
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 500;
-  margin: 6px 12px 0 12px;
   display: flex;
   align-items: center;
   gap: 6px;
-  flex-shrink: 0;
+  box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.1);
+  z-index: 100;
+  animation: slideUp 0.3s ease;
 }
 
-@keyframes slideDown {
+.error-message {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+}
+
+.error-title {
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.error-details {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+}
+
+.error-location {
+  color: #a33;
+  font-weight: 600;
+  background: rgba(220, 53, 69, 0.1);
+  padding: 2px 8px;
+  border-radius: 4px;
+  align-self: flex-start;
+}
+
+.error-suggestion {
+  color: #2e7d32;
+  font-weight: 500;
+  background: rgba(46, 125, 50, 0.1);
+  padding: 2px 8px;
+  border-radius: 4px;
+  align-self: flex-start;
+}
+
+@keyframes slideUp {
   from {
     opacity: 0;
-    transform: translateY(-6px);
+    transform: translateY(10px);
   }
   to {
     opacity: 1;
@@ -110,21 +244,53 @@
   }
 }
 
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+}
+
 /* 双面板容器 */
 .json-workspace {
   display: flex;
-  gap: 1px;
+  gap: 16px;
   flex: 1;
   overflow: hidden;
-  background: var(--border-color);
+  padding: 20px;
+  background: var(--bg-secondary);
 }
 
-.json-editor-panel,
+.json-editor-panel-wrapper {
+  flex: 1;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.json-editor-panel {
+  flex: 1;
+  background: var(--bg-primary);
+  overflow: auto;
+  min-width: 0;
+  padding: 16px;
+  border-radius: 8px;
+  box-shadow: var(--shadow-sm);
+}
+
 .json-tree-panel {
   flex: 1;
   background: var(--bg-primary);
   overflow: auto;
   min-width: 0;
+  padding: 16px;
+  border-radius: 8px;
+  box-shadow: var(--shadow-sm);
 }
 
 /* 隐藏滚动条但保持滚动功能 */
@@ -155,7 +321,7 @@
   width: 100%;
   height: 100%;
   border: none;
-  padding: 12px;
+  padding: 16px;
   font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', 'Courier New', monospace;
   font-size: 13px;
   line-height: 1.5;
@@ -163,6 +329,7 @@
   background: var(--bg-primary);
   color: var(--text-primary);
   box-sizing: border-box;
+  border-radius: 8px;
 }
 
 .json-editor:focus {
@@ -175,10 +342,11 @@
 
 /* 树形视图 */
 .json-tree {
-  padding: 12px;
+  padding: 16px;
   font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', 'Courier New', monospace;
   font-size: 13px;
   line-height: 1.5;
+  border-radius: 8px;
 }
 
 .tree-node {
@@ -247,16 +415,51 @@
 /* 空状态 */
 .empty-state {
   text-align: center;
-  padding: 60px 20px;
-  color: var(--text-tertiary);
+  padding: 80px 40px;
+  color: var(--text-secondary);
 }
 
 .empty-icon {
-  font-size: 48px;
-  margin-bottom: 12px;
-  opacity: 0.5;
+  font-size: 64px;
+  margin-bottom: 16px;
+  opacity: 0.6;
 }
 
-.empty-text {
+.empty-title {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 8px;
+}
+
+.empty-description {
   font-size: 14px;
+  color: var(--text-secondary);
+  line-height: 1.6;
+}
+
+/* 底部状态栏 */
+.json-statusbar {
+  padding: 12px 20px;
+  background: var(--bg-secondary);
+  border-top: 1px solid var(--border-color);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 12px;
+  color: var(--text-secondary);
+  flex-shrink: 0;
+}
+
+.statusbar-left,
+.statusbar-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.status-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
 }

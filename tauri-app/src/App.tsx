@@ -207,11 +207,9 @@ export default function App() {
                       display: "flex",
                       alignItems: "center",
                       justifyContent: "center",
-                      background:
-                        selectedPlugin === plugin.id
-                          ? "var(--accent)"
-                          : "var(--bg-tertiary)",
+                      background: "var(--bg-tertiary)",
                       borderRadius: "8px",
+                      transition: "all 0.15s ease",
                     }}
                   >
                     {plugin.icon}
