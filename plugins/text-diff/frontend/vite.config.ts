@@ -15,6 +15,15 @@ export default defineConfig({
           if (assetInfo.name === 'index.html') return 'index.html';
           if (assetInfo.name?.endsWith('.css')) return 'styles.css';
           return 'main.js';
+        },
+        // 减少代码分割 - 将所有代码打包成少量文件
+        manualChunks: (id) => {
+          // 将 Monaco 的所有模块合并到一个文件
+          if (id.includes('monaco-editor')) {
+            return 'monaco';
+          }
+          // 其他模块合并
+          return 'vendor';
         }
       }
     }
