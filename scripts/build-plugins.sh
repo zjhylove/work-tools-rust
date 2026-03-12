@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # 插件打包脚本
-# 用于构建并打包密码管理器、双因素验证和 JSON 工具插件
+# 用于构建并打包密码管理器、双因素验证、JSON 工具和文本对比插件
 
 set -e  # 遇到错误立即退出
 
@@ -23,7 +23,7 @@ echo -e "${BLUE}========================================${NC}"
 echo ""
 
 # 检查环境
-echo -e "${YELLOW}[1/6] 检查构建环境...${NC}"
+echo -e "${YELLOW}[1/7] 检查构建环境...${NC}"
 if ! command -v cargo &> /dev/null; then
     echo -e "${RED}✗ 错误: 未找到 cargo${NC}"
     exit 1
@@ -37,14 +37,14 @@ echo -e "${GREEN}✓ 构建环境检查通过${NC}"
 echo ""
 
 # 编译 Rust 动态库
-echo -e "${YELLOW}[2/6] 编译 Rust 动态库...${NC}"
+echo -e "${YELLOW}[2/7] 编译 Rust 动态库...${NC}"
 cd "${PROJECT_ROOT}"
 cargo build --release
 echo -e "${GREEN}✓ 动态库编译完成${NC}"
 echo ""
 
 # 构建密码管理器插件
-echo -e "${YELLOW}[3/6] 构建密码管理器插件...${NC}"
+echo -e "${YELLOW}[3/7] 构建密码管理器插件...${NC}"
 PASSWORD_MANAGER_DIR="${PLUGINS_DIR}/password-manager"
 PASSWORD_MANAGER_FRONTEND="${PASSWORD_MANAGER_DIR}/frontend"
 
@@ -81,7 +81,7 @@ fi
 echo ""
 
 # 构建双因素验证插件
-echo -e "${YELLOW}[4/6] 构建双因素验证插件...${NC}"
+echo -e "${YELLOW}[4/7] 构建双因素验证插件...${NC}"
 AUTH_PLUGIN_DIR="${PLUGINS_DIR}/auth-plugin"
 AUTH_PLUGIN_FRONTEND="${AUTH_PLUGIN_DIR}/frontend"
 
@@ -118,7 +118,7 @@ fi
 echo ""
 
 # 构建JSON工具插件
-echo -e "${YELLOW}[5/6] 构建 JSON 工具插件...${NC}"
+echo -e "${YELLOW}[5/7] 构建 JSON 工具插件...${NC}"
 JSON_TOOLS_DIR="${PLUGINS_DIR}/json-tools"
 JSON_TOOLS_FRONTEND="${JSON_TOOLS_DIR}/frontend"
 
@@ -154,8 +154,45 @@ else
 fi
 echo ""
 
+# 构建文本对比插件
+echo -e "${YELLOW}[6/7] 构建文本对比插件...${NC}"
+TEXT_DIFF_DIR="${PLUGINS_DIR}/text-diff"
+TEXT_DIFF_FRONTEND="${TEXT_DIFF_DIR}/frontend"
+
+if [ -d "${TEXT_DIFF_FRONTEND}" ]; then
+    echo "  → 构建文本对比前端..."
+    cd "${TEXT_DIFF_FRONTEND}"
+    npm run build > /dev/null 2>&1
+    echo -e "${GREEN}  ✓ 前端构建完成${NC}"
+
+    echo "  → 打包文本对比插件..."
+    cd "${TEXT_DIFF_DIR}"
+
+    # 删除旧的包
+    rm -f text-diff.wtplugin.zip
+
+    # 复制动态库
+    cp "${TARGET_DIR}/libtext_diff.dylib" .
+
+    # 打包
+    zip -r text-diff.wtplugin.zip \
+        manifest.json \
+        libtext_diff.dylib \
+        assets/ > /dev/null
+
+    # 清理临时文件
+    rm -f libtext_diff.dylib
+
+    # 显示包信息
+    PACKAGE_SIZE=$(du -h text-diff.wtplugin.zip | cut -f1)
+    echo -e "${GREEN}  ✓ 打包完成: text-diff.wtplugin.zip (${PACKAGE_SIZE})${NC}"
+else
+    echo -e "${YELLOW}  ⚠ 文本对比前端目录不存在,跳过${NC}"
+fi
+echo ""
+
 # 显示打包结果
-echo -e "${YELLOW}[6/6] 打包结果汇总${NC}"
+echo -e "${YELLOW}[7/7] 打包结果汇总${NC}"
 echo -e "${BLUE}========================================${NC}"
 
 if [ -f "${PASSWORD_MANAGER_DIR}/password-manager.wtplugin.zip" ]; then
@@ -168,6 +205,10 @@ fi
 
 if [ -f "${JSON_TOOLS_DIR}/json-tools.wtplugin.zip" ]; then
     echo -e "${GREEN}✓${NC} ${JSON_TOOLS_DIR}/json-tools.wtplugin.zip"
+fi
+
+if [ -f "${TEXT_DIFF_DIR}/text-diff.wtplugin.zip" ]; then
+    echo -e "${GREEN}✓${NC} ${TEXT_DIFF_DIR}/text-diff.wtplugin.zip"
 fi
 
 echo -e "${BLUE}========================================${NC}"

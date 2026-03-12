@@ -12,9 +12,11 @@ export default defineConfig({
         entryFileNames: 'main.js',
         chunkFileNames: 'main.js',
         assetFileNames: (assetInfo) => {
-          if (assetInfo.name === 'index.html') return 'index.html';
-          if (assetInfo.name?.endsWith('.css')) return 'styles.css';
-          return 'main.js';
+          const name = assetInfo.names?.[0] ?? '';
+          if (name === 'index.html') return 'index.html';
+          if (name.endsWith('.css')) return 'styles.css';
+          // 字体文件和其他资源使用原始名称
+          return '[name].[ext]';
         },
         // 减少代码分割 - 将所有代码打包成少量文件
         manualChunks: (id) => {
