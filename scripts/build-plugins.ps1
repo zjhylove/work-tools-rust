@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 ﻿# 插件打包脚本 (PowerShell)
 # 用于构建并打包密码管理器、双因素验证和 JSON 工具插件
 
@@ -9,6 +10,15 @@ $ErrorActionPreference = "Stop"
 
 # 项目根目录
 $PROJECT_ROOT = Split-Path -Parent $PSScriptRoot
+=======
+# 插件打包脚本 (PowerShell)
+# 用于构建并打包密码管理器、双因素验证和 JSON 工具插件
+
+$ErrorActionPreference = "Stop"
+
+# 项目根目录
+$PROJECT_ROOT = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
+>>>>>>> 713fb380a703968981c6d5fef029cd3ecbb99b18
 $PLUGINS_DIR = Join-Path $PROJECT_ROOT "plugins"
 $TARGET_DIR = Join-Path $PROJECT_ROOT "target\release"
 
@@ -45,6 +55,7 @@ $PASSWORD_MANAGER_FRONTEND = Join-Path $PASSWORD_MANAGER_DIR "frontend"
 if (Test-Path $PASSWORD_MANAGER_FRONTEND) {
     Write-Host "  → 构建密码管理器前端..."
     Push-Location $PASSWORD_MANAGER_FRONTEND
+<<<<<<< HEAD
 
     # 检查并安装依赖
     if (-not (Test-Path "node_modules")) {
@@ -52,6 +63,8 @@ if (Test-Path $PASSWORD_MANAGER_FRONTEND) {
         npm install | Out-Null
     }
 
+=======
+>>>>>>> 713fb380a703968981c6d5fef029cd3ecbb99b18
     npm run build | Out-Null
     Pop-Location
     Write-Host "  ✓ 前端构建完成" -ForegroundColor Green
@@ -90,6 +103,7 @@ $AUTH_PLUGIN_FRONTEND = Join-Path $AUTH_PLUGIN_DIR "frontend"
 if (Test-Path $AUTH_PLUGIN_FRONTEND) {
     Write-Host "  → 构建双因素验证前端..."
     Push-Location $AUTH_PLUGIN_FRONTEND
+<<<<<<< HEAD
 
     # 检查并安装依赖
     if (-not (Test-Path "node_modules")) {
@@ -97,6 +111,8 @@ if (Test-Path $AUTH_PLUGIN_FRONTEND) {
         npm install | Out-Null
     }
 
+=======
+>>>>>>> 713fb380a703968981c6d5fef029cd3ecbb99b18
     npm run build | Out-Null
     Pop-Location
     Write-Host "  ✓ 前端构建完成" -ForegroundColor Green
@@ -135,6 +151,7 @@ $JSON_TOOLS_FRONTEND = Join-Path $JSON_TOOLS_DIR "frontend"
 if (Test-Path $JSON_TOOLS_FRONTEND) {
     Write-Host "  → 构建 JSON 工具前端..."
     Push-Location $JSON_TOOLS_FRONTEND
+<<<<<<< HEAD
 
     # 检查并安装依赖
     if (-not (Test-Path "node_modules")) {
@@ -142,6 +159,8 @@ if (Test-Path $JSON_TOOLS_FRONTEND) {
         npm install | Out-Null
     }
 
+=======
+>>>>>>> 713fb380a703968981c6d5fef029cd3ecbb99b18
     npm run build | Out-Null
     Pop-Location
     Write-Host "  ✓ 前端构建完成" -ForegroundColor Green
