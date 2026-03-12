@@ -1,0 +1,42 @@
+Work Tools Platform - 版本信息
+=================================
+
+生成时间: 2026-03-03 21:43
+
+主应用
+------
+名称: Work Tools
+版本: 1.0.0
+架构: aarch64 (Apple Silicon)
+文件: Work Tools_1.0.0_aarch64.dmg
+大小: 5.4 MB
+
+插件列表
+--------
+1. 密码管理器 (Password Manager)
+   - 版本: 1.0.0
+   - 文件: password-manager.wtplugin.zip
+   - 大小: 362 KB
+   - 动态库: libpassword_manager.dylib (711 KB)
+   - 功能: 安全存储和管理密码
+
+2. 双因素验证 (Auth Plugin / TOTP)
+   - 版本: 1.0.0
+   - 文件: auth.wtplugin.zip
+   - 大小: 358 KB
+   - 动态库: libauth_plugin.dylib (709 KB)
+   - 功能: TOTP 双因素验证码生成
+
+系统要求
+--------
+- macOS 11.0+ (Big Sur 或更高版本)
+- Apple Silicon (M1/M2/M3)
+- 至少 4 GB RAM
+- 至少 50 MB 磁盘空间
+
+技术栈
+-----
+- 后端: Rust + Tauri 2.x
+- 前端: Solid.js + TypeScript + Tailwind CSS
+- 插件架构: 动态库加载 (libloading)
+- 插件包格式: ZIP (.wtplugin.zip)

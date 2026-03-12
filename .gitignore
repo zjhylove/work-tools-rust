@@ -1,0 +1,43 @@
+# Build artifacts
+target/
+target/*
+dist/
+*.wtplugin.zip
+plugins/**/*.wtplugin.zip
+
+# Dependencies
+node_modules/*
+node_modules
+
+# Git worktrees
+.worktrees/
+
+# Backup files
+*.backup
+*.bak
+*~
+*.solidjs.backup
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+
+# Test artifacts
+*.log
+logs/
+
+# Tauri
+src-tauri/capabilities/
+src-tauri/gen/
+plugins/.DS_Store
