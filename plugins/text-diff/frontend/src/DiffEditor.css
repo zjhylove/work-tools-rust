@@ -1,19 +1,125 @@
-.diff-editor-container {
-  flex: 1;
-  width: 100%;
-  height: 100%;
+/* 删除的行 - 红色背景 (增强对比度) */
+.line-delete {
+  background-color: #ffc1c1 !important;
+  border-left: 3px solid #dc3545 !important;
+}
+
+.glyph-delete {
+  background-color: #dc3545 !important;
+}
+
+/* 新增的行 - 绿色背景 (增强对比度) */
+.line-insert {
+  background-color: #b7ebc1 !important;
+  border-left: 3px solid #28a745 !important;
+}
+
+.glyph-insert {
+  background-color: #28a745 !important;
+}
+
+/* 修改的行 - 黄色背景 */
+.line-modified {
+  background-color: #fff3b8 !important;
+  border-left: 3px solid #ffc107 !important;
+}
+
+/* 确保 Monaco Editor 占满容器 */
+.original-editor,
+.modified-editor {
+  height: 100% !important;
+  min-height: 600px !important;
+  position: relative;
+}
+
+/* 编辑器容器样式 */
+.original-editor .monaco-editor,
+.modified-editor .monaco-editor {
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
   overflow: hidden;
 }
 
-/* 自定义差异高亮颜色 */
-.monaco-editor .diagonal-fill {
-  background-color: #ffeba0;
+/* 左右分隔线 - 更明显 */
+.original-editor {
+  position: relative;
 }
 
-.monaco-editor .line-add {
-  background-color: #c6f6d5;
+.original-editor::after {
+  content: '';
+  position: absolute;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: linear-gradient(to bottom, #e0e0e0, #d0d0d0, #e0e0e0);
+  box-shadow: 1px 0 3px rgba(0, 0, 0, 0.1);
+}
+
+/* 编辑器标题区域 */
+.original-editor::before,
+.modified-editor::before {
+  content: attr(data-label);
+  display: block;
+  padding: 8px 16px;
+  background: #f8f9fa;
+  border-bottom: 1px solid #dee2e6;
+  font-size: 13px;
+  font-weight: 600;
+  color: #495057;
+  text-align: center;
+}
+
+/* 自定义差异高亮颜色 - 浅色主题 */
+.monaco-editor .diagonal-fill {
+  background-color: #ffeba0 !important;
+}
+
+/* 添加行差异高亮 */
+.monaco-editor .line-insert {
+  background-color: #d4edda !important; /* 绿色 - 新增 */
 }
 
 .monaco-editor .line-delete {
-  background-color: #fed7d7;
+  background-color: #f8d7da !important; /* 红色 - 删除 */
+}
+
+.monaco-editor .line-modified {
+  background-color: #fff3cd !important; /* 黄色 - 修改 */
+}
+
+/* 字符差异高亮 */
+.monaco-editor .char-insert {
+  background-color: #a3cfbb !important;
+}
+
+.monaco-editor .char-delete {
+  background-color: #e8b4b9 !important;
+}
+
+/* 确保差异标记可见 */
+.monaco-editor .view-lines .line-delete {
+  background-color: #ffeef0 !important;
+}
+
+.monaco-editor .view-lines .line-insert {
+  background-color: #e6ffed !important;
+}
+
+/* 差异概览侧边栏 */
+.monaco-editor .diff-overview-widget {
+  background-color: #f0f0f0;
+}
+
+.monaco-editor .diff-overview-widget .insert-sign {
+  background-color: #28a745;
+}
+
+.monaco-editor .diff-overview-widget .delete-sign {
+  background-color: #dc3545;
+}
+
+/* 调整编辑器边框以匹配整体风格 */
+.monaco-editor {
+  border-radius: var(--radius-md, 8px);
 }

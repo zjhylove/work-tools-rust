@@ -2,6 +2,7 @@ import { useState, useCallback, useEffect, useRef } from 'react';
 import { DiffEditor } from './DiffEditor';
 import { Toolbar } from './Toolbar';
 import './App.css';
+import './Toolbar.css';
 
 // 声明 Tauri API
 declare global {
@@ -13,13 +14,17 @@ declare global {
 }
 
 function App() {
-  const [originalText, setOriginalText] = useState('');
-  const [modifiedText, setModifiedText] = useState('');
+  const [originalText, setOriginalText] = useState(
+    'Line 1\nLine 2\nLine 3\nLine 4'
+  );
+  const [modifiedText, setModifiedText] = useState(
+    'Line 1\nModified Line 2\nLine 3\nNew Line 5'
+  );
   const [options, setOptions] = useState({
     ignoreWhitespace: false,
     ignoreCase: false
   });
-  const [diffStats, setDiffStats] = useState({
+  const [diffStats] = useState({
     additions: 0,
     deletions: 0,
     modifications: 0
@@ -29,26 +34,43 @@ function App() {
 
   // 文件打开处理
   const handleFileOpen = useCallback(async (side: 'left' | 'right') => {
+    console.log('[TextDiff] handleFileOpen called with side:', side);
     setError(null);
 
     try {
-      // 临时测试路径 - 实际应该使用 Tauri 文件对话框
-      const testFilePath = '/tmp/test.txt';
+      // 直接使用 prompt 输入文件路径 (iframe 环境中无法使用 Tauri dialog)
+      console.log('[TextDiff] Showing prompt...');
+      const userInput = prompt('请输入文件路径:\n\n例如: /tmp/test-original.txt');
+      console.log('[TextDiff] User input:', userInput);
+
+      if (!userInput) {
+        // 用户取消了选择
+        console.log('[TextDiff] User cancelled');
+        return;
+      }
+
+      // 调用后端加载文件
+      console.log('[TextDiff] Calling pluginAPI...');
       const result = await window.pluginAPI.call('text-diff', 'load_text_file', {
-        file_path: testFilePath
+        file_path: userInput
       });
+      console.log('[TextDiff] PluginAPI result:', result);
 
       if (result.error) {
+        console.error('[TextDiff] Error from plugin:', result.error);
         setError(result.error);
         return;
       }
 
       if (side === 'left') {
+        console.log('[TextDiff] Setting original text');
         setOriginalText(result.content);
       } else {
+        console.log('[TextDiff] Setting modified text');
         setModifiedText(result.content);
       }
     } catch (err: any) {
+      console.error('[TextDiff] Exception:', err);
       setError(`加载文件失败: ${err.message}`);
     }
   }, []);
@@ -95,7 +117,9 @@ function App() {
     setOptions(prev => ({ ...prev, ignoreCase: value }));
   }, []);
 
-  // 计算差异统计
+  // 计算差异统计 (暂时禁用,避免阻塞)
+  // TODO: 修复后端 count_diff 方法的性能问题后再启用
+  /*
   useEffect(() => {
     if (!originalText || !modifiedText) {
       setDiffStats({ additions: 0, deletions: 0, modifications: 0 });
@@ -104,18 +128,23 @@ function App() {
 
     const calculateStats = async () => {
       try {
+        console.log('[TextDiff] Calculating diff stats...');
         const stats = await window.pluginAPI.call('text-diff', 'count_diff', {
           original: originalText,
           modified: modifiedText
         });
+        console.log('[TextDiff] Diff stats:', stats);
         setDiffStats(stats);
       } catch (err: any) {
-        console.error('Count diff error:', err);
+        console.error('[TextDiff] Count diff error:', err);
+        // 失败时使用默认值
+        setDiffStats({ additions: 0, deletions: 0, modifications: 0 });
       }
     };
 
     calculateStats();
   }, [originalText, modifiedText]);
+  */
 
   // 键盘快捷键
   useEffect(() => {
