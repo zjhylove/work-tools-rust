@@ -1,26 +1,6 @@
-import { useEffect, useRef, useState } from 'react';
-import * as monaco from 'monaco-editor';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { diffLines } from 'diff';
 import './DiffEditor.css';
-
-// 配置 Monaco Worker
-function configureMonacoWorkers() {
-  if ((window as any).MonacoEnvironment) return;
-
-  class DummyWorker {
-    onmessage: ((message: any) => void) | null = null;
-    addEventListener(_type: string, _listener: any) {}
-    removeEventListener(_type: string, _listener: any) {}
-    postMessage(_message: any) {}
-    terminate() {}
-  }
-
-  (window as any).MonacoEnvironment = {
-    getWorker: function (_moduleId: string, _label: string) {
-      return new DummyWorker() as any;
-    }
-  };
-}
 
 interface DiffEditorProps {
   originalText: string;
@@ -29,182 +9,169 @@ interface DiffEditorProps {
     ignoreWhitespace: boolean;
     ignoreCase: boolean;
   };
-  onEditorReady?: (editor: any) => void;
+  onEditorReady?: (editor: { goToDiff: (direction: 'next' | 'previous') => void }) => void;
+}
+
+interface DiffLine {
+  content: string;
+  type: 'delete' | 'insert' | 'equal' | 'empty';
+  lineNumber?: number;
 }
 
 export function DiffEditor({
   originalText,
   modifiedText,
-  options: _options,
-  onEditorReady: _onEditorReady
+  options,
+  onEditorReady
 }: DiffEditorProps) {
-  const originalContainerRef = useRef<HTMLDivElement>(null);
-  const modifiedContainerRef = useRef<HTMLDivElement>(null);
-  const originalEditorRef = useRef<any>(null);
-  const modifiedEditorRef = useRef<any>(null);
-  const originalDecorationsRef = useRef<string[]>([]);
-  const modifiedDecorationsRef = useRef<string[]>([]);
-  const [isInitialized, setIsInitialized] = useState(false);
+  const [originalLines, setOriginalLines] = useState<DiffLine[]>([]);
+  const [modifiedLines, setModifiedLines] = useState<DiffLine[]>([]);
+  const diffIndicesRef = useRef<number[]>([]);
 
-  // 初始化两个编辑器
-  useEffect(() => {
-    if (!originalContainerRef.current || !modifiedContainerRef.current) {
-      return;
+  // 预处理文本
+  const preprocessText = useCallback((text: string): string => {
+    let result = text;
+
+    if (options.ignoreCase) {
+      result = result.toLowerCase();
     }
 
-    console.log('[DiffEditor] Initializing editors...');
-    configureMonacoWorkers();
-
-    // 创建原始文本编辑器
-    const originalEditor = monaco.editor.create(originalContainerRef.current, {
-      value: originalText,
-      language: 'plaintext',
-      theme: 'vs',
-      readOnly: true,
-      minimap: { enabled: false },
-      scrollBeyondLastLine: false,
-      fontSize: 14,
-      lineHeight: 21,
-      fontFamily: "'Menlo', 'Monaco', 'Courier New', monospace",
-    });
-
-    // 创建修改后的文本编辑器
-    const modifiedEditor = monaco.editor.create(modifiedContainerRef.current, {
-      value: modifiedText,
-      language: 'plaintext',
-      theme: 'vs',
-      readOnly: false,
-      minimap: { enabled: false },
-      scrollBeyondLastLine: false,
-      fontSize: 14,
-      lineHeight: 21,
-      fontFamily: "'Menlo', 'Monaco', 'Courier New', monospace",
-    });
-
-    originalEditorRef.current = originalEditor;
-    modifiedEditorRef.current = modifiedEditor;
-    setIsInitialized(true);
-
-    console.log('[DiffEditor] Editors created');
-
-    return () => {
-      originalEditor.dispose();
-      modifiedEditor.dispose();
-    };
-  }, []);
-
-  // 更新内容并应用差异高亮
-  useEffect(() => {
-    if (!originalEditorRef.current || !modifiedEditorRef.current || !isInitialized) {
-      return;
+    if (options.ignoreWhitespace) {
+      result = result
+        .split('\n')
+        .map(line => line.trim().split(/\s+/).join(' '))
+        .join('\n');
     }
 
-    console.log('[DiffEditor] Updating content and highlights...');
+    return result;
+  }, [options.ignoreCase, options.ignoreWhitespace]);
 
-    // 计算差异
-    const changes = diffLines(originalText, modifiedText);
-    console.log('[DiffEditor] Diff changes:', changes);
+  // 计算差异
+  useEffect(() => {
+    console.log('[DiffEditor] Computing diff...');
 
-    // 更新编辑器内容
-    originalEditorRef.current.setValue(originalText);
-    modifiedEditorRef.current.setValue(modifiedText);
+    const preprocessedOriginal = preprocessText(originalText);
+    const preprocessedModified = preprocessText(modifiedText);
 
-    // 清除旧装饰
-    originalDecorationsRef.current = originalEditorRef.current.deltaDecorations(originalDecorationsRef.current, []);
-    modifiedDecorationsRef.current = modifiedEditorRef.current.deltaDecorations(modifiedDecorationsRef.current, []);
+    const changes = diffLines(preprocessedOriginal, preprocessedModified);
 
-    // 应用差异高亮
-    const originalDecorations: any[] = [];
-    const modifiedDecorations: any[] = [];
-
+    const newOriginalLines: DiffLine[] = [];
+    const newModifiedLines: DiffLine[] = [];
+    const newDiffIndices: number[] = [];
+    let diffIndex = 0;
     let originalLineNum = 1;
     let modifiedLineNum = 1;
 
     changes.forEach((part) => {
-      // 计算 line count
-      let lineCount = 1;
-      if (part.count) {
-        lineCount = part.count;
-      } else if (part.value) {
-        lineCount = part.value.split('\n').filter((line: string) => line !== '').length;
-      }
-
-      console.log('[DiffEditor] Processing part:', {
-        removed: part.removed,
-        added: part.added,
-        lineCount,
-        originalLineNum,
-        modifiedLineNum
-      });
+      const lines = part.value.split('\n').filter(line => line !== '');
 
       if (part.removed) {
-        // 删除的行 - 在左侧编辑器高亮
-        for (let i = 0; i < lineCount; i++) {
-          originalDecorations.push({
-            range: new (monaco as any).Range(originalLineNum + i, 1, originalLineNum + i, 1),
-            options: {
-              isWholeLine: true,
-              className: 'line-delete',
-              glyphMarginClassName: 'glyph-delete'
-            }
+        // 删除的行
+        lines.forEach((line) => {
+          newOriginalLines.push({
+            content: line,
+            type: 'delete',
+            lineNumber: originalLineNum++
           });
-        }
-        originalLineNum += lineCount;
+          newModifiedLines.push({
+            content: '',
+            type: 'empty'
+          });
+          newDiffIndices.push(diffIndex);
+        });
+        diffIndex++;
       } else if (part.added) {
-        // 新增的行 - 在右侧编辑器高亮
-        for (let i = 0; i < lineCount; i++) {
-          modifiedDecorations.push({
-            range: new (monaco as any).Range(modifiedLineNum + i, 1, modifiedLineNum + i, 1),
-            options: {
-              isWholeLine: true,
-              className: 'line-insert',
-              glyphMarginClassName: 'glyph-insert'
-            }
+        // 新增的行
+        lines.forEach((line) => {
+          newOriginalLines.push({
+            content: '',
+            type: 'empty'
           });
-        }
-        modifiedLineNum += lineCount;
+          newModifiedLines.push({
+            content: line,
+            type: 'insert',
+            lineNumber: modifiedLineNum++
+          });
+          newDiffIndices.push(diffIndex);
+        });
+        diffIndex++;
       } else {
-        // 未修改的行
-        originalLineNum += lineCount;
-        modifiedLineNum += lineCount;
+        // 相同的行
+        lines.forEach((line) => {
+          newOriginalLines.push({
+            content: line,
+            type: 'equal',
+            lineNumber: originalLineNum++
+          });
+          newModifiedLines.push({
+            content: line,
+            type: 'equal',
+            lineNumber: modifiedLineNum++
+          });
+        });
       }
     });
 
-    // 应用装饰
-    originalDecorationsRef.current = originalEditorRef.current.deltaDecorations(originalDecorationsRef.current, originalDecorations);
-    modifiedDecorationsRef.current = modifiedEditorRef.current.deltaDecorations(modifiedDecorationsRef.current, modifiedDecorations);
+    setOriginalLines(newOriginalLines);
+    setModifiedLines(newModifiedLines);
+    diffIndicesRef.current = newDiffIndices;
 
-    console.log('[DiffEditor] Applied decorations:', {
-      original: originalDecorations.length,
-      modified: modifiedDecorations.length
+    console.log('[DiffEditor] Diff computed:', {
+      totalChanges: diffIndex,
+      originalLines: newOriginalLines.length,
+      modifiedLines: newModifiedLines.length
     });
+  }, [originalText, modifiedText, preprocessText]);
 
-  }, [originalText, modifiedText, isInitialized]);
+  // 暴露导航方法
+  useEffect(() => {
+    if (onEditorReady) {
+      onEditorReady({
+        goToDiff: (direction: 'next' | 'previous') => {
+          const indices = diffIndicesRef.current;
+          if (indices.length === 0) return;
+
+          console.log('[DiffEditor] goToDiff:', direction, 'Total diffs:', indices.length);
+          // TODO: 实现差异导航高亮
+        }
+      });
+    }
+  }, [onEditorReady]);
+
+  // 渲染行
+  const renderLine = (line: DiffLine) => {
+    return (
+      <div
+        className={`diff-line diff-line-${line.type}`}
+        data-line-number={line.lineNumber || ''}
+      >
+        <span className="line-number">{line.lineNumber || ''}</span>
+        <span className="line-content">{line.content || '\u00A0'}</span>
+      </div>
+    );
+  };
 
   return (
-    <div style={{
-      display: 'flex',
-      width: '100%',
-      height: '100%',
-      minHeight: '600px',
-      gap: '0',
-      background: 'white',
-      borderRadius: '12px',
-      overflow: 'hidden',
-      boxShadow: '0 4px 12px rgba(0, 0, 0, 0.08)'
-    }}>
-      <div
-        ref={originalContainerRef}
-        style={{ flex: 1 }}
-        className="original-editor"
-        data-label="原始文件"
-      />
-      <div
-        ref={modifiedContainerRef}
-        style={{ flex: 1 }}
-        className="modified-editor"
-        data-label="修改后的文件"
-      />
+    <div className="diff-editor-container">
+      <div className="diff-editor-pane">
+        <div className="pane-header">原始文件</div>
+        <div className="pane-content original-pane">
+          {originalLines.map((line, index) => (
+            <div key={index}>{renderLine(line)}</div>
+          ))}
+        </div>
+      </div>
+
+      <div className="diff-divider" />
+
+      <div className="diff-editor-pane">
+        <div className="pane-header">修改后的文件</div>
+        <div className="pane-content modified-pane">
+          {modifiedLines.map((line, index) => (
+            <div key={index}>{renderLine(line)}</div>
+          ))}
+        </div>
+      </div>
     </div>
   );
 }
