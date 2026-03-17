@@ -352,21 +352,6 @@ mod tests {
         
         let diff = TextDiff::export_unified_diff(original, modified, "test.txt");
         
-        assert!(diff.contains("--- a/test.txt"));
-        assert!(diff.contains("+++ b/test.txt"));
-        assert!(diff.contains("- Line 2"));
-        assert!(diff.contains("+ Modified"));
-        println!("✅ export_diff test passed");
-    }
-}
-
-    #[test]
-    fn test_export_diff() {
-        let original = "Line 1\nLine 2\nLine 3";
-        let modified = "Line 1\nModified\nLine 3";
-        
-        let diff = TextDiff::export_unified_diff(original, modified, "test.txt");
-        
         // 检查基本结构
         assert!(diff.contains("--- a/test.txt"));
         assert!(diff.contains("+++ b/test.txt"));
@@ -376,3 +361,4 @@ mod tests {
         println!("Diff output:\n{}", diff);
         println!("\n✅ export_diff test passed");
     }
+}
