@@ -1,0 +1,89 @@
+.file-picker-button {
+  position: relative;
+  display: inline-block;
+}
+
+.file-picker-button button {
+  padding: 6px 12px;
+  background: #fff;
+  border: 1.5px solid #dee2e6;
+  border-radius: 6px;
+  color: #495057;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 150px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.file-picker-button button:hover:not(:disabled) {
+  background: #007aff;
+  color: #fff;
+  border-color: #007aff;
+  transform: translateY(-1px);
+  box-shadow: 0 3px 6px rgba(0, 122, 255, 0.25);
+}
+
+.file-picker-button button:active:not(:disabled) {
+  transform: translateY(0);
+  box-shadow: none;
+}
+
+.file-picker-button button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.file-picker-button button.loading {
+  animation: pulse 1.5s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
+}
+
+.file-picker-error {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  right: 0;
+  padding: 8px 12px;
+  background: #d32f2f;
+  color: #fff;
+  font-size: 12px;
+  border-radius: 4px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  z-index: 1000;
+  animation: slideDown 0.3s ease;
+  white-space: nowrap;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* 拖放时的高亮 */
+.file-picker-button.drag-over {
+  background: #e3f2fd;
+  border-color: #2196f3;
+}
+
+.file-picker-button.drag-over button {
+  background: #2196f3;
+  color: #fff;
+  border-color: #2196f3;
+}

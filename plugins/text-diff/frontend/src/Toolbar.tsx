@@ -1,8 +1,11 @@
 import { useState, useCallback } from 'react';
+import './Toolbar.css';
 
 interface ToolbarProps {
-  onOpenLeft: () => void;
-  onOpenRight: () => void;
+  originalFileName: string;
+  modifiedFileName: string;
+  onOpenOriginal: () => void;
+  onOpenModified: () => void;
   onNextDiff: () => void;
   onPreviousDiff: () => void;
   onExport: () => void;
@@ -16,8 +19,10 @@ interface ToolbarProps {
 }
 
 export function Toolbar({
-  onOpenLeft,
-  onOpenRight,
+  originalFileName,
+  modifiedFileName,
+  onOpenOriginal,
+  onOpenModified,
   onNextDiff,
   onPreviousDiff,
   onExport,
@@ -45,18 +50,18 @@ export function Toolbar({
       {/* 文件操作组 */}
       <div className="toolbar-group">
         <button
-          onClick={onOpenLeft}
+          onClick={onOpenOriginal}
           title="打开左侧文件 (Ctrl+O)"
-          className="icon-btn"
+          className="icon-btn file-btn"
         >
-          📂
+          📂 {originalFileName.length > 20 ? originalFileName.substring(0, 20) + '...' : originalFileName}
         </button>
         <button
-          onClick={onOpenRight}
+          onClick={onOpenModified}
           title="打开右侧文件 (Ctrl+Shift+O)"
-          className="icon-btn"
+          className="icon-btn file-btn"
         >
-          📂
+          📂 {modifiedFileName.length > 20 ? modifiedFileName.substring(0, 20) + '...' : modifiedFileName}
         </button>
       </div>
 
@@ -112,9 +117,9 @@ export function Toolbar({
       {/* 统计信息 - 最右侧 */}
       <div className="toolbar-group stats-group">
         <span className="stats-label">统计:</span>
-        <span className="stats-value additions">➕{diffStats.additions}</span>
-        <span className="stats-value deletions">➖{diffStats.deletions}</span>
-        <span className="stats-value modifications">✏️{diffStats.modifications}</span>
+        <span className="stats-value additions">+{diffStats.additions}</span>
+        <span className="stats-value deletions">-{diffStats.deletions}</span>
+        <span className="stats-value modifications">~{diffStats.modifications}</span>
       </div>
     </div>
   );

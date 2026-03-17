@@ -63,5 +63,17 @@
   opacity: 0.8;
 }
 
-/* 工具栏样式已在 Toolbar.tsx 中定义 */
-/* 这里只需要确保工具栏和编辑器的布局正确 */
+/* 编辑器容器 */
+.editor-container {
+  display: flex;
+  flex: 1;
+  gap: 12px;
+  overflow: hidden;
+  min-height: 0; /* 重要: 允许 flex 子项缩小 */
+}
+
+.left-pane,
+.right-pane {
+  flex: 1;
+  min-width: 0; /* 重要: 允许 flex 子项缩小到内容宽度以下 */
+}
