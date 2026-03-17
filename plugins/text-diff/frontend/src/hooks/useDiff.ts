@@ -117,14 +117,26 @@ export function useDiff(
     // 计算统计
     const additions = newModifiedLines.filter(l => l.type === 'insert').length;
     const deletions = newOriginalLines.filter(l => l.type === 'delete').length;
-    const modifications = Math.min(additions, deletions);
+
+    // 修改数：查找既有删除又有新增的位置
+    let modifications = 0;
+    const maxLength = Math.max(newOriginalLines.length, newModifiedLines.length);
+    for (let i = 0; i < maxLength; i++) {
+      const origLine = newOriginalLines[i];
+      const modLine = newModifiedLines[i];
+
+      // 如果同一位置既有删除又有新增，这是一个修改
+      if (origLine?.type === 'delete' && modLine?.type === 'insert') {
+        modifications++;
+      }
+    }
 
     const result: DiffResult = {
       originalLines: newOriginalLines,
       modifiedLines: newModifiedLines,
       stats: {
-        additions: additions - modifications,
-        deletions: deletions - modifications,
+        additions,
+        deletions,
         modifications
       }
     };
