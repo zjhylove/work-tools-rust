@@ -16,7 +16,8 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  min-width: 150px;
+  min-width: 100px;
+  max-width: 200px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;

@@ -112,32 +112,37 @@
 }
 
 .stats-label {
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 600;
   color: #6c757d;
-  margin-right: 6px;
+  margin-right: 8px;
   line-height: 24px;
 }
 
 .stats-value {
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 700;
-  padding: 2px 6px;
+  padding: 3px 8px;
   border-radius: 4px; /* 保留圆角,便于识别 */
   background: rgba(0, 0, 0, 0.05); /* 极淡的背景 */
   line-height: 20px;
+  min-width: 30px;
+  text-align: center;
 }
 
 .stats-value.additions {
   color: #28a745;
+  background-color: rgba(40, 167, 69, 0.1);
 }
 
 .stats-value.deletions {
   color: #dc3545;
+  background-color: rgba(220, 53, 69, 0.1);
 }
 
 .stats-value.modifications {
-  color: #ffc107;
+  color: #d39c00;
+  background-color: rgba(255, 193, 7, 0.15);
 }
 
 /* 响应式 */

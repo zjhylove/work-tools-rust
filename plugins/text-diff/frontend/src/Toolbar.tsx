@@ -34,6 +34,17 @@ export function Toolbar({
   onToggleIgnoreCase,
   diffStats
 }: ToolbarProps) {
+  // 提取短文件名用于显示
+  const getShortFileName = (fullName: string) => {
+    if (!fullName || fullName === '原始文件' || fullName === '修改后的文件') {
+      return fullName;
+    }
+    // 从完整路径中提取文件名
+    const parts = fullName.split(/[/\\]/);
+    const fileName = parts[parts.length - 1];
+    // 如果文件名超过15个字符，截断并添加省略号
+    return fileName.length > 15 ? fileName.substring(0, 12) + '...' : fileName;
+  };
   const [ignoreWhitespace, setIgnoreWhitespace] = useState(false);
   const [ignoreCase, setIgnoreCase] = useState(false);
 
@@ -58,14 +69,14 @@ export function Toolbar({
           title="打开左侧文件 (Ctrl+O)"
           className="icon-btn file-btn"
         >
-          📂 {originalFileName.length > 20 ? originalFileName.substring(0, 20) + '...' : originalFileName}
+          📂 {getShortFileName(originalFileName)}
         </button>
         <button
           onClick={onOpenModified}
           title="打开右侧文件 (Ctrl+Shift+O)"
           className="icon-btn file-btn"
         >
-          📂 {modifiedFileName.length > 20 ? modifiedFileName.substring(0, 20) + '...' : modifiedFileName}
+          📂 {getShortFileName(modifiedFileName)}
         </button>
       </div>
 
@@ -131,10 +142,18 @@ export function Toolbar({
 
       {/* 统计信息 - 最右侧 */}
       <div className="toolbar-group stats-group">
-        <span className="stats-label">统计:</span>
-        <span className="stats-value additions">+{diffStats.additions}</span>
-        <span className="stats-value deletions">-{diffStats.deletions}</span>
-        <span className="stats-value modifications">~{diffStats.modifications}</span>
+        <span className="stats-label">差异:</span>
+        <span className="stats-value additions" title={`新增 ${diffStats.additions} 行`}>
+          +{diffStats.additions}
+        </span>
+        <span className="stats-value deletions" title={`删除 ${diffStats.deletions} 行`}>
+          -{diffStats.deletions}
+        </span>
+        {diffStats.modifications > 0 && (
+          <span className="stats-value modifications" title={`修改 ${diffStats.modifications} 处`}>
+            ±{diffStats.modifications}
+          </span>
+        )}
       </div>
     </div>
   );
