@@ -67,9 +67,15 @@
 .editor-container {
   display: flex;
   flex: 1;
-  gap: 12px;
+  gap: 0; /* 恢复为0，面板紧贴 */
   overflow: hidden;
   min-height: 0; /* 重要: 允许 flex 子项缩小 */
+
+  /* 恢复原来的容器样式 */
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  padding: 1px; /* 为分割线留空间 */
 }
 
 .left-pane,

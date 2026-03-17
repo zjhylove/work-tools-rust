@@ -4,8 +4,17 @@
   flex-direction: column;
   overflow: hidden;
   background: #fff;
-  border: 1px solid #e5e5e5;
-  border-radius: 8px;
+  /* 移除外边框，使用原来的无边框设计 */
+}
+
+.editor-pane:first-child {
+  border-top-left-radius: 12px;
+  border-bottom-left-radius: 12px;
+}
+
+.editor-pane:last-child {
+  border-top-right-radius: 12px;
+  border-bottom-right-radius: 12px;
 }
 
 .pane-header {
@@ -149,4 +158,21 @@
   50% {
     opacity: 0.7;
   }
+}
+
+/* 分割线 - 恢复原来的视觉元素 */
+.editor-pane + .editor-pane {
+  position: relative;
+}
+
+.editor-pane + .editor-pane::before {
+  content: '';
+  position: absolute;
+  left: -6px;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: linear-gradient(to bottom, #e0e0e0, #d0d0d0, #e0e0e0);
+  box-shadow: 1px 0 3px rgba(0, 0, 0, 0.1);
+  z-index: 10;
 }
