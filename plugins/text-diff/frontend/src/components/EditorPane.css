@@ -134,3 +134,19 @@
 .highlight-highlight-delete:hover {
   background-color: #ffdce0;
 }
+
+/* 当前差异位置高亮 (用于导航) */
+.highlight-line.current-diff {
+  background-color: #fff3b8 !important; /* 黄色高亮 */
+  border-left: 3px solid #ffc107;
+  animation: pulse-highlight 1s ease-in-out;
+}
+
+@keyframes pulse-highlight {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.7;
+  }
+}

@@ -94,6 +94,7 @@ export function EditorPane({
               {displayLines.map((line, index) => (
                 <div
                   key={index}
+                  data-line-index={index}
                   className={`highlight-line highlight-line-${line.type}`}
                 >
                   {line.content || '\u00A0'}

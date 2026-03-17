@@ -3,6 +3,8 @@ import { EditorPane } from './components/EditorPane';
 import { Toolbar } from './Toolbar';
 import { useDiff, type DiffOptions } from './hooks/useDiff';
 import { useDebounce } from './hooks/useDebounce';
+import { useSyncScroll } from './hooks/useSyncScroll';
+import { useDiffNavigation } from './hooks/useDiffNavigation';
 import './App.css';
 
 // 声明 Tauri API
@@ -42,6 +44,18 @@ function App() {
 
   // 计算差异 (使用防抖后的文本)
   const diffResult = useDiff(debouncedOriginal, debouncedModified, options);
+
+  // 同步滚动
+  const {
+    handleLeftScroll,
+    handleRightScroll
+  } = useSyncScroll({ enabled: true });
+
+  // 差异导航
+  const navigation = useDiffNavigation(
+    diffResult.originalLines,
+    diffResult.modifiedLines
+  );
 
   // 文件加载处理
   const handleOriginalFileLoaded = useCallback((content: string, fileName: string) => {
@@ -97,14 +111,14 @@ function App() {
     setOptions(prev => ({ ...prev, ignoreCase: value }));
   }, []);
 
-  // 占位符函数 (差异导航)
+  // 差异导航
   const handleNextDiff = useCallback(() => {
-    console.log('下一个差异 (待实现)');
-  }, []);
+    navigation.goToNextAndScroll();
+  }, [navigation]);
 
   const handlePreviousDiff = useCallback(() => {
-    console.log('上一个差异 (待实现)');
-  }, []);
+    navigation.goToPreviousAndScroll();
+  }, [navigation]);
 
   return (
     <div className="app">
@@ -160,6 +174,7 @@ function App() {
           content={originalText}
           diffLines={diffResult.originalLines}
           onChange={handleOriginalChange}
+          onScroll={handleLeftScroll}
           placeholder="在此输入或粘贴原始文件内容..."
           className="left-pane"
         />
@@ -169,6 +184,7 @@ function App() {
           content={modifiedText}
           diffLines={diffResult.modifiedLines}
           onChange={handleModifiedChange}
+          onScroll={handleRightScroll}
           placeholder="在此输入或粘贴修改后的文件内容..."
           className="right-pane"
         />
