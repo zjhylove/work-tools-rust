@@ -4,11 +4,13 @@ import './Toolbar.css';
 interface ToolbarProps {
   originalFileName: string;
   modifiedFileName: string;
+  viewMode: 'side-by-side' | 'inline';
   onOpenOriginal: () => void;
   onOpenModified: () => void;
   onNextDiff: () => void;
   onPreviousDiff: () => void;
   onExport: () => void;
+  onToggleViewMode: () => void;
   onToggleIgnoreWhitespace: (value: boolean) => void;
   onToggleIgnoreCase: (value: boolean) => void;
   diffStats: {
@@ -21,11 +23,13 @@ interface ToolbarProps {
 export function Toolbar({
   originalFileName,
   modifiedFileName,
+  viewMode,
   onOpenOriginal,
   onOpenModified,
   onNextDiff,
   onPreviousDiff,
   onExport,
+  onToggleViewMode,
   onToggleIgnoreWhitespace,
   onToggleIgnoreCase,
   diffStats
@@ -83,6 +87,17 @@ export function Toolbar({
           />
           <span>忽略大小写</span>
         </label>
+      </div>
+
+      {/* 视图模式切换 */}
+      <div className="toolbar-group">
+        <button
+          onClick={onToggleViewMode}
+          title="切换视图模式"
+          className="view-toggle-btn"
+        >
+          {viewMode === 'side-by-side' ? '📊 并排' : '📄 行内'}
+        </button>
       </div>
 
       {/* 导出按钮 */}

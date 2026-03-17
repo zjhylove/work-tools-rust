@@ -1,5 +1,6 @@
 import { useState, useCallback } from 'react';
 import { EditorPane } from './components/EditorPane';
+import { InlineDiffView } from './components/InlineDiffView';
 import { Toolbar } from './Toolbar';
 import { useDiff, type DiffOptions } from './hooks/useDiff';
 import { useDebounce } from './hooks/useDebounce';
@@ -34,6 +35,9 @@ function App() {
     ignoreWhitespace: false,
     ignoreCase: false
   });
+
+  // 视图模式
+  const [viewMode, setViewMode] = useState<'side-by-side' | 'inline'>('side-by-side');
 
   // 错误状态
   const [error, setError] = useState<string | null>(null);
@@ -111,6 +115,11 @@ function App() {
     setOptions(prev => ({ ...prev, ignoreCase: value }));
   }, []);
 
+  // 视图模式切换
+  const handleToggleViewMode = useCallback(() => {
+    setViewMode(prev => prev === 'side-by-side' ? 'inline' : 'side-by-side');
+  }, []);
+
   // 差异导航
   const handleNextDiff = useCallback(() => {
     navigation.goToNextAndScroll();
@@ -132,6 +141,7 @@ function App() {
       <Toolbar
         originalFileName={originalFileName || '原始文件'}
         modifiedFileName={modifiedFileName || '修改后的文件'}
+        viewMode={viewMode}
         onOpenOriginal={() => {
           const input = prompt('请输入原始文件路径:');
           if (input) {
@@ -163,32 +173,42 @@ function App() {
         onNextDiff={handleNextDiff}
         onPreviousDiff={handlePreviousDiff}
         onExport={handleExport}
+        onToggleViewMode={handleToggleViewMode}
         onToggleIgnoreWhitespace={handleToggleIgnoreWhitespace}
         onToggleIgnoreCase={handleToggleIgnoreCase}
         diffStats={diffResult.stats}
       />
 
-      <div className="editor-container">
-        <EditorPane
-          title={originalFileName || '原始文件'}
-          content={originalText}
-          diffLines={diffResult.originalLines}
-          onChange={handleOriginalChange}
-          onScroll={handleLeftScroll}
-          placeholder="在此输入或粘贴原始文件内容..."
-          className="left-pane"
-        />
+      {viewMode === 'side-by-side' ? (
+        <div className="editor-container">
+          <EditorPane
+            title={originalFileName || '原始文件'}
+            content={originalText}
+            diffLines={diffResult.originalLines}
+            onChange={handleOriginalChange}
+            onScroll={handleLeftScroll}
+            placeholder="在此输入或粘贴原始文件内容..."
+            className="left-pane"
+          />
 
-        <EditorPane
-          title={modifiedFileName || '修改后的文件'}
-          content={modifiedText}
-          diffLines={diffResult.modifiedLines}
-          onChange={handleModifiedChange}
-          onScroll={handleRightScroll}
-          placeholder="在此输入或粘贴修改后的文件内容..."
-          className="right-pane"
-        />
-      </div>
+          <EditorPane
+            title={modifiedFileName || '修改后的文件'}
+            content={modifiedText}
+            diffLines={diffResult.modifiedLines}
+            onChange={handleModifiedChange}
+            onScroll={handleRightScroll}
+            placeholder="在此输入或粘贴修改后的文件内容..."
+            className="right-pane"
+          />
+        </div>
+      ) : (
+        <div className="inline-container">
+          <InlineDiffView
+            originalLines={diffResult.originalLines}
+            modifiedLines={diffResult.modifiedLines}
+          />
+        </div>
+      )}
     </div>
   );
 }

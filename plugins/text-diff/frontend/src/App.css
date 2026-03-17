@@ -77,3 +77,10 @@
   flex: 1;
   min-width: 0; /* 重要: 允许 flex 子项缩小到内容宽度以下 */
 }
+
+/* 行内视图容器 */
+.inline-container {
+  flex: 1;
+  overflow: hidden;
+  min-height: 0;
+}
