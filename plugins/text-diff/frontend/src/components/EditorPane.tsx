@@ -1,5 +1,6 @@
-import { useRef, useEffect } from 'react';
+import { useRef, useEffect, useMemo } from 'react';
 import type { ChangeEvent } from 'react';
+import type { DiffLine } from '../hooks/useDiff';
 import './EditorPane.css';
 
 export interface EditorPaneProps {
@@ -10,6 +11,7 @@ export interface EditorPaneProps {
   onChange?: (content: string) => void;
   onScroll?: (scrollTop: number) => void;
   className?: string;
+  diffLines?: DiffLine[];  // 新增: 差异信息
 }
 
 export function EditorPane({
@@ -19,10 +21,23 @@ export function EditorPane({
   placeholder = '请输入或粘贴文本...',
   onChange,
   onScroll,
-  className = ''
+  className = '',
+  diffLines = []
 }: EditorPaneProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const highlightRef = useRef<HTMLDivElement>(null);
+
+  // 如果没有差异信息,使用原始内容
+  const displayLines = useMemo(() => {
+    if (diffLines.length === 0) {
+      return content.split('\n').map((line, index) => ({
+        content: line,
+        type: 'equal' as const,
+        lineNumber: index + 1
+      }));
+    }
+    return diffLines;
+  }, [content, diffLines]);
 
   // 同步滚动
   const handleScroll = () => {
@@ -61,24 +76,27 @@ export function EditorPane({
         <div className="editor-container">
           {/* 行号列 */}
           <div className="line-numbers">
-            {content.split('\n').map((_, index) => (
+            {displayLines.map((line, index) => (
               <div key={index} className="line-number">
-                {index + 1}
+                {line.lineNumber > 0 ? line.lineNumber : ''}
               </div>
             ))}
           </div>
 
           {/* 编辑区域 */}
           <div className="editor-wrapper">
-            {/* 高亮层 (暂时为空,后续添加差异高亮) */}
+            {/* 高亮层 - 显示差异高亮 */}
             <div
               ref={highlightRef}
               className="highlight-layer"
               aria-hidden="true"
             >
-              {content.split('\n').map((line, index) => (
-                <div key={index} className="highlight-line">
-                  {line || '\u00A0'}
+              {displayLines.map((line, index) => (
+                <div
+                  key={index}
+                  className={`highlight-line highlight-line-${line.type}`}
+                >
+                  {line.content || '\u00A0'}
                 </div>
               ))}
             </div>

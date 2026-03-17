@@ -1,6 +1,8 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback } from 'react';
 import { EditorPane } from './components/EditorPane';
 import { Toolbar } from './Toolbar';
+import { useDiff, type DiffOptions } from './hooks/useDiff';
+import { useDebounce } from './hooks/useDebounce';
 import './App.css';
 
 // 声明 Tauri API
@@ -25,43 +27,21 @@ function App() {
   const [originalFileName, setOriginalFileName] = useState<string>('');
   const [modifiedFileName, setModifiedFileName] = useState<string>('');
 
-  // 差异统计
-  const [diffStats, setDiffStats] = useState({
-    additions: 0,
-    deletions: 0,
-    modifications: 0
+  // 差异选项
+  const [options, setOptions] = useState<DiffOptions>({
+    ignoreWhitespace: false,
+    ignoreCase: false
   });
 
   // 错误状态
   const [error, setError] = useState<string | null>(null);
 
-  // 计算差异统计 (简化版,暂时用前端计算)
-  useEffect(() => {
-    const calculateStats = () => {
-      const origLines = originalText.split('\n');
-      const modLines = modifiedText.split('\n');
+  // 防抖处理文本输入 (300ms)
+  const debouncedOriginal = useDebounce(originalText, 300);
+  const debouncedModified = useDebounce(modifiedText, 300);
 
-      // 简单的差异检测 (实际应该使用 diff 库)
-      let additions = 0;
-      let deletions = 0;
-
-      modLines.forEach(line => {
-        if (!origLines.includes(line)) additions++;
-      });
-
-      origLines.forEach(line => {
-        if (!modLines.includes(line)) deletions++;
-      });
-
-      const modifications = Math.min(additions, deletions);
-      additions -= modifications;
-      deletions -= modifications;
-
-      setDiffStats({ additions, deletions, modifications });
-    };
-
-    calculateStats();
-  }, [originalText, modifiedText]);
+  // 计算差异 (使用防抖后的文本)
+  const diffResult = useDiff(debouncedOriginal, debouncedModified, options);
 
   // 文件加载处理
   const handleOriginalFileLoaded = useCallback((content: string, fileName: string) => {
@@ -74,7 +54,7 @@ function App() {
     setModifiedFileName(fileName);
   }, []);
 
-  // 文本变化处理
+  // 文本变化处理 (立即更新,但差异计算会防抖)
   const handleOriginalChange = useCallback((content: string) => {
     setOriginalText(content);
   }, []);
@@ -108,24 +88,22 @@ function App() {
     }
   }, [originalText, modifiedText]);
 
-  // 选项切换 (暂时为空,后续实现)
+  // 选项切换
   const handleToggleIgnoreWhitespace = useCallback((value: boolean) => {
-    console.log('忽略空白:', value);
-    // TODO: 实现忽略空白逻辑
+    setOptions(prev => ({ ...prev, ignoreWhitespace: value }));
   }, []);
 
   const handleToggleIgnoreCase = useCallback((value: boolean) => {
-    console.log('忽略大小写:', value);
-    // TODO: 实现忽略大小写逻辑
+    setOptions(prev => ({ ...prev, ignoreCase: value }));
   }, []);
 
   // 占位符函数 (差异导航)
   const handleNextDiff = useCallback(() => {
-    console.log('下一个差异');
+    console.log('下一个差异 (待实现)');
   }, []);
 
   const handlePreviousDiff = useCallback(() => {
-    console.log('上一个差异');
+    console.log('上一个差异 (待实现)');
   }, []);
 
   return (
@@ -138,10 +116,9 @@ function App() {
       )}
 
       <Toolbar
-        originalFileName={originalFileName || '未选择文件'}
-        modifiedFileName={modifiedFileName || '未选择文件'}
+        originalFileName={originalFileName || '原始文件'}
+        modifiedFileName={modifiedFileName || '修改后的文件'}
         onOpenOriginal={() => {
-          // 使用 prompt 作为临时方案
           const input = prompt('请输入原始文件路径:');
           if (input) {
             window.pluginAPI.call('text-diff', 'load_text_file', { file_path: input })
@@ -174,13 +151,14 @@ function App() {
         onExport={handleExport}
         onToggleIgnoreWhitespace={handleToggleIgnoreWhitespace}
         onToggleIgnoreCase={handleToggleIgnoreCase}
-        diffStats={diffStats}
+        diffStats={diffResult.stats}
       />
 
       <div className="editor-container">
         <EditorPane
           title={originalFileName || '原始文件'}
           content={originalText}
+          diffLines={diffResult.originalLines}
           onChange={handleOriginalChange}
           placeholder="在此输入或粘贴原始文件内容..."
           className="left-pane"
@@ -189,6 +167,7 @@ function App() {
         <EditorPane
           title={modifiedFileName || '修改后的文件'}
           content={modifiedText}
+          diffLines={diffResult.modifiedLines}
           onChange={handleModifiedChange}
           placeholder="在此输入或粘贴修改后的文件内容..."
           className="right-pane"

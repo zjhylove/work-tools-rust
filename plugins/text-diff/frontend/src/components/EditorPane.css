@@ -113,15 +113,24 @@
   color: #ccc;
 }
 
-/* 差异高亮样式 (后续使用) */
-.highlight-line.added {
-  background-color: #e6ffed;
+/* 差异高亮样式 */
+.highlight-highlight-equal {
+  background-color: transparent;
 }
 
-.highlight-line.removed {
-  background-color: #ffeef0;
+.highlight-highlight-insert {
+  background-color: #e6ffed;  /* 绿色背景 - 新增 */
 }
 
-.highlight-line.modified {
-  background-color: #fff3b8;
+.highlight-highlight-delete {
+  background-color: #ffeef0;  /* 红色背景 - 删除 */
+}
+
+/* 鼠标悬停时的视觉增强 */
+.highlight-highlight-insert:hover {
+  background-color: #cdffd8;
+}
+
+.highlight-highlight-delete:hover {
+  background-color: #ffdce0;
 }
