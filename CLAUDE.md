@@ -36,7 +36,8 @@ work-tools-rust/
 ├── plugins/                # 插件项目 (动态库)
 │   ├── password-manager/   # 密码管理器
 │   ├── json-tools/         # JSON 工具
-│   └── auth-plugin/        # 双因素验证 (TOTP)
+│   ├── auth-plugin/        # 双因素验证 (TOTP)
+│   └── text-diff/          # 文本比对工具 (Monaco Editor)
 ├── shared/                 # 共享库
 │   ├── types/             # 共享数据类型
 │   └── plugin-api/        # 插件 API 定义 (Plugin trait)
@@ -159,17 +160,58 @@ git push origin v1.0.0
 
 详见 [.github/workflows/build.yml](.github/workflows/build.yml)
 
-### 插件编译
+### 插件编译和打包
+
+**⚠️ 重要**: 项目已升级为自动发现构建系统,无需手动修改构建脚本!
+
+#### 一键构建所有插件 (推荐)
 
 ```bash
-# 编译单个插件
+# Linux/macOS
+bash scripts/build-plugins.sh
+
+# Windows PowerShell
+.\scripts\build-plugins.ps1
+```
+
+**功能**:
+- ✅ 自动扫描 `plugins/` 目录下的所有插件
+- ✅ 读取 `manifest.json` 获取插件配置
+- ✅ 构建前端 (如果有 `frontend/` 目录)
+- ✅ 编译 Rust 动态库
+- ✅ 打包生成 `.wtplugin.zip` 文件
+
+**输出**: 所有插件包会生成在各自的插件目录中:
+```
+plugins/
+├── password-manager/password-manager.wtplugin.zip
+├── json-tools/json-tools.wtplugin.zip
+├── auth-plugin/auth.wtplugin.zip
+└── text-diff/text-diff.wtplugin.zip
+```
+
+#### 手动编译单个插件
+
+```bash
 cd plugins/password-manager
 cargo build --release
-
-# 安装插件到用户目录
-mkdir -p ~/.worktools/plugins/password-manager
-cp target/release/password-manager ~/.worktools/plugins/password-manager/
 ```
+
+#### 快速构建脚本
+
+```bash
+bash plugins/build-all.sh
+```
+
+#### 添加新插件
+
+1. 在 `plugins/` 目录下创建新的插件目录
+2. 创建 `manifest.json` 文件
+3. 运行 `bash scripts/build-plugins.sh`
+
+**就这么简单!** 脚本会自动发现并构建你的新插件。
+
+详见 [插件构建脚本使用说明](scripts/README-BUILD.md)
 
 ### Lint 和格式化
 ```bash

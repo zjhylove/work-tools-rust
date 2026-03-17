@@ -1,7 +1,7 @@
 #!/bin/bash
 
-# 插件打包脚本
-# 用于构建并打包密码管理器、双因素验证、JSON 工具和文本对比插件
+# 插件打包脚本 (自动发现模式)
+# 自动扫描 plugins 目录下的所有插件并打包
 
 set -e  # 遇到错误立即退出
 
@@ -10,6 +10,7 @@ RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
+CYAN='\033[0;36m'
 NC='\033[0m' # No Color
 
 # 项目根目录
@@ -17,206 +18,221 @@ PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 PLUGINS_DIR="${PROJECT_ROOT}/plugins"
 TARGET_DIR="${PROJECT_ROOT}/target/release"
 
-echo -e "${BLUE}========================================${NC}"
-echo -e "${BLUE}  Work Tools 插件打包脚本${NC}"
-echo -e "${BLUE}========================================${NC}"
-echo ""
+# 检测当前平台
+detect_platform() {
+    case "$(uname -s)" in
+        Darwin)
+            echo "macos"
+            ;;
+        Linux)
+            echo "linux"
+            ;;
+        MINGW*|MSYS*|CYGWIN*)
+            echo "windows"
+            ;;
+        *)
+            echo "unknown"
+            ;;
+    esac
+}
 
-# 检查环境
-echo -e "${YELLOW}[1/7] 检查构建环境...${NC}"
-if ! command -v cargo &> /dev/null; then
-    echo -e "${RED}✗ 错误: 未找到 cargo${NC}"
-    exit 1
-fi
+PLATFORM=$(detect_platform)
 
-if ! command -v zip &> /dev/null; then
-    echo -e "${RED}✗ 错误: 未找到 zip 命令${NC}"
-    exit 1
-fi
-echo -e "${GREEN}✓ 构建环境检查通过${NC}"
-echo ""
+# 获取动态库文件名
+get_lib_name() {
+    local manifest_file="$1"
+    local platform="$2"
 
-# 编译 Rust 动态库
-echo -e "${YELLOW}[2/7] 编译 Rust 动态库...${NC}"
-cd "${PROJECT_ROOT}"
-cargo build --release
-echo -e "${GREEN}✓ 动态库编译完成${NC}"
-echo ""
+    # 从 manifest.json 读取文件名
+    if [ "$platform" = "macos" ]; then
+        grep -A 3 '"files"' "$manifest_file" | grep '"macos"' | sed 's/.*: *"\([^"]*\)".*/\1/'
+    elif [ "$platform" = "linux" ]; then
+        grep -A 4 '"files"' "$manifest_file" | grep '"linux"' | sed 's/.*: *"\([^"]*\)".*/\1/'
+    elif [ "$platform" = "windows" ]; then
+        grep -A 5 '"files"' "$manifest_file" | grep '"windows"' | sed 's/.*: *"\([^"]*\)".*/\1/'
+    fi
+}
 
-# 构建密码管理器插件
-echo -e "${YELLOW}[3/7] 构建密码管理器插件...${NC}"
-PASSWORD_MANAGER_DIR="${PLUGINS_DIR}/password-manager"
-PASSWORD_MANAGER_FRONTEND="${PASSWORD_MANAGER_DIR}/frontend"
+# 构建单个插件
+build_plugin() {
+    local plugin_dir="$1"
+    local plugin_name="$(basename "$plugin_dir")"
+    local manifest_file="${plugin_dir}/manifest.json"
+    local frontend_dir="${plugin_dir}/frontend"
 
-if [ -d "${PASSWORD_MANAGER_FRONTEND}" ]; then
-    echo "  → 构建密码管理器前端..."
-    cd "${PASSWORD_MANAGER_FRONTEND}"
-    npm run build > /dev/null 2>&1
-    echo -e "${GREEN}  ✓ 前端构建完成${NC}"
+    # 检查 manifest.json 是否存在
+    if [ ! -f "$manifest_file" ]; then
+        echo -e "${YELLOW}  ⚠ ${plugin_name}: 缺少 manifest.json,跳过${NC}"
+        return 0
+    fi
 
-    echo "  → 打包密码管理器插件..."
-    cd "${PASSWORD_MANAGER_DIR}"
+    # 读取插件信息
+    local plugin_id=$(grep -o '"id"[[:space:]]*:[[:space:]]*"[^"]*"' "$manifest_file" | sed 's/.*: *"\([^"]*\)".*/\1/')
+    local package_name="${plugin_id}.wtplugin.zip"
 
-    # 删除旧的包
-    rm -f password-manager.wtplugin.zip
+    echo -e "${CYAN}→ 构建插件: ${plugin_name} (${plugin_id})${NC}"
 
-    # 复制动态库
-    cp "${TARGET_DIR}/libpassword_manager.dylib" .
+    # 构建前端 (如果存在)
+    if [ -d "$frontend_dir" ]; then
+        echo "  → 构建前端..."
+        cd "$frontend_dir"
+        if npm run build > /dev/null 2>&1; then
+            echo -e "${GREEN}  ✓ 前端构建完成${NC}"
+        else
+            echo -e "${RED}  ✗ 前端构建失败${NC}"
+            return 1
+        fi
+    else
+        echo -e "${YELLOW}  ⚠ 前端目录不存在,跳过前端构建${NC}"
+    fi
 
-    # 打包
-    zip -r password-manager.wtplugin.zip \
-        manifest.json \
-        libpassword_manager.dylib \
-        assets/ > /dev/null
+    # 获取动态库名称
+    local lib_name=$(get_lib_name "$manifest_file" "$PLATFORM")
 
-    # 清理临时文件
-    rm -f libpassword_manager.dylib
+    if [ -z "$lib_name" ]; then
+        echo -e "${RED}  ✗ 无法从 manifest.json 读取动态库配置${NC}"
+        return 1
+    fi
 
-    # 显示包信息
-    PACKAGE_SIZE=$(du -h password-manager.wtplugin.zip | cut -f1)
-    echo -e "${GREEN}  ✓ 打包完成: password-manager.wtplugin.zip (${PACKAGE_SIZE})${NC}"
-else
-    echo -e "${YELLOW}  ⚠ 密码管理器前端目录不存在,跳过${NC}"
-fi
-echo ""
-
-# 构建双因素验证插件
-echo -e "${YELLOW}[4/7] 构建双因素验证插件...${NC}"
-AUTH_PLUGIN_DIR="${PLUGINS_DIR}/auth-plugin"
-AUTH_PLUGIN_FRONTEND="${AUTH_PLUGIN_DIR}/frontend"
-
-if [ -d "${AUTH_PLUGIN_FRONTEND}" ]; then
-    echo "  → 构建双因素验证前端..."
-    cd "${AUTH_PLUGIN_FRONTEND}"
-    npm run build > /dev/null 2>&1
-    echo -e "${GREEN}  ✓ 前端构建完成${NC}"
-
-    echo "  → 打包双因素验证插件..."
-    cd "${AUTH_PLUGIN_DIR}"
-
-    # 删除旧的包
-    rm -f auth.wtplugin.zip
-
-    # 复制动态库
-    cp "${TARGET_DIR}/libauth_plugin.dylib" .
-
-    # 打包
-    zip -r auth.wtplugin.zip \
-        manifest.json \
-        libauth_plugin.dylib \
-        assets/ > /dev/null
-
-    # 清理临时文件
-    rm -f libauth_plugin.dylib
-
-    # 显示包信息
-    PACKAGE_SIZE=$(du -h auth.wtplugin.zip | cut -f1)
-    echo -e "${GREEN}  ✓ 打包完成: auth.wtplugin.zip (${PACKAGE_SIZE})${NC}"
-else
-    echo -e "${YELLOW}  ⚠ 双因素验证前端目录不存在,跳过${NC}"
-fi
-echo ""
-
-# 构建JSON工具插件
-echo -e "${YELLOW}[5/7] 构建 JSON 工具插件...${NC}"
-JSON_TOOLS_DIR="${PLUGINS_DIR}/json-tools"
-JSON_TOOLS_FRONTEND="${JSON_TOOLS_DIR}/frontend"
-
-if [ -d "${JSON_TOOLS_FRONTEND}" ]; then
-    echo "  → 构建 JSON 工具前端..."
-    cd "${JSON_TOOLS_FRONTEND}"
-    npm run build > /dev/null 2>&1
-    echo -e "${GREEN}  ✓ 前端构建完成${NC}"
-
-    echo "  → 打包 JSON 工具插件..."
-    cd "${JSON_TOOLS_DIR}"
+    # 打包插件
+    echo "  → 打包插件..."
+    cd "$plugin_dir"
 
     # 删除旧的包
-    rm -f json-tools.wtplugin.zip
+    rm -f "$package_name"
 
     # 复制动态库
-    cp "${TARGET_DIR}/libjson_tools.dylib" .
+    if [ ! -f "${TARGET_DIR}/${lib_name}" ]; then
+        echo -e "${RED}  ✗ 动态库不存在: ${TARGET_DIR}/${lib_name}${NC}"
+        echo -e "${YELLOW}  提示: 请先运行 'cargo build --release' 编译所有插件${NC}"
+        return 1
+    fi
+
+    cp "${TARGET_DIR}/${lib_name}" .
 
     # 打包
-    zip -r json-tools.wtplugin.zip \
+    zip -r "$package_name" \
         manifest.json \
-        libjson_tools.dylib \
-        assets/ > /dev/null
+        "$lib_name" \
+        assets/ > /dev/null 2>&1 || true
 
     # 清理临时文件
-    rm -f libjson_tools.dylib
+    rm -f "$lib_name"
 
     # 显示包信息
-    PACKAGE_SIZE=$(du -h json-tools.wtplugin.zip | cut -f1)
-    echo -e "${GREEN}  ✓ 打包完成: json-tools.wtplugin.zip (${PACKAGE_SIZE})${NC}"
-else
-    echo -e "${YELLOW}  ⚠ JSON 工具前端目录不存在,跳过${NC}"
-fi
-echo ""
+    if [ -f "$package_name" ]; then
+        PACKAGE_SIZE=$(du -h "$package_name" | cut -f1)
+        echo -e "${GREEN}  ✓ 打包完成: ${package_name} (${PACKAGE_SIZE})${NC}"
+    else
+        echo -e "${RED}  ✗ 打包失败${NC}"
+        return 1
+    fi
 
-# 构建文本对比插件
-echo -e "${YELLOW}[6/7] 构建文本对比插件...${NC}"
-TEXT_DIFF_DIR="${PLUGINS_DIR}/text-diff"
-TEXT_DIFF_FRONTEND="${TEXT_DIFF_DIR}/frontend"
+    echo ""
+}
 
-if [ -d "${TEXT_DIFF_FRONTEND}" ]; then
-    echo "  → 构建文本对比前端..."
-    cd "${TEXT_DIFF_FRONTEND}"
-    npm run build > /dev/null 2>&1
-    echo -e "${GREEN}  ✓ 前端构建完成${NC}"
+# 主函数
+main() {
+    echo -e "${BLUE}========================================${NC}"
+    echo -e "${BLUE}  Work Tools 插件打包脚本${NC}"
+    echo -e "${BLUE}  平台: ${PLATFORM}${NC}"
+    echo -e "${BLUE}========================================${NC}"
+    echo ""
 
-    echo "  → 打包文本对比插件..."
-    cd "${TEXT_DIFF_DIR}"
+    # 检查环境
+    echo -e "${YELLOW}[1/4] 检查构建环境...${NC}"
+    if ! command -v cargo &> /dev/null; then
+        echo -e "${RED}✗ 错误: 未找到 cargo${NC}"
+        exit 1
+    fi
 
-    # 删除旧的包
-    rm -f text-diff.wtplugin.zip
+    if ! command -v zip &> /dev/null; then
+        echo -e "${RED}✗ 错误: 未找到 zip 命令${NC}"
+        exit 1
+    fi
+    echo -e "${GREEN}✓ 构建环境检查通过${NC}"
+    echo ""
 
-    # 复制动态库
-    cp "${TARGET_DIR}/libtext_diff.dylib" .
+    # 编译 Rust 动态库
+    echo -e "${YELLOW}[2/4] 编译 Rust 动态库...${NC}"
+    cd "${PROJECT_ROOT}"
+    cargo build --release
+    echo -e "${GREEN}✓ 动态库编译完成${NC}"
+    echo ""
 
-    # 打包
-    zip -r text-diff.wtplugin.zip \
-        manifest.json \
-        libtext_diff.dylib \
-        assets/ > /dev/null
+    # 扫描并构建所有插件
+    echo -e "${YELLOW}[3/4] 扫描并构建插件...${NC}"
+    echo ""
 
-    # 清理临时文件
-    rm -f libtext_diff.dylib
+    # 统计变量
+    local total_count=0
+    local success_count=0
+    local failed_count=0
+    local skipped_count=0
 
-    # 显示包信息
-    PACKAGE_SIZE=$(du -h text-diff.wtplugin.zip | cut -f1)
-    echo -e "${GREEN}  ✓ 打包完成: text-diff.wtplugin.zip (${PACKAGE_SIZE})${NC}"
-else
-    echo -e "${YELLOW}  ⚠ 文本对比前端目录不存在,跳过${NC}"
-fi
-echo ""
+    # 遍历 plugins 目录
+    for plugin_dir in "${PLUGINS_DIR}"/*; do
+        # 跳过非目录文件
+        if [ ! -d "$plugin_dir" ]; then
+            continue
+        fi
 
-# 显示打包结果
-echo -e "${YELLOW}[7/7] 打包结果汇总${NC}"
-echo -e "${BLUE}========================================${NC}"
+        # 跳过隐藏目录
+        local plugin_name="$(basename "$plugin_dir")"
+        if [[ "$plugin_name" == .* ]]; then
+            continue
+        fi
 
-if [ -f "${PASSWORD_MANAGER_DIR}/password-manager.wtplugin.zip" ]; then
-    echo -e "${GREEN}✓${NC} ${PASSWORD_MANAGER_DIR}/password-manager.wtplugin.zip"
-fi
+        ((total_count++))
 
-if [ -f "${AUTH_PLUGIN_DIR}/auth.wtplugin.zip" ]; then
-    echo -e "${GREEN}✓${NC} ${AUTH_PLUGIN_DIR}/auth.wtplugin.zip"
-fi
+        # 构建插件
+        if build_plugin "$plugin_dir"; then
+            ((success_count++))
+        else
+            ((failed_count++))
+        fi
+    done
 
-if [ -f "${JSON_TOOLS_DIR}/json-tools.wtplugin.zip" ]; then
-    echo -e "${GREEN}✓${NC} ${JSON_TOOLS_DIR}/json-tools.wtplugin.zip"
-fi
+    # 显示构建统计
+    echo -e "${YELLOW}[4/4] 构建统计${NC}"
+    echo -e "${BLUE}========================================${NC}"
+    echo -e "总插件数: ${CYAN}${total_count}${NC}"
+    echo -e "${GREEN}成功: ${success_count}${NC}"
+    if [ $failed_count -gt 0 ]; then
+        echo -e "${RED}失败: ${failed_count}${NC}"
+    fi
+    echo -e "${BLUE}========================================${NC}"
+    echo ""
 
-if [ -f "${TEXT_DIFF_DIR}/text-diff.wtplugin.zip" ]; then
-    echo -e "${GREEN}✓${NC} ${TEXT_DIFF_DIR}/text-diff.wtplugin.zip"
-fi
+    # 显示打包结果
+    echo -e "${YELLOW}插件包位置:${NC}"
+    for plugin_dir in "${PLUGINS_DIR}"/*; do
+        if [ -d "$plugin_dir" ]; then
+            local package_name="$(basename "$plugin_dir").wtplugin.zip"
+            local package_path="${plugin_dir}/${package_name}"
+            if [ -f "$package_path" ]; then
+                echo -e "${GREEN}✓${NC} ${package_path}"
+            fi
+        fi
+    done
+    echo ""
 
-echo -e "${BLUE}========================================${NC}"
-echo ""
-echo -e "${GREEN}🎉 所有插件打包完成!${NC}"
-echo ""
-echo "你可以通过以下方式安装插件:"
-echo "  1. 启动应用"
-echo "  2. 点击插件市场按钮 (🧩)"
-echo "  3. 选择对应的 .wtplugin.zip 文件导入"
-echo ""
+    # 显示安装提示
+    if [ $success_count -gt 0 ]; then
+        echo -e "${GREEN}🎉 插件打包完成!${NC}"
+        echo ""
+        echo "你可以通过以下方式安装插件:"
+        echo "  1. 启动应用"
+        echo "  2. 点击插件市场按钮 (🧩)"
+        echo "  3. 选择对应的 .wtplugin.zip 文件导入"
+        echo ""
+    fi
+
+    # 如果有失败的插件,返回错误码
+    if [ $failed_count -gt 0 ]; then
+        exit 1
+    fi
+}
+
+# 执行主函数
+main

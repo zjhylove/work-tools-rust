@@ -1,114 +1,97 @@
 #!/bin/bash
 
-# 插件快速构建和打包脚本
+# 插件快速构建和打包脚本 (自动发现模式)
+# 自动扫描当前目录下的所有插件并构建
 
 set -e  # 遇到错误立即退出
+
+# 颜色定义
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+CYAN='\033[0;36m'
+NC='\033[0m' # No Color
 
 # 获取脚本所在目录的绝对路径
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
-echo "🚀 开始插件构建流程..."
-echo "工作目录: $SCRIPT_DIR"
-
-# 1. 构建前端资源
+echo -e "${BLUE}========================================${NC}"
+echo -e "${BLUE}  Work Tools 插件快速构建脚本${NC}"
+echo -e "${BLUE}========================================${NC}"
 echo ""
-echo "📦 构建插件前端..."
-cd "$SCRIPT_DIR/password-manager/frontend"
-npm run build
-echo "✓ password-manager 前端构建完成"
 
-cd "$SCRIPT_DIR/auth-plugin/frontend"
-npm run build
-echo "✓ auth-plugin 前端构建完成"
+# 统计变量
+TOTAL_PLUGINS=0
+FRONTEND_BUILT=0
+RUST_BUILT=0
 
-cd "$SCRIPT_DIR/json-tools/frontend"
-npm run build
-echo "✓ json-tools 前端构建完成"
-
-cd "$SCRIPT_DIR/text-diff/frontend"
-npm run build
-echo "✓ text-diff 前端构建完成"
-
-# 2. 编译 Rust 动态库
+# 1. 构建所有插件的前端资源
+echo -e "${YELLOW}[1/3] 构建插件前端...${NC}"
 echo ""
-echo "🔨 编译 Rust 动态库..."
-cd "$SCRIPT_DIR/password-manager"
-cargo build --release
-echo "✓ password-manager 动态库编译完成"
 
-cd "$SCRIPT_DIR/auth-plugin"
-cargo build --release
-echo "✓ auth-plugin 动态库编译完成"
-
-cd "$SCRIPT_DIR/json-tools"
-cargo build --release
-echo "✓ json-tools 动态库编译完成"
-
-cd "$SCRIPT_DIR/text-diff"
-cargo build --release
-echo "✓ text-diff 动态库编译完成"
-
-# 3. 打包插件
-echo ""
-echo "📦 打包插件..."
-
-# 定义插件列表
-PLUGINS=(
-    "password-manager:password_manager"
-    "auth:auth_plugin"
-    "json-tools:json_tools"
-    "text-diff:text_diff"
-)
-
-for PLUGIN_INFO in "${PLUGINS[@]}"; do
-    IFS=':' read -r PLUGIN_ID DLL_NAME <<< "$PLUGIN_INFO"
-
-    case "$PLUGIN_ID" in
-        "password-manager") PLUGIN_DIR="password-manager" ;;
-        "auth") PLUGIN_DIR="auth-plugin" ;;
-        "json-tools") PLUGIN_DIR="json-tools" ;;
-        "text-diff") PLUGIN_DIR="text-diff" ;;
-    esac
-
-    OUTPUT_FILE="$SCRIPT_DIR/$PLUGIN_DIR/$PLUGIN_ID.wtplugin.zip"
-    DLL_PATH="$SCRIPT_DIR/$PLUGIN_DIR/target/release/lib${DLL_NAME}.dylib"
-    SO_PATH="$SCRIPT_DIR/$PLUGIN_DIR/target/release/lib${DLL_NAME}.so"
-    MANIFEST_PATH="$SCRIPT_DIR/$PLUGIN_DIR/manifest.json"
-    ASSETS_PATH="$SCRIPT_DIR/$PLUGIN_DIR/assets"
-
-    echo "  打包 $PLUGIN_ID..."
-
-    # 删除旧的 zip 文件
-    rm -f "$OUTPUT_FILE"
-
-    # 根据平台选择动态库
-    if [[ "$OSTYPE" == "darwin"* ]]; then
-        LIB_FILE="$DLL_PATH"
-    elif [[ "$OSTYPE" == "msys"* || "$OSTYPE" == "win32"* ]]; then
-        LIB_FILE="$SCRIPT_DIR/$PLUGIN_DIR/target/release/${DLL_NAME}.dll"
-    else
-        LIB_FILE="$SO_PATH"
+for plugin_dir in "${SCRIPT_DIR}"/*; do
+    # 跳过非目录文件和隐藏目录
+    if [ ! -d "$plugin_dir" ]; then
+        continue
     fi
 
-    # 创建 zip 文件
-    pushd "$SCRIPT_DIR/$PLUGIN_DIR" > /dev/null
-    zip -r "$OUTPUT_FILE" manifest.json assets -j "$LIB_FILE" 2>/dev/null
-    popd > /dev/null
+    plugin_name="$(basename "$plugin_dir")"
+    if [[ "$plugin_name" == .* ]]; then
+        continue
+    fi
 
-    echo "    ✓ $PLUGIN_ID.wtplugin.zip"
+    frontend_dir="${plugin_dir}/frontend"
+
+    # 检查是否有前端目录
+    if [ -d "$frontend_dir" ]; then
+        echo -e "${CYAN}→ ${plugin_name}: 构建前端...${NC}"
+
+        if cd "$frontend_dir" && npm run build > /dev/null 2>&1; then
+            echo -e "${GREEN}  ✓ ${plugin_name} 前端构建完成${NC}"
+            ((FRONTEND_BUILT++))
+        else
+            echo -e "${RED}  ✗ ${plugin_name} 前端构建失败${NC}"
+            exit 1
+        fi
+
+        ((TOTAL_PLUGINS++))
+    fi
 done
 
 echo ""
-echo "✨ 所有插件构建和打包完成!"
+if [ $FRONTEND_BUILT -gt 0 ]; then
+    echo -e "${GREEN}✓ 前端构建完成 (${FRONTEND_BUILT}/${TOTAL_PLUGINS})${NC}"
+else
+    echo -e "${YELLOW}⚠ 未找到需要构建的前端${NC}"
+fi
 echo ""
-echo "插件包位置:"
-for PLUGIN_INFO in "${PLUGINS[@]}"; do
-    IFS=':' read -r PLUGIN_ID _ <<< "$PLUGIN_INFO"
-    case "$PLUGIN_ID" in
-        "password-manager") PLUGIN_DIR="password-manager" ;;
-        "auth") PLUGIN_DIR="auth-plugin" ;;
-        "json-tools") PLUGIN_DIR="json-tools" ;;
-        "text-diff") PLUGIN_DIR="text-diff" ;;
-    esac
-    echo "  - $SCRIPT_DIR/$PLUGIN_DIR/$PLUGIN_ID.wtplugin.zip"
-done
+
+# 2. 编译所有 Rust 动态库
+echo -e "${YELLOW}[2/3] 编译 Rust 动态库...${NC}"
+echo ""
+
+cd "$SCRIPT_DIR/.."
+
+# 编译整个 workspace
+if cargo build --release; then
+    echo -e "${GREEN}✓ 所有 Rust 动态库编译完成${NC}"
+    ((RUST_BUILT++))
+else
+    echo -e "${RED}✗ Rust 动态库编译失败${NC}"
+    exit 1
+fi
+
+echo ""
+
+# 3. 打包插件
+echo -e "${YELLOW}[3/3] 打包插件...${NC}"
+echo ""
+
+# 调用主打包脚本
+if [ -f "${SCRIPT_DIR}/../scripts/build-plugins.sh" ]; then
+    bash "${SCRIPT_DIR}/../scripts/build-plugins.sh"
+else
+    echo -e "${RED}✗ 错误: 找不到主打包脚本 ${SCRIPT_DIR}/../scripts/build-plugins.sh${NC}"
+    exit 1
+fi

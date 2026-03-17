@@ -42,50 +42,79 @@ export function Toolbar({
 
   return (
     <div className="toolbar">
-      <button onClick={onOpenLeft} title="打开左侧文件 (Ctrl+O)">
-        📂 打开左侧
-      </button>
-      <button onClick={onOpenRight} title="打开右侧文件 (Ctrl+Shift+O)">
-        📂 打开右侧
-      </button>
+      {/* 文件操作组 */}
+      <div className="toolbar-group">
+        <button
+          onClick={onOpenLeft}
+          title="打开左侧文件 (Ctrl+O)"
+          className="icon-btn"
+        >
+          📂
+        </button>
+        <button
+          onClick={onOpenRight}
+          title="打开右侧文件 (Ctrl+Shift+O)"
+          className="icon-btn"
+        >
+          📂
+        </button>
+      </div>
 
-      <div className="separator" />
+      {/* 选项组 */}
+      <div className="toolbar-group">
+        <label className="compact-checkbox">
+          <input
+            type="checkbox"
+            checked={ignoreWhitespace}
+            onChange={handleWhitespaceChange}
+          />
+          <span>忽略空白</span>
+        </label>
+        <label className="compact-checkbox">
+          <input
+            type="checkbox"
+            checked={ignoreCase}
+            onChange={handleCaseChange}
+          />
+          <span>忽略大小写</span>
+        </label>
+      </div>
 
-      <button onClick={onPreviousDiff} title="上一个差异 (Shift+F8)">
-        ↑ 上一个
-      </button>
-      <button onClick={onNextDiff} title="下一个差异 (F8)">
-        ↓ 下一个
-      </button>
+      {/* 导出按钮 */}
+      <div className="toolbar-group">
+        <button
+          onClick={onExport}
+          title="导出差异 (Ctrl+S)"
+          className="export-btn"
+        >
+          💾 导出
+        </button>
+      </div>
 
-      <div className="separator" />
+      {/* 导航组 - 放在右侧 */}
+      <div className="toolbar-group nav-group">
+        <button
+          onClick={onPreviousDiff}
+          title="上一个差异 (Shift+F8)"
+          className="nav-btn"
+        >
+          ↑
+        </button>
+        <button
+          onClick={onNextDiff}
+          title="下一个差异 (F8)"
+          className="nav-btn"
+        >
+          ↓
+        </button>
+      </div>
 
-      <label className="checkbox-label">
-        <input
-          type="checkbox"
-          checked={ignoreWhitespace}
-          onChange={handleWhitespaceChange}
-        />
-        忽略空白
-      </label>
-
-      <label className="checkbox-label">
-        <input
-          type="checkbox"
-          checked={ignoreCase}
-          onChange={handleCaseChange}
-        />
-        忽略大小写
-      </label>
-
-      <div className="separator" />
-
-      <button onClick={onExport} title="导出差异 (Ctrl+S)">
-        💾 导出差异
-      </button>
-
-      <div className="stats">
-        ➕ {diffStats.additions} | ➖ {diffStats.deletions} | ✏️ {diffStats.modifications}
+      {/* 统计信息 - 最右侧 */}
+      <div className="toolbar-group stats-group">
+        <span className="stats-label">统计:</span>
+        <span className="stats-value additions">➕{diffStats.additions}</span>
+        <span className="stats-value deletions">➖{diffStats.deletions}</span>
+        <span className="stats-value modifications">✏️{diffStats.modifications}</span>
       </div>
     </div>
   );

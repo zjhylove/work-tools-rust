@@ -1,75 +1,158 @@
 .toolbar {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 12px 16px;
-  background: #252526;
-  border-bottom: 1px solid #3e3e42;
-  flex-wrap: wrap;
+  gap: 16px;
+  padding: 10px 16px;
+  background: var(--bg-primary, #ffffff);
+  border-bottom: 2px solid var(--border-color, #e5e5e5);
+  height: 52px; /* 固定高度,确保一致性 */
+  box-sizing: border-box;
 }
 
+/* 分组 */
+.toolbar-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+  border: 1px solid #dee2e6;
+  border-radius: 8px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+  min-height: 32px; /* 与按钮高度一致 */
+  height: 32px; /* 固定高度 */
+}
+
+/* 按钮样式 */
 .toolbar button {
   padding: 6px 12px;
-  background: #0078d4;
-  color: white;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
+  background: white;
+  border: 1.5px solid #dee2e6;
+  border-radius: 6px;
+  color: #495057;
   font-size: 14px;
-  white-space: nowrap;
-  transition: background 0.2s, transform 0.1s;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 32px; /* 固定高度 */
 }
 
 .toolbar button:hover {
-  background: #005a9e;
+  background: #007aff;
+  color: white;
+  border-color: #007aff;
+  transform: translateY(-1px);
+  box-shadow: 0 3px 6px rgba(0, 122, 255, 0.25);
 }
 
 .toolbar button:active {
-  transform: scale(0.98);
+  transform: translateY(0);
+  box-shadow: none;
 }
 
-.toolbar button:disabled {
-  background: #3e3e42;
-  cursor: not-allowed;
-  opacity: 0.5;
+/* 图标按钮 */
+.icon-btn {
+  padding: 6px 10px;
+  font-size: 18px;
 }
 
-.toolbar .separator {
-  width: 1px;
-  height: 24px;
-  background: #3e3e42;
-  margin: 0 4px;
+/* 导航按钮 - 保持特殊样式但无框 */
+.nav-btn {
+  padding: 6px 14px;
+  font-size: 16px;
+  font-weight: 600;
 }
 
-.toolbar .checkbox-label {
+/* 导出按钮 */
+.export-btn {
+  padding: 6px 16px;
+  font-weight: 600;
+}
+
+/* 复选框 */
+.compact-checkbox {
   display: flex;
   align-items: center;
   gap: 6px;
-  color: #cccccc;
-  font-size: 14px;
-  cursor: pointer;
-  user-select: none;
-  padding: 6px 12px;
+  padding: 4px 8px;
   border-radius: 4px;
-  transition: background 0.2s;
-}
-
-.toolbar .checkbox-label:hover {
-  background: #3e3e42;
-}
-
-.toolbar .checkbox-label input[type="checkbox"] {
   cursor: pointer;
+  transition: background 0.2s ease;
+  user-select: none;
+}
+
+.compact-checkbox:hover {
+  background: rgba(0, 0, 0, 0.05);
+}
+
+.compact-checkbox input[type="checkbox"] {
   width: 16px;
   height: 16px;
+  cursor: pointer;
+  accent-color: #007aff;
 }
 
-.toolbar .stats {
-  margin-left: auto;
-  color: #cccccc;
+.compact-checkbox span {
   font-size: 13px;
-  white-space: nowrap;
-  padding: 6px 12px;
-  background: #1e1e1e;
-  border-radius: 4px;
+  font-weight: 500;
+}
+
+/* 统计信息组 - 扁平化 */
+.stats-group {
+  margin-left: auto;
+  background: transparent; /* 移除渐变背景 */
+  border: none; /* 移除边框 */
+  min-height: 32px;
+  height: 32px;
+  padding: 4px 12px;
+  gap: 8px; /* 统计值之间的间距 */
+}
+
+.stats-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: #6c757d;
+  margin-right: 6px;
+  line-height: 24px;
+}
+
+.stats-value {
+  font-size: 14px;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 4px; /* 保留圆角,便于识别 */
+  background: rgba(0, 0, 0, 0.05); /* 极淡的背景 */
+  line-height: 20px;
+}
+
+.stats-value.additions {
+  color: #28a745;
+}
+
+.stats-value.deletions {
+  color: #dc3545;
+}
+
+.stats-value.modifications {
+  color: #ffc107;
+}
+
+/* 响应式 */
+@media (max-width: 768px) {
+  .toolbar {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .toolbar-group {
+    flex-grow: 1;
+  }
+
+  .stats-group {
+    flex-basis: 100%;
+    margin-left: 0;
+  }
 }
