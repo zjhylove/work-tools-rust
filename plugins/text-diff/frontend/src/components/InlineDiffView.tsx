@@ -44,8 +44,8 @@ export function InlineDiffView({ originalLines, modifiedLines }: InlineDiffViewP
       <div className="inline-header">
         <h3>对比视图</h3>
         <div className="inline-stats">
-          <span className="stat-additions">+{originalLines.filter(l => l.type === 'insert').length}</span>
-          <span className="stat-deletions">-{modifiedLines.filter(l => l.type === 'delete').length}</span>
+          <span className="stat-additions">+{modifiedLines.filter(l => l.type === 'insert').length}</span>
+          <span className="stat-deletions">-{originalLines.filter(l => l.type === 'delete').length}</span>
         </div>
       </div>
 
