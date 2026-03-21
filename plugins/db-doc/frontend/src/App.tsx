@@ -1,0 +1,496 @@
+import { useState, useEffect } from 'react'
+import './App.css'
+
+// 类型定义
+interface ConnectionConfig {
+  id: string
+  name: string
+  db_type: 'mysql' | 'postgresql'
+  host: string
+  port: number
+  database: string
+  username: string
+  password?: string
+  created_at: number
+  last_used?: number
+}
+
+interface TableInfo {
+  name: string
+  schema: string
+  comment?: string
+  columns: ColumnInfo[]
+  indexes: IndexInfo[]
+}
+
+interface ColumnInfo {
+  name: string
+  data_type: string
+  max_length?: number
+  is_nullable: boolean
+  is_primary_key: boolean
+  default_value?: string
+  comment?: string
+  position: number
+}
+
+interface IndexInfo {
+  name: string
+  columns: string[]
+  is_unique: boolean
+  is_primary: boolean
+}
+
+// 声明 window.pluginAPI
+declare global {
+  interface Window {
+    pluginAPI: {
+      call: (method: string, params?: Record<string, unknown>) => Promise<unknown>
+    }
+  }
+}
+
+type ViewMode = 'connections' | 'tables' | 'preview'
+
+function App() {
+  const [connections, setConnections] = useState<ConnectionConfig[]>([])
+  const [selectedConnection, setSelectedConnection] = useState<ConnectionConfig | null>(null)
+  const [tables, setTables] = useState<string[]>([])
+  const [selectedTables, setSelectedTables] = useState<Set<string>>(new Set())
+  const [tableInfos, setTableInfos] = useState<TableInfo[]>([])
+  const [viewMode, setViewMode] = useState<ViewMode>('connections')
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  // 加载连接列表
+  useEffect(() => {
+    loadConnections()
+  }, [])
+
+  const loadConnections = async () => {
+    try {
+      setLoading(true)
+      const result = await window.pluginAPI.call('list_connections') as ConnectionConfig[]
+      setConnections(result || [])
+    } catch (e) {
+      setError(e instanceof Error ? e.message : '加载连接失败')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  // 测试连接
+  const testConnection = async (config: Partial<ConnectionConfig>) => {
+    try {
+      setLoading(true)
+      const result = await window.pluginAPI.call('test_connection', config as Record<string, unknown>) as { success: boolean; message: string }
+      if (result.success) {
+        alert('连接成功!')
+      } else {
+        alert('连接失败: ' + result.message)
+      }
+    } catch (e) {
+      alert('连接失败: ' + (e instanceof Error ? e.message : '未知错误'))
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  // 加载表列表
+  const loadTables = async (connectionId: string) => {
+    try {
+      setLoading(true)
+      const result = await window.pluginAPI.call('list_tables', { connection_id: connectionId }) as string[]
+      setTables(result || [])
+      setSelectedTables(new Set())
+    } catch (e) {
+      setError(e instanceof Error ? e.message : '加载表列表失败')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  // 获取表详情
+  const loadTableInfo = async (connectionId: string, tableName: string) => {
+    try {
+      const result = await window.pluginAPI.call('get_table_info', {
+        connection_id: connectionId,
+        table_name: tableName
+      }) as TableInfo
+      return result
+    } catch (e) {
+      console.error('加载表信息失败:', e)
+      return null
+    }
+  }
+
+  // 选择连接
+  const handleSelectConnection = async (conn: ConnectionConfig) => {
+    setSelectedConnection(conn)
+    await loadTables(conn.id)
+    setViewMode('tables')
+  }
+
+  // 切换表选择
+  const toggleTableSelection = (tableName: string) => {
+    const newSelected = new Set(selectedTables)
+    if (newSelected.has(tableName)) {
+      newSelected.delete(tableName)
+    } else {
+      newSelected.add(tableName)
+    }
+    setSelectedTables(newSelected)
+  }
+
+  // 全选/取消全选
+  const toggleSelectAll = () => {
+    if (selectedTables.size === tables.length) {
+      setSelectedTables(new Set())
+    } else {
+      setSelectedTables(new Set(tables))
+    }
+  }
+
+  // 预览选中表
+  const handlePreview = async () => {
+    if (!selectedConnection || selectedTables.size === 0) return
+
+    setLoading(true)
+    const infos: TableInfo[] = []
+    for (const tableName of selectedTables) {
+      const info = await loadTableInfo(selectedConnection.id, tableName)
+      if (info) infos.push(info)
+    }
+    setTableInfos(infos)
+    setViewMode('preview')
+    setLoading(false)
+  }
+
+  // 导出文档
+  const handleExport = async () => {
+    if (!selectedConnection || selectedTables.size === 0) return
+
+    try {
+      setLoading(true)
+      const result = await window.pluginAPI.call('export_docs', {
+        connection_id: selectedConnection.id,
+        tables: Array.from(selectedTables),
+        output_dir: '~/.worktools/exports',
+        format: 'markdown',
+        template: 'detailed'
+      }) as { success: boolean; files?: string[]; message?: string }
+
+      if (result.success) {
+        alert(`导出成功! 共 ${result.files?.length || 0} 个文件`)
+      } else {
+        alert('导出失败: ' + (result.message || '未知错误'))
+      }
+    } catch (e) {
+      alert('导出失败: ' + (e instanceof Error ? e.message : '未知错误'))
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <div className="app">
+      <header className="header">
+        <h1>📊 数据库文档生成器</h1>
+        <nav className="nav">
+          <button
+            className={viewMode === 'connections' ? 'active' : ''}
+            onClick={() => setViewMode('connections')}
+          >
+            连接管理
+          </button>
+          {selectedConnection && (
+            <>
+              <button
+                className={viewMode === 'tables' ? 'active' : ''}
+                onClick={() => setViewMode('tables')}
+              >
+                选择表
+              </button>
+              <button
+                className={viewMode === 'preview' ? 'active' : ''}
+                onClick={handlePreview}
+                disabled={selectedTables.size === 0}
+              >
+                预览 ({selectedTables.size})
+              </button>
+            </>
+          )}
+        </nav>
+      </header>
+
+      {error && <div className="error">{error}</div>}
+      {loading && <div className="loading">加载中...</div>}
+
+      <main className="main">
+        {viewMode === 'connections' && (
+          <div className="connections-view">
+            <div className="connections-list">
+              <h2>已保存的连接</h2>
+              {connections.length === 0 ? (
+                <p className="empty">暂无保存的连接配置</p>
+              ) : (
+                <ul>
+                  {connections.map((conn) => (
+                    <li key={conn.id} className="connection-item">
+                      <div className="connection-info">
+                        <span className="connection-name">{conn.name}</span>
+                        <span className="connection-type">{conn.db_type.toUpperCase()}</span>
+                        <span className="connection-host">{conn.host}:{conn.port}</span>
+                      </div>
+                      <div className="connection-actions">
+                        <button onClick={() => handleSelectConnection(conn)}>选择</button>
+                        <button onClick={() => testConnection(conn)}>测试连接</button>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+            <div className="connection-form">
+              <h2>新建连接</h2>
+              <ConnectionForm
+                onSave={async (config) => {
+                  await window.pluginAPI.call('save_connection', config as Record<string, unknown>)
+                  loadConnections()
+                }}
+                onTest={testConnection}
+              />
+            </div>
+          </div>
+        )}
+
+        {viewMode === 'tables' && selectedConnection && (
+          <div className="tables-view">
+            <div className="tables-header">
+              <h2>{selectedConnection.name} - 选择要导出的表</h2>
+              <button onClick={toggleSelectAll}>
+                {selectedTables.size === tables.length ? '取消全选' : '全选'}
+              </button>
+            </div>
+            <div className="tables-grid">
+              {tables.map((table) => (
+                <div
+                  key={table}
+                  className={`table-item ${selectedTables.has(table) ? 'selected' : ''}`}
+                  onClick={() => toggleTableSelection(table)}
+                >
+                  <input
+                    type="checkbox"
+                    checked={selectedTables.has(table)}
+                    onChange={() => toggleTableSelection(table)}
+                  />
+                  <span>{table}</span>
+                </div>
+              ))}
+            </div>
+            <div className="tables-actions">
+              <button onClick={() => setViewMode('connections')}>返回</button>
+              <button
+                onClick={handlePreview}
+                disabled={selectedTables.size === 0}
+              >
+                预览选中 ({selectedTables.size})
+              </button>
+            </div>
+          </div>
+        )}
+
+        {viewMode === 'preview' && (
+          <div className="preview-view">
+            <div className="preview-header">
+              <h2>预览 - {tableInfos.length} 张表</h2>
+              <div className="preview-actions">
+                <button onClick={() => setViewMode('tables')}>返回选择</button>
+                <button onClick={handleExport} className="primary">导出文档</button>
+              </div>
+            </div>
+            <div className="preview-content">
+              {tableInfos.map((table) => (
+                <TablePreview key={table.name} table={table} />
+              ))}
+            </div>
+          </div>
+        )}
+      </main>
+    </div>
+  )
+}
+
+// 连接表单组件
+function ConnectionForm({
+  onSave,
+  onTest,
+}: {
+  onSave: (config: Partial<ConnectionConfig>) => Promise<void>
+  onTest: (config: Partial<ConnectionConfig>) => Promise<void>
+}) {
+  const [config, setConfig] = useState<Partial<ConnectionConfig>>({
+    name: '',
+    db_type: 'mysql',
+    host: 'localhost',
+    port: 3306,
+    database: '',
+    username: 'root',
+    password: '',
+  })
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    await onSave(config)
+  }
+
+  const handleTest = async () => {
+    await onTest(config)
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="form">
+      <div className="form-group">
+        <label>连接名称</label>
+        <input
+          value={config.name}
+          onChange={(e) => setConfig({ ...config, name: e.target.value })}
+          placeholder="例如: 生产环境"
+          required
+        />
+      </div>
+
+      <div className="form-group">
+        <label>数据库类型</label>
+        <select
+          value={config.db_type}
+          onChange={(e) => setConfig({
+            ...config,
+            db_type: e.target.value as 'mysql' | 'postgresql',
+            port: e.target.value === 'mysql' ? 3306 : 5432
+          })}
+        >
+          <option value="mysql">MySQL</option>
+          <option value="postgresql">PostgreSQL</option>
+        </select>
+      </div>
+
+      <div className="form-row">
+        <div className="form-group">
+          <label>主机地址</label>
+          <input
+            value={config.host}
+            onChange={(e) => setConfig({ ...config, host: e.target.value })}
+            placeholder="localhost"
+          />
+        </div>
+        <div className="form-group">
+          <label>端口</label>
+          <input
+            type="number"
+            value={config.port}
+            onChange={(e) => setConfig({ ...config, port: parseInt(e.target.value) })}
+          />
+        </div>
+      </div>
+
+      <div className="form-group">
+        <label>数据库名</label>
+        <input
+          value={config.database}
+          onChange={(e) => setConfig({ ...config, database: e.target.value })}
+          placeholder="database_name"
+          required
+        />
+      </div>
+
+      <div className="form-group">
+        <label>用户名</label>
+        <input
+          value={config.username}
+          onChange={(e) => setConfig({ ...config, username: e.target.value })}
+          placeholder="root"
+        />
+      </div>
+
+      <div className="form-group">
+        <label>密码</label>
+        <input
+          type="password"
+          value={config.password}
+          onChange={(e) => setConfig({ ...config, password: e.target.value })}
+          placeholder="••••••••"
+        />
+      </div>
+
+      <div className="form-actions">
+        <button type="button" onClick={handleTest}>测试连接</button>
+        <button type="submit" className="primary">保存</button>
+      </div>
+    </form>
+  )
+}
+
+// 表预览组件
+function TablePreview({ table }: { table: TableInfo }) {
+  return (
+    <div className="table-preview">
+      <h3>{table.name}</h3>
+      {table.comment && <p className="table-comment">{table.comment}</p>}
+
+      <table className="columns-table">
+        <thead>
+          <tr>
+            <th>字段名</th>
+            <th>类型</th>
+            <th>可空</th>
+            <th>主键</th>
+            <th>默认值</th>
+            <th>说明</th>
+          </tr>
+        </thead>
+        <tbody>
+          {table.columns.map((col) => (
+            <tr key={col.name}>
+              <td>{col.name}</td>
+              <td>
+                {col.data_type.toUpperCase()}
+                {col.max_length && `(${col.max_length})`}
+              </td>
+              <td>{col.is_nullable ? '是' : '否'}</td>
+              <td>{col.is_primary_key ? '是' : ''}</td>
+              <td>{col.default_value || '-'}</td>
+              <td>{col.comment || '-'}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+
+      {table.indexes.length > 0 && (
+        <div className="indexes-section">
+          <h4>索引</h4>
+          <table className="indexes-table">
+            <thead>
+              <tr>
+                <th>索引名</th>
+                <th>列</th>
+                <th>唯一</th>
+              </tr>
+            </thead>
+            <tbody>
+              {table.indexes.map((idx) => (
+                <tr key={idx.name}>
+                  <td>{idx.name}</td>
+                  <td>{idx.columns.join(', ')}</td>
+                  <td>{idx.is_unique ? '是' : '否'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  )
+}
+
+export default App
