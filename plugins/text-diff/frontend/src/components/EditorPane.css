@@ -2,116 +2,109 @@
   flex: 1;
   display: flex;
   flex-direction: column;
-  overflow: hidden;  /* 保持hidden，防止整个面板溢出 */
+  overflow: hidden;
   background: var(--bg-primary);
-  border-radius: 8px;
 }
 
 .pane-header {
-  display: none; /* 隐藏标题栏 */
+  display: none;
 }
 
 .pane-content {
   flex: 1;
   display: flex;
-  overflow: hidden;  /* 保持hidden，内容由内部元素处理滚动 */
+  overflow: hidden;
 }
 
 .editor-container {
   display: flex;
   flex: 1;
-  overflow: visible;  /* 改为visible，允许子元素超出 */
+  overflow: visible;
   position: relative;
 }
 
+/* 行号区域 */
 .line-numbers {
-  /* 自适应宽度，默认2位数字的宽度 */
-  width: fit-content;
   min-width: 28px;
   max-width: 60px;
-  background: #f5f5f5;
-  border-right: 1px solid #e0e0e0;
-  overflow: hidden;  /* 隐藏溢出，滚动由JS控制 */
+  background: var(--bg-tertiary);
+  border-right: 1px solid var(--border-light);
+  overflow: hidden;
   flex-shrink: 0;
-  /* padding移到inner，与文本区域padding: 8px对应 */
-  /* 高度由JS动态设置 */
-  /* 隐藏滚动条但保持滚动功能 */
-  scrollbar-width: none;  /* Firefox */
-  -ms-overflow-style: none;  /* IE/Edge */
+  scrollbar-width: none;
+  -ms-overflow-style: none;
 }
 
 .line-numbers-inner {
-  /* 内部容器，通过transform实现滚动 */
   padding: 8px 4px;
-  padding-right: 8px;
+  padding-right: 6px;
   will-change: transform;
 }
 
 .line-numbers::-webkit-scrollbar {
-  display: none;  /* Chrome/Safari/Opera */
+  display: none;
 }
-
-/* 行号滚动条样式已在上方定义 */
 
 .line-number {
   text-align: right;
-  color: #999999;
-  font-size: 13px;
-  font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+  color: var(--text-tertiary);
+  font-size: 12px;
+  font-family: 'SF Mono', 'Menlo', 'Monaco', 'Consolas', monospace;
   line-height: 22px;
-  height: 22px;  /* 明确设置高度，确保与文本行对齐 */
+  height: 22px;
   user-select: none;
+  font-variant-numeric: tabular-nums;
 }
 
+/* 编辑器滚动容器 */
 .editor-wrapper {
   flex: 1;
   position: relative;
   overflow: auto;
-  background: #ffffff;
+  background: var(--bg-primary);
   height: 100%;
   min-height: 0;
 }
 
 .editor-content {
   position: relative;
-  /* 高度由JS动态设置 */
 }
 
+/* 高亮层 */
 .highlight-layer {
   position: absolute;
   top: 0;
   left: 0;
-  padding: 8px;
-  padding-right: 100px;
+  padding: 8px 100px 8px 8px;
   overflow: hidden;
   pointer-events: none;
   z-index: 1;
-  font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+  font-family: 'SF Mono', 'Menlo', 'Monaco', 'Consolas', monospace;
   font-size: 13px;
   line-height: 22px;
   white-space: pre;
   box-sizing: border-box;
-  /* 高度由JS动态设置 */
 }
 
 .highlight-line {
-  height: 22px;  /* 与行号高度一致 */
+  height: 22px;
+  padding: 0 2px;
+  border-radius: 2px;
 }
 
+/* 文本输入层 */
 .text-input {
   position: absolute;
   top: 0;
   left: 0;
   width: 100%;
-  /* 高度由JS动态设置，匹配内容尺寸 */
-  padding: 8px;
-  padding-right: 100px;
+  padding: 8px 100px 8px 8px;
   border: none;
   background: transparent;
   color: transparent;
-  caret-color: #000;
+  caret-color: var(--text-primary);
   resize: none;
-  font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+  font-family: 'SF Mono', 'Menlo', 'Monaco', 'Consolas', monospace;
   font-size: 13px;
   line-height: 22px;
   outline: none;
@@ -122,49 +115,52 @@
 }
 
 .text-input::selection {
-  background: rgba(0, 122, 255, 0.2);
+  background: var(--accent-light);
   color: transparent;
 }
 
 .text-input::placeholder {
-  color: #999999;  /* 提升对比度，从#cccccc改为#999999 */
-  opacity: 1;  /* 确保不透明度为1 */
+  color: var(--text-tertiary);
+  opacity: 1;
 }
 
-/* 差异高亮样式 */
+/* 差异高亮样式 - 使用更柔和的颜色 */
 .highlight-line-equal {
   background-color: transparent;
 }
 
-.highlight-line-delete,
-.highlight-line-insert {
-  background-color: transparent;
+.highlight-line-delete {
+  background-color: rgba(255, 59, 48, 0.08);
 }
 
-/* 字符级高亮样式 */
+.highlight-line-insert {
+  background-color: rgba(52, 199, 89, 0.08);
+}
+
+/* 字符级高亮样式 - macOS 风格 */
 .char-removed {
-  color: #FF0000;
+  color: var(--error-color);
   text-decoration: line-through;
-  text-decoration-color: #FF0000;
-  background-color: transparent;
-  font-weight: 500;
+  text-decoration-color: var(--error-color);
+  background-color: rgba(255, 59, 48, 0.15);
+  border-radius: 2px;
 }
 
 .char-added {
-  color: #0000FF;
-  background-color: transparent;
-  font-weight: 500;
+  color: var(--success-color);
+  background-color: rgba(52, 199, 89, 0.15);
+  border-radius: 2px;
 }
 
-/* 空行占位符样式 */
+/* 空行占位符 */
 .line-number:empty::before {
   content: '';
 }
 
-/* 滚动条样式 - 应用在editor-wrapper上 */
+/* 滚动条样式 - 与主应用一致 */
 .editor-wrapper::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+  width: 6px;
+  height: 6px;
 }
 
 .editor-wrapper::-webkit-scrollbar-track {
@@ -172,12 +168,13 @@
 }
 
 .editor-wrapper::-webkit-scrollbar-thumb {
-  background: #d0d0d0;
-  border-radius: 4px;
+  background: var(--border-color);
+  border-radius: 3px;
+  transition: background 0.2s ease;
 }
 
 .editor-wrapper::-webkit-scrollbar-thumb:hover {
-  background: #a0a0a0;
+  background: var(--text-tertiary);
 }
 
 .editor-wrapper::-webkit-scrollbar-corner {

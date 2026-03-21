@@ -93,6 +93,7 @@ function App() {
         modifiedFileName={modifiedFileName}
         onOpenOriginal={() => originalFileInputRef.current?.click()}
         onOpenModified={() => modifiedFileInputRef.current?.click()}
+        stats={diffResult.stats}
       />
 
       {/* 隐藏的文件输入 */}
@@ -130,6 +131,11 @@ function App() {
           placeholder="在此输入或粘贴修改后的文件内容..."
           className="right-pane"
         />
+      </div>
+
+      {/* 底部状态栏 */}
+      <div className="status-bar">
+        文本比对
       </div>
     </div>
   );

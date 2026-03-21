@@ -87,6 +87,15 @@ export const EditorPane = forwardRef<EditorPaneHandle, EditorPaneProps>(function
     return diffLines;
   }, [content, diffLines]);
 
+  // 计算行号区域宽度（根据行数自适应）
+  const lineNumbersWidth = useMemo(() => {
+    const lineCount = displayLines.length;
+    // 默认2位数字宽度，超过99行时按实际数字位数计算
+    const digits = lineCount > 99 ? String(lineCount).length : 2;
+    // 每位数字约8px + 左padding 4px + 右padding 8px
+    return digits * 8 + 12;
+  }, [displayLines.length]);
+
   // 同步行号位置（只有行号需要transform，textarea和highlight-layer由wrapper自然滚动）
   const updateLineNumbersTransform = useCallback((scrollTop: number) => {
     if (lineNumbersInnerRef.current) {
@@ -143,6 +152,14 @@ export const EditorPane = forwardRef<EditorPaneHandle, EditorPaneProps>(function
   useEffect(() => {
     syncDimensions();
   }, []); // 空依赖，只在挂载时执行
+
+  // 内容变化时同步尺寸（处理文件导入等外部更新）
+  useEffect(() => {
+    // 使用 requestAnimationFrame 确保 DOM 已更新
+    requestAnimationFrame(() => {
+      syncDimensions();
+    });
+  }, [content, syncDimensions]);
 
   // 同步滚动：wrapper滚动时同步行号
   const handleWrapperScroll = useCallback(() => {
@@ -205,7 +222,7 @@ export const EditorPane = forwardRef<EditorPaneHandle, EditorPaneProps>(function
       <div className="pane-content">
         <div className="editor-container">
           {/* 行号列 */}
-          <div ref={lineNumbersRef} className="line-numbers">
+          <div ref={lineNumbersRef} className="line-numbers" style={{ width: `${lineNumbersWidth}px` }}>
             <div ref={lineNumbersInnerRef} className="line-numbers-inner">
               {displayLines.map((line, index) => (
                 <div key={index} className="line-number">
