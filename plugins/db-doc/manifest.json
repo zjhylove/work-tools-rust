@@ -1,0 +1,21 @@
+{
+  "id": "db-doc",
+  "name": "数据库文档",
+  "description": "连接数据库,自动生成表结构文档 (Word/Markdown/PDF)",
+  "version": "1.0.0",
+  "icon": "📊",
+  "author": "Work Tools Team",
+  "homepage": "https://github.com/worktools/db-doc",
+  "files": {
+    "macos": "libdb_doc.dylib",
+    "linux": "libdb_doc.so",
+    "windows": "db_doc.dll"
+  },
+  "assets": {
+    "entry": "index.html"
+  },
+  "permissions": [
+    "filesystem",
+    "network"
+  ]
+}
