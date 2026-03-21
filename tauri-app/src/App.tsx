@@ -155,6 +155,7 @@ export default function App() {
             {plugins.map((plugin) => (
               <div
                 key={plugin.id}
+                title={plugin.description}
                 onClick={(e) => {
                   e.preventDefault();
                   e.stopPropagation();
@@ -219,21 +220,9 @@ export default function App() {
                       style={{
                         fontSize: "14px",
                         fontWeight: "600",
-                        marginBottom: "3px",
                       }}
                     >
                       {plugin.name}
-                    </div>
-                    <div
-                      style={{
-                        fontSize: "12px",
-                        color: "var(--text-secondary)",
-                        overflow: "hidden",
-                        textOverflow: "ellipsis",
-                        whiteSpace: "nowrap",
-                      }}
-                    >
-                      {plugin.description}
                     </div>
                   </div>
                 </div>

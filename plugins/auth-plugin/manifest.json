@@ -1,7 +1,7 @@
 {
   "id": "auth",
   "name": "双因素验证",
-  "description": "TOTP 双因素认证",
+  "description": "TOTP动态验证码生成与管理",
   "version": "1.0.0",
   "icon": "🔢",
   "author": "Work Tools Team",

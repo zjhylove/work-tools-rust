@@ -1,7 +1,7 @@
 {
   "id": "text-diff",
   "name": "文本比对",
-  "description": "实时文本比对工具,支持差异高亮、文件导入导出、差异导航",
+  "description": "并排文本比对,字符级差异高亮与统计",
   "version": "1.0.0",
   "icon": "🔍",
   "author": "Work Tools Team",
