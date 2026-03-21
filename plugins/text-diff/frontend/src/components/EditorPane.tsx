@@ -148,7 +148,7 @@ export const EditorPane = forwardRef<EditorPaneHandle, EditorPaneProps>(function
     syncScrollPosition();
   }, [syncScrollPosition]);
 
-  // 初始化时同步尺寸（仅一次）
+  // 初始化时同步尺寸
   useEffect(() => {
     syncDimensions();
   }, []); // 空依赖，只在挂载时执行
@@ -165,13 +165,12 @@ export const EditorPane = forwardRef<EditorPaneHandle, EditorPaneProps>(function
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  // 内容变化时同步尺寸（处理文件导入等外部更新）
+  // 内容变化时同步尺寸（统一入口：处理文件导入和用户输入）
   useEffect(() => {
-    // 使用 requestAnimationFrame 确保 DOM 已更新
     requestAnimationFrame(() => {
       syncDimensions();
     });
-  }, [content, syncDimensions]);
+  }, [content]); // 移除 syncDimensions 依赖，避免不必要的重新订阅
 
   // 同步滚动：wrapper滚动时同步行号
   const handleWrapperScroll = useCallback(() => {
@@ -190,11 +189,8 @@ export const EditorPane = forwardRef<EditorPaneHandle, EditorPaneProps>(function
     const newContent = e.target.value;
     onChange?.(newContent);
 
-    // 在下一帧同步尺寸并滚动到光标位置
+    // 滚动到光标位置（尺寸同步由 content useEffect 统一处理）
     requestAnimationFrame(() => {
-      syncDimensions();
-
-      // 计算光标位置并滚动wrapper使光标可见
       if (textareaRef.current && wrapperRef.current && lineNumbersInnerRef.current) {
         const { selectionStart } = textareaRef.current;
         const textBeforeCursor = newContent.substring(0, selectionStart);
@@ -223,7 +219,7 @@ export const EditorPane = forwardRef<EditorPaneHandle, EditorPaneProps>(function
 
   // 监听粘贴事件，确保内容正确显示
   const handlePaste = () => {
-    // 粘贴后同步尺寸
+    // 粘贴后同步尺寸（content 变化会触发 useEffect，这里作为备份）
     setTimeout(syncDimensions, 50);
   };
 
