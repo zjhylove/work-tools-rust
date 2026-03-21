@@ -153,6 +153,18 @@ export const EditorPane = forwardRef<EditorPaneHandle, EditorPaneProps>(function
     syncDimensions();
   }, []); // 空依赖，只在挂载时执行
 
+  // 监听窗口大小变化，同步行号容器高度
+  useEffect(() => {
+    const handleResize = () => {
+      if (lineNumbersRef.current && wrapperRef.current) {
+        lineNumbersRef.current.style.height = `${wrapperRef.current.clientHeight}px`;
+      }
+    };
+
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
   // 内容变化时同步尺寸（处理文件导入等外部更新）
   useEffect(() => {
     // 使用 requestAnimationFrame 确保 DOM 已更新
