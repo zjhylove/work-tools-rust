@@ -2,7 +2,7 @@
   flex: 1;
   display: flex;
   flex-direction: column;
-  overflow: hidden;
+  overflow: hidden;  /* 保持hidden，防止整个面板溢出 */
   background: var(--bg-primary);
   border-radius: 8px;
 }
@@ -14,29 +14,44 @@
 .pane-content {
   flex: 1;
   display: flex;
-  overflow: hidden;
+  overflow: hidden;  /* 保持hidden，内容由内部元素处理滚动 */
 }
 
 .editor-container {
   display: flex;
   flex: 1;
-  overflow: hidden;
+  overflow: visible;  /* 改为visible，允许子元素超出 */
   position: relative;
 }
 
 .line-numbers {
   /* 自适应宽度，默认2位数字的宽度 */
   width: fit-content;
-  min-width: 28px;  /* 问题2修复：减小到28px，刚好容纳2位数字 */
+  min-width: 28px;
   max-width: 60px;
   background: #f5f5f5;
   border-right: 1px solid #e0e0e0;
-  overflow: hidden;
+  overflow: hidden;  /* 隐藏溢出，滚动由JS控制 */
   flex-shrink: 0;
+  /* padding移到inner，与文本区域padding: 8px对应 */
+  /* 高度由JS动态设置 */
+  /* 隐藏滚动条但保持滚动功能 */
+  scrollbar-width: none;  /* Firefox */
+  -ms-overflow-style: none;  /* IE/Edge */
+}
+
+.line-numbers-inner {
+  /* 内部容器，通过transform实现滚动 */
   padding: 8px 4px;
   padding-right: 8px;
-  min-height: 100%;
+  will-change: transform;
 }
+
+.line-numbers::-webkit-scrollbar {
+  display: none;  /* Chrome/Safari/Opera */
+}
+
+/* 行号滚动条样式已在上方定义 */
 
 .line-number {
   text-align: right;
@@ -44,14 +59,22 @@
   font-size: 13px;
   font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
   line-height: 22px;
+  height: 22px;  /* 明确设置高度，确保与文本行对齐 */
   user-select: none;
 }
 
 .editor-wrapper {
   flex: 1;
   position: relative;
-  overflow: hidden;
+  overflow: auto;
   background: #ffffff;
+  height: 100%;
+  min-height: 0;
+}
+
+.editor-content {
+  position: relative;
+  /* 高度由JS动态设置 */
 }
 
 .highlight-layer {
@@ -59,8 +82,8 @@
   top: 0;
   left: 0;
   padding: 8px;
-  padding-right: 100px;  /* 与textarea保持一致 */
-  overflow: auto;  /* 关键修复：允许滚动，否则内容会被裁剪！ */
+  padding-right: 100px;
+  overflow: hidden;
   pointer-events: none;
   z-index: 1;
   font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
@@ -68,11 +91,11 @@
   line-height: 22px;
   white-space: pre;
   box-sizing: border-box;
-  /* 宽度和高度由JS动态设置 */
+  /* 高度由JS动态设置 */
 }
 
 .highlight-line {
-  min-height: 22px;
+  height: 22px;  /* 与行号高度一致 */
 }
 
 .text-input {
@@ -80,9 +103,9 @@
   top: 0;
   left: 0;
   width: 100%;
-  height: 100%;
+  /* 高度由JS动态设置，匹配内容尺寸 */
   padding: 8px;
-  padding-right: 100px;  /* 确保末尾空格可见 */
+  padding-right: 100px;
   border: none;
   background: transparent;
   color: transparent;
@@ -94,7 +117,7 @@
   outline: none;
   z-index: 2;
   white-space: pre;
-  overflow: auto;
+  overflow: hidden;
   box-sizing: border-box;
 }
 
@@ -138,31 +161,25 @@
   content: '';
 }
 
-/* 滚动条样式 - 只在textarea上应用，隐藏highlight-layer的滚动条 */
-.highlight-layer::-webkit-scrollbar {
-  display: none;  /* 隐藏highlight-layer的滚动条 */
-  width: 0;
-  height: 0;
-}
-
-.text-input::-webkit-scrollbar {
+/* 滚动条样式 - 应用在editor-wrapper上 */
+.editor-wrapper::-webkit-scrollbar {
   width: 8px;
   height: 8px;
 }
 
-.text-input::-webkit-scrollbar-track {
+.editor-wrapper::-webkit-scrollbar-track {
   background: transparent;
 }
 
-.text-input::-webkit-scrollbar-thumb {
+.editor-wrapper::-webkit-scrollbar-thumb {
   background: #d0d0d0;
   border-radius: 4px;
 }
 
-.text-input::-webkit-scrollbar-thumb:hover {
+.editor-wrapper::-webkit-scrollbar-thumb:hover {
   background: #a0a0a0;
 }
 
-.text-input::-webkit-scrollbar-corner {
+.editor-wrapper::-webkit-scrollbar-corner {
   background: transparent;
 }
