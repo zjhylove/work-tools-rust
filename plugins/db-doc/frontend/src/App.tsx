@@ -71,8 +71,31 @@ function App() {
   const [connectionSearch, setConnectionSearch] = useState('')
   const [testingConnection, setTestingConnection] = useState(false)
   const [testResult, setTestResult] = useState<{id: string, success: boolean, message?: string} | null>(null)
+  const [tableSearch, setTableSearch] = useState('')
+  const [prefixFilter, setPrefixFilter] = useState('')
 
   const filteredConnections = connections.filter(c => c.name.toLowerCase().includes(connectionSearch.toLowerCase()))
+
+  const filteredTables = tables.filter(t => {
+    const matchesSearch = t.toLowerCase().includes(tableSearch.toLowerCase())
+    const matchesPrefix = prefixFilter === '' || t.toLowerCase().startsWith(prefixFilter.toLowerCase())
+    return matchesSearch && matchesPrefix
+  })
+
+  const selectByPrefix = () => {
+    const matching = tables.filter(t => t.toLowerCase().startsWith(prefixFilter.toLowerCase()))
+    setSelectedTables(new Set([...selectedTables, ...matching]))
+  }
+
+  const invertSelection = () => {
+    const newSelected = new Set<string>()
+    tables.forEach(t => {
+      if (!selectedTables.has(t)) {
+        newSelected.add(t)
+      }
+    })
+    setSelectedTables(newSelected)
+  }
 
   const showToast = (type: ToastMessage['type'], message: string) => {
     const id = Date.now()
@@ -326,8 +349,28 @@ function App() {
                 {selectedTables.size === tables.length ? '取消全选' : '全选'}
               </button>
             </div>
+            <div className="tables-toolbar">
+              <input
+                className="search-input"
+                type="text"
+                placeholder="搜索表名..."
+                value={tableSearch}
+                onChange={(e) => setTableSearch(e.target.value)}
+              />
+              <div className="batch-actions">
+                <input
+                  className="prefix-input"
+                  type="text"
+                  placeholder="表前缀"
+                  value={prefixFilter}
+                  onChange={(e) => setPrefixFilter(e.target.value)}
+                />
+                <button onClick={selectByPrefix} disabled={!prefixFilter}>按前缀选择</button>
+                <button onClick={invertSelection}>反选</button>
+              </div>
+            </div>
             <div className="tables-grid">
-              {tables.map((table) => (
+              {filteredTables.map((table) => (
                 <div
                   key={table}
                   className={`table-item ${selectedTables.has(table) ? 'selected' : ''}`}

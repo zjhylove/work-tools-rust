@@ -311,6 +311,39 @@
   font-size: 18px;
 }
 
+.tables-toolbar {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+
+.tables-toolbar .search-input {
+  flex: 1;
+  min-width: 200px;
+  margin-bottom: 0;
+}
+
+.batch-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.prefix-input {
+  padding: 8px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  font-size: 14px;
+  width: 120px;
+}
+
+.prefix-input:focus {
+  outline: none;
+  border-color: var(--color-primary);
+}
+
 .tables-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
