@@ -1,6 +1,6 @@
 use anyhow::Result;
 use std::path::Path;
-use crate::models::{TableInfo, TemplateStyle, ColumnInfo};
+use crate::models::{TableInfo, TemplateStyle, ColumnInfo, ExportConfig};
 
 /// Markdown 文档导出器
 pub struct MarkdownExporter {
@@ -143,6 +143,22 @@ impl MarkdownExporter {
         } else {
             col.data_type.to_uppercase()
         }
+    }
+}
+
+use super::DocumentExporter;
+
+impl DocumentExporter for MarkdownExporter {
+    fn export(&self, tables: &[TableInfo], config: &ExportConfig) -> Result<Vec<String>> {
+        let output_path = std::path::PathBuf::from(&config.output_dir);
+        std::fs::create_dir_all(&output_path)?;
+
+        let file_path = output_path.join(format!(
+            "数据库文档_{}.md",
+            chrono::Local::now().format("%Y%m%d")
+        ));
+        self.export_tables(tables, &file_path)?;
+        Ok(vec![file_path.to_string_lossy().to_string()])
     }
 }
 

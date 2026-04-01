@@ -11,7 +11,7 @@ pub mod crypto;
 
 use models::*;
 use storage::DbDocStorage;
-use database::{DatabaseExtractor, MySqlExtractor};
+use database::{DatabaseExtractor, MySqlExtractor, PostgresExtractor};
 
 /// 数据库文档生成插件
 pub struct DbDocPlugin {
@@ -83,8 +83,8 @@ impl DbDocPlugin {
                 self.runtime.block_on(extractor.test_connection(&config))
             }
             DatabaseType::PostgreSQL => {
-                // TODO: Phase 2 实现
-                return Err(anyhow::anyhow!("PostgreSQL 支持即将推出"));
+                let extractor = PostgresExtractor;
+                self.runtime.block_on(extractor.test_connection(&config))
             }
         };
 
@@ -115,7 +115,8 @@ impl DbDocPlugin {
                 self.runtime.block_on(extractor.list_tables(&config))?
             }
             DatabaseType::PostgreSQL => {
-                return Err(anyhow::anyhow!("PostgreSQL 支持即将推出"));
+                let extractor = PostgresExtractor;
+                self.runtime.block_on(extractor.list_tables(&config))?
             }
         };
 
@@ -146,7 +147,8 @@ impl DbDocPlugin {
                 self.runtime.block_on(extractor.get_table_info(&config, table_name))?
             }
             DatabaseType::PostgreSQL => {
-                return Err(anyhow::anyhow!("PostgreSQL 支持即将推出"));
+                let extractor = PostgresExtractor;
+                self.runtime.block_on(extractor.get_table_info(&config, table_name))?
             }
         };
 
@@ -172,36 +174,25 @@ impl DbDocPlugin {
                     .block_on(extractor.get_tables_info(&conn_config, &config.tables))?
             }
             DatabaseType::PostgreSQL => {
-                return Err(anyhow::anyhow!("PostgreSQL 支持即将推出"));
+                let extractor = PostgresExtractor;
+                self.runtime
+                    .block_on(extractor.get_tables_info(&conn_config, &config.tables))?
             }
         };
 
-        // 导出文档
-        let output_path = std::path::PathBuf::from(&config.output_dir);
-        std::fs::create_dir_all(&output_path)?;
-
-        let mut exported_files = Vec::new();
-
-        match config.format {
+        // 选择导出器并导出
+        let exported_files: Vec<String> = match config.format {
             ExportFormat::Markdown => {
                 let exporter = exporter::MarkdownExporter::new(config.template);
-
-                for table in &tables_info {
-                    let file_name = format!("{}.md", table.name);
-                    let file_path = output_path.join(&file_name);
-                    exporter.export_table(table, &file_path)?;
-                    exported_files.push(file_name);
-                }
+                exporter::DocumentExporter::export(&exporter, &tables_info, &config)?
             }
             ExportFormat::Word => {
-                // TODO: Phase 1 后续实现
                 return Err(anyhow::anyhow!("Word 导出即将实现"));
             }
             ExportFormat::Pdf => {
-                // TODO: Phase 3 实现
                 return Err(anyhow::anyhow!("PDF 导出即将实现"));
             }
-        }
+        };
 
         // 保存导出历史
         let history = ExportHistory {
@@ -210,7 +201,7 @@ impl DbDocPlugin {
             tables: config.tables.clone(),
             format: config.format,
             template: config.template,
-            output_path: config.output_dir.clone(),
+            output_path: exported_files.first().cloned().unwrap_or_default(),
             exported_at: chrono::Utc::now().to_rfc3339(),
         };
         self.storage.add_export_history(history)?;
@@ -293,4 +284,27 @@ impl Plugin for DbDocPlugin {
 pub extern "C" fn plugin_create() -> *mut Box<dyn Plugin> {
     let plugin: Box<Box<dyn Plugin>> = Box::new(Box::new(DbDocPlugin::new()));
     Box::leak(plugin) as *mut Box<dyn Plugin>
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::models::ConnectionConfig;
+    use serde_json;
+
+    #[test]
+    fn test_deserialize_without_id() {
+        // 模拟前端传的数据（没有 id 和 created_at）
+        let json = serde_json::json!({
+            "name": "test",
+            "db_type": "mysql",
+            "host": "localhost",
+            "port": 3306,
+            "database": "mydb",
+            "username": "root"
+        });
+        let config: ConnectionConfig = serde_json::from_value(json).expect("反序列化失败");
+        assert_eq!(config.id, "");
+        assert_eq!(config.name, "test");
+        assert_eq!(config.created_at, 0);
+    }
 }
