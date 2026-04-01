@@ -1,3 +1,30 @@
+:root {
+  --color-primary: #1890ff;
+  --color-primary-hover: #40a9ff;
+  --color-primary-light: #e6f7ff;
+  --color-primary-border: #91d5ff;
+  --color-success: #52c41a;
+  --color-success-light: #f6ffed;
+  --color-error: #ff4d4f;
+  --color-error-light: #fff2f0;
+  --color-error-border: #ffccc7;
+  --color-warning: #faad14;
+  --color-warning-light: #fffbe6;
+  --color-bg: #f5f5f5;
+  --color-card: #ffffff;
+  --color-text: #333333;
+  --color-text-secondary: #666666;
+  --color-text-tertiary: #999999;
+  --color-border: #e8e8e8;
+  --color-border-light: #f0f0f0;
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.04);
+  --transition: all 0.2s ease;
+}
+
 .app {
   padding: 20px;
 }
@@ -8,12 +35,12 @@
   align-items: center;
   margin-bottom: 20px;
   padding-bottom: 15px;
-  border-bottom: 1px solid #e0e0e0;
+  border-bottom: 1px solid var(--color-border);
 }
 
 .header h1 {
   font-size: 24px;
-  color: #333;
+  color: var(--color-text);
 }
 
 .nav {
@@ -25,34 +52,34 @@
   padding: 8px 16px;
   border: 1px solid #ddd;
   background: #fff;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   cursor: pointer;
-  transition: all 0.2s;
+  transition: var(--transition);
 }
 
 .nav button:hover {
-  background: #f5f5f5;
+  background: var(--color-bg);
 }
 
 .nav button.active {
-  background: #1890ff;
+  background: var(--color-primary);
   color: #fff;
-  border-color: #1890ff;
+  border-color: var(--color-primary);
 }
 
 .error {
   padding: 12px;
-  background: #fff2f0;
-  border: 1px solid #ffccc7;
-  border-radius: 4px;
-  color: #ff4d4f;
+  background: var(--color-error-light);
+  border: 1px solid var(--color-error-border);
+  border-radius: var(--radius-sm);
+  color: var(--color-error);
   margin-bottom: 20px;
 }
 
 .loading {
   padding: 20px;
   text-align: center;
-  color: #666;
+  color: var(--color-text-secondary);
 }
 
 .main {
@@ -67,9 +94,9 @@
 }
 
 .connections-list {
-  background: #fafafa;
+  background: var(--color-card);
   padding: 20px;
-  border-radius: 8px;
+  border-radius: var(--radius-md);
 }
 
 .connections-list h2 {
@@ -86,9 +113,9 @@
   justify-content: space-between;
   align-items: center;
   padding: 12px;
-  background: #fff;
-  border: 1px solid #e0e0e0;
-  border-radius: 4px;
+  background: var(--color-card);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
   margin-bottom: 10px;
 }
 
@@ -104,14 +131,14 @@
 
 .connection-type {
   padding: 2px 8px;
-  background: #e6f7ff;
-  color: #1890ff;
-  border-radius: 4px;
+  background: var(--color-primary-light);
+  color: var(--color-primary);
+  border-radius: var(--radius-sm);
   font-size: 12px;
 }
 
 .connection-host {
-  color: #666;
+  color: var(--color-text-secondary);
   font-size: 14px;
 }
 
@@ -126,16 +153,16 @@
 }
 
 .empty {
-  color: #999;
+  color: var(--color-text-tertiary);
   text-align: center;
   padding: 20px;
 }
 
 /* 表单样式 */
 .connection-form {
-  background: #fafafa;
+  background: var(--color-card);
   padding: 20px;
-  border-radius: 8px;
+  border-radius: var(--radius-md);
 }
 
 .connection-form h2 {
@@ -158,21 +185,21 @@
 .form-group label {
   font-size: 14px;
   font-weight: 500;
-  color: #333;
+  color: var(--color-text);
 }
 
 .form-group input,
 .form-group select {
   padding: 8px 12px;
-  border: 1px solid #d9d9d9;
-  border-radius: 4px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
   font-size: 14px;
 }
 
 .form-group input:focus,
 .form-group select:focus {
   outline: none;
-  border-color: #1890ff;
+  border-color: var(--color-primary);
 }
 
 .form-row {
@@ -195,9 +222,9 @@
 
 /* 表选择视图 */
 .tables-view {
-  background: #fafafa;
+  background: var(--color-card);
   padding: 20px;
-  border-radius: 8px;
+  border-radius: var(--radius-md);
 }
 
 .tables-header {
@@ -223,20 +250,20 @@
   align-items: center;
   gap: 10px;
   padding: 12px;
-  background: #fff;
-  border: 1px solid #e0e0e0;
-  border-radius: 4px;
+  background: var(--color-card);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
   cursor: pointer;
-  transition: all 0.2s;
+  transition: var(--transition);
 }
 
 .table-item:hover {
-  border-color: #1890ff;
+  border-color: var(--color-primary);
 }
 
 .table-item.selected {
-  background: #e6f7ff;
-  border-color: #1890ff;
+  background: var(--color-primary-light);
+  border-color: var(--color-primary);
 }
 
 .tables-actions {
@@ -247,9 +274,9 @@
 
 /* 预览视图 */
 .preview-view {
-  background: #fafafa;
+  background: var(--color-card);
   padding: 20px;
-  border-radius: 8px;
+  border-radius: var(--radius-md);
 }
 
 .preview-header {
@@ -275,10 +302,10 @@
 }
 
 .table-preview {
-  background: #fff;
+  background: var(--color-card);
   padding: 20px;
-  border: 1px solid #e0e0e0;
-  border-radius: 8px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
 }
 
 .table-preview h3 {
@@ -287,7 +314,7 @@
 }
 
 .table-comment {
-  color: #666;
+  color: var(--color-text-secondary);
   font-size: 14px;
   margin-bottom: 15px;
 }
@@ -304,13 +331,13 @@
 .indexes-table th,
 .indexes-table td {
   padding: 10px;
-  border: 1px solid #e0e0e0;
+  border: 1px solid var(--color-border);
   text-align: left;
 }
 
 .columns-table th,
 .indexes-table th {
-  background: #fafafa;
+  background: var(--color-bg);
   font-weight: 500;
 }
 
@@ -326,16 +353,16 @@
 /* 通用按钮 */
 button {
   padding: 8px 16px;
-  border: 1px solid #d9d9d9;
-  background: #fff;
-  border-radius: 4px;
+  border: 1px solid var(--color-border);
+  background: var(--color-card);
+  border-radius: var(--radius-sm);
   cursor: pointer;
-  transition: all 0.2s;
+  transition: var(--transition);
 }
 
 button:hover {
-  border-color: #1890ff;
-  color: #1890ff;
+  border-color: var(--color-primary);
+  color: var(--color-primary);
 }
 
 button:disabled {
@@ -344,12 +371,12 @@ button:disabled {
 }
 
 button.primary {
-  background: #1890ff;
+  background: var(--color-primary);
   color: #fff;
-  border-color: #1890ff;
+  border-color: var(--color-primary);
 }
 
 button.primary:hover {
-  background: #40a9ff;
-  border-color: #40a9ff;
+  background: var(--color-primary-hover);
+  border-color: var(--color-primary-hover);
 }
