@@ -43,28 +43,60 @@
   color: var(--color-text);
 }
 
-.nav {
+.steps {
   display: flex;
-  gap: 10px;
+  align-items: center;
+  gap: 0;
 }
 
-.nav button {
+.step {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   padding: 8px 16px;
-  border: 1px solid #ddd;
-  background: #fff;
-  border-radius: var(--radius-sm);
   cursor: pointer;
+  border-radius: var(--radius-sm);
   transition: var(--transition);
+  font-size: 14px;
+  color: var(--color-text-tertiary);
 }
 
-.nav button:hover {
-  background: var(--color-bg);
+.step.active {
+  color: var(--color-primary);
+  font-weight: 500;
 }
 
-.nav button.active {
+.step.completed {
+  color: var(--color-success);
+}
+
+.step-number {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  border: 2px solid currentColor;
+}
+
+.step.active .step-number {
   background: var(--color-primary);
-  color: #fff;
+  color: white;
   border-color: var(--color-primary);
+}
+
+.step.completed .step-number {
+  background: var(--color-success);
+  color: white;
+  border-color: var(--color-success);
+}
+
+.step-line {
+  width: 40px;
+  height: 2px;
+  background: var(--color-border);
 }
 
 .error {

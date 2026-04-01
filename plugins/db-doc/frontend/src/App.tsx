@@ -218,31 +218,24 @@ function App() {
     <div className="app">
       <header className="header">
         <h1>📊 数据库文档生成器</h1>
-        <nav className="nav">
-          <button
-            className={viewMode === 'connections' ? 'active' : ''}
-            onClick={() => setViewMode('connections')}
-          >
-            连接管理
-          </button>
-          {selectedConnection && (
-            <>
-              <button
-                className={viewMode === 'tables' ? 'active' : ''}
-                onClick={() => setViewMode('tables')}
-              >
-                选择表
-              </button>
-              <button
-                className={viewMode === 'preview' ? 'active' : ''}
-                onClick={handlePreview}
-                disabled={selectedTables.size === 0}
-              >
-                预览 ({selectedTables.size})
-              </button>
-            </>
-          )}
-        </nav>
+        <div className="steps">
+          <div className={`step ${viewMode === 'connections' ? 'active' : 'completed'}`}
+            onClick={() => setViewMode('connections')}>
+            <span className="step-number">1</span>
+            <span className="step-label">连接管理</span>
+          </div>
+          <div className="step-line"></div>
+          <div className={`step ${viewMode === 'tables' ? 'active' : selectedConnection ? 'completed' : ''}`}
+            onClick={() => selectedConnection && setViewMode('tables')}>
+            <span className="step-number">2</span>
+            <span className="step-label">选择表</span>
+          </div>
+          <div className="step-line"></div>
+          <div className={`step ${viewMode === 'preview' ? 'active' : ''}`}>
+            <span className="step-number">3</span>
+            <span className="step-label">预览 & 导出</span>
+          </div>
+        </div>
       </header>
 
       {error && <div className="error">{error}</div>}
