@@ -110,6 +110,18 @@ function App() {
     }, 3000)
   }
 
+  const callAPI = async <T,>(method: string, params?: Record<string, unknown>): Promise<T> => {
+    try {
+      setError(null)
+      return await window.pluginAPI.call('db-doc', method, params) as T
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e)
+      setError(message)
+      showToast('error', message)
+      throw e
+    }
+  }
+
   // 加载连接列表
   useEffect(() => {
     // 等待 pluginAPI 注入完成后再加载
@@ -125,10 +137,10 @@ function App() {
   const loadConnections = async () => {
     try {
       setLoading(true)
-      const result = await window.pluginAPI.call('db-doc', 'list_connections', {}) as ConnectionConfig[]
+      const result = await callAPI<ConnectionConfig[]>('list_connections', {})
       setConnections(result || [])
-    } catch (e) {
-      setError(e instanceof Error ? e.message : '加载连接失败')
+    } catch {
+      // callAPI handles error display
     } finally {
       setLoading(false)
     }
@@ -158,11 +170,11 @@ function App() {
   const loadTables = async (connectionId: string) => {
     try {
       setLoading(true)
-      const result = await window.pluginAPI.call('db-doc', 'list_tables', { connection_id: connectionId }) as string[]
+      const result = await callAPI<string[]>('list_tables', { connection_id: connectionId })
       setTables(result || [])
       setSelectedTables(new Set())
-    } catch (e) {
-      setError(e instanceof Error ? e.message : '加载表列表失败')
+    } catch {
+      // callAPI handles error display
     } finally {
       setLoading(false)
     }
@@ -171,13 +183,12 @@ function App() {
   // 获取表详情
   const loadTableInfo = async (connectionId: string, tableName: string) => {
     try {
-      const result = await window.pluginAPI.call('db-doc', 'get_table_info', {
+      const result = await callAPI<TableInfo>('get_table_info', {
         connection_id: connectionId,
         table_name: tableName
-      }) as TableInfo
+      })
       return result
-    } catch (e) {
-      console.error('加载表信息失败:', e)
+    } catch {
       return null
     }
   }
@@ -192,14 +203,14 @@ function App() {
   // 删除连接
   const handleDeleteConnection = async (connId: string) => {
     try {
-      await window.pluginAPI.call('db-doc', 'delete_connection', { id: connId })
+      await callAPI('delete_connection', { id: connId })
       showToast('success', '连接已删除')
       loadConnections()
       if (selectedConnection?.id === connId) {
         setSelectedConnection(null)
       }
-    } catch (e) {
-      showToast('error', '删除失败: ' + (e instanceof Error ? e.message : '未知错误'))
+    } catch {
+      // callAPI handles error display
     }
   }
 
@@ -247,13 +258,13 @@ function App() {
       if (!outputDir) return
 
       setExporting(true)
-      const result = await window.pluginAPI.call('db-doc', 'export_docs', {
+      const result = await callAPI<{ success: boolean; files?: string[]; message?: string }>('export_docs', {
         connection_id: selectedConnection.id,
         tables: Array.from(selectedTables),
         output_dir: outputDir,
         format: exportFormat,
         template: exportTemplate
-      }) as { success: boolean; files?: string[]; message?: string }
+      })
 
       if (result.success) {
         showToast('success', `导出成功! 共 ${result.files?.length || 0} 个文件`)
@@ -341,7 +352,7 @@ function App() {
               <h2>新建连接</h2>
               <ConnectionForm
                 onSave={async (config) => {
-                  await window.pluginAPI.call('db-doc', 'save_connection', config as Record<string, unknown>)
+                  await callAPI('save_connection', config as Record<string, unknown>)
                   loadConnections()
                 }}
                 onTest={testConnection}
