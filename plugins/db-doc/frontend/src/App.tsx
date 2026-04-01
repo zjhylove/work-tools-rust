@@ -52,6 +52,7 @@ declare global {
   interface Window {
     pluginAPI: {
       call: (pluginId: string, method: string, params?: Record<string, unknown>) => Promise<unknown>
+      open_folder_dialog: (title?: string) => Promise<string | null>
     }
   }
 }
@@ -73,6 +74,10 @@ function App() {
   const [testResult, setTestResult] = useState<{id: string, success: boolean, message?: string} | null>(null)
   const [tableSearch, setTableSearch] = useState('')
   const [prefixFilter, setPrefixFilter] = useState('')
+  const [showExportPanel, setShowExportPanel] = useState(false)
+  const [exportFormat, setExportFormat] = useState<'markdown' | 'word' | 'pdf'>('markdown')
+  const [exportTemplate, setExportTemplate] = useState<'simple' | 'detailed'>('detailed')
+  const [exporting, setExporting] = useState(false)
 
   const filteredConnections = connections.filter(c => c.name.toLowerCase().includes(connectionSearch.toLowerCase()))
 
@@ -234,28 +239,32 @@ function App() {
   }
 
   // 导出文档
-  const handleExport = async () => {
+  const handleExportWithDialog = async () => {
     if (!selectedConnection || selectedTables.size === 0) return
 
     try {
-      setLoading(true)
+      const outputDir = await window.pluginAPI.open_folder_dialog('选择导出目录')
+      if (!outputDir) return
+
+      setExporting(true)
       const result = await window.pluginAPI.call('db-doc', 'export_docs', {
         connection_id: selectedConnection.id,
         tables: Array.from(selectedTables),
-        output_dir: '~/.worktools/exports',
-        format: 'markdown',
-        template: 'detailed'
+        output_dir: outputDir,
+        format: exportFormat,
+        template: exportTemplate
       }) as { success: boolean; files?: string[]; message?: string }
 
       if (result.success) {
         showToast('success', `导出成功! 共 ${result.files?.length || 0} 个文件`)
+        setShowExportPanel(false)
       } else {
         showToast('error', '导出失败: ' + (result.message || '未知错误'))
       }
     } catch (e) {
       showToast('error', '导出失败: ' + (e instanceof Error ? e.message : '未知错误'))
     } finally {
-      setLoading(false)
+      setExporting(false)
     }
   }
 
@@ -403,13 +412,70 @@ function App() {
               <h2>预览 - {tableInfos.length} 张表</h2>
               <div className="preview-actions">
                 <button onClick={() => setViewMode('tables')}>返回选择</button>
-                <button onClick={handleExport} className="primary">导出文档</button>
+                <button onClick={() => setShowExportPanel(true)} className="primary">导出文档</button>
               </div>
             </div>
             <div className="preview-content">
               {tableInfos.map((table) => (
                 <TablePreview key={table.name} table={table} />
               ))}
+            </div>
+          </div>
+        )}
+
+        {showExportPanel && (
+          <div className="modal-overlay" onClick={() => setShowExportPanel(false)}>
+            <div className="export-panel" onClick={(e) => e.stopPropagation()}>
+              <h3>导出配置</h3>
+
+              <div className="form-group">
+                <label>导出格式</label>
+                <div className="radio-group">
+                  <label className="radio-item">
+                    <input type="radio" name="format" value="markdown"
+                      checked={exportFormat === 'markdown'}
+                      onChange={() => setExportFormat('markdown')} />
+                    <span>Markdown</span>
+                  </label>
+                  <label className="radio-item">
+                    <input type="radio" name="format" value="word"
+                      checked={exportFormat === 'word'}
+                      onChange={() => setExportFormat('word')} />
+                    <span>Word</span>
+                  </label>
+                  <label className="radio-item">
+                    <input type="radio" name="format" value="pdf"
+                      checked={exportFormat === 'pdf'}
+                      onChange={() => setExportFormat('pdf')} />
+                    <span>PDF</span>
+                  </label>
+                </div>
+              </div>
+
+              <div className="form-group">
+                <label>模板风格</label>
+                <div className="radio-group">
+                  <label className="radio-item">
+                    <input type="radio" name="template" value="simple"
+                      checked={exportTemplate === 'simple'}
+                      onChange={() => setExportTemplate('simple')} />
+                    <span>简洁</span>
+                  </label>
+                  <label className="radio-item">
+                    <input type="radio" name="template" value="detailed"
+                      checked={exportTemplate === 'detailed'}
+                      onChange={() => setExportTemplate('detailed')} />
+                    <span>详细</span>
+                  </label>
+                </div>
+              </div>
+
+              <div className="form-actions">
+                <button onClick={() => setShowExportPanel(false)}>取消</button>
+                <button className="primary" onClick={handleExportWithDialog} disabled={exporting}>
+                  {exporting ? '导出中...' : '选择目录并导出'}
+                </button>
+              </div>
             </div>
           </div>
         )}

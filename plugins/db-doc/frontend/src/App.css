@@ -407,6 +407,51 @@
   gap: 20px;
 }
 
+/* 导出面板模态框 */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 500;
+}
+
+.export-panel {
+  background: var(--color-card);
+  padding: 24px;
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow);
+  min-width: 400px;
+  max-width: 500px;
+}
+
+.export-panel h3 {
+  font-size: 18px;
+  margin-bottom: 20px;
+}
+
+.radio-group {
+  display: flex;
+  gap: 16px;
+}
+
+.radio-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.radio-item input[type="radio"] {
+  margin: 0;
+}
+
 .table-preview {
   background: var(--color-card);
   padding: 20px;
