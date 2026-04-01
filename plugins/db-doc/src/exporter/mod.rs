@@ -1,6 +1,10 @@
 mod markdown;
+mod pdf;
+mod word;
 
 pub use markdown::MarkdownExporter;
+pub use pdf::PdfExporter;
+pub use word::WordExporter;
 
 use anyhow::Result;
 use crate::models::{TableInfo, ExportConfig};

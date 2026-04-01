@@ -187,10 +187,12 @@ impl DbDocPlugin {
                 exporter::DocumentExporter::export(&exporter, &tables_info, &config)?
             }
             ExportFormat::Word => {
-                return Err(anyhow::anyhow!("Word 导出即将实现"));
+                let exporter = exporter::WordExporter::new(config.template);
+                exporter::DocumentExporter::export(&exporter, &tables_info, &config)?
             }
             ExportFormat::Pdf => {
-                return Err(anyhow::anyhow!("PDF 导出即将实现"));
+                let exporter = exporter::PdfExporter::new(config.template);
+                exporter::DocumentExporter::export(&exporter, &tables_info, &config)?
             }
         };
 
