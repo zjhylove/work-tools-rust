@@ -2,6 +2,12 @@ import { useState, useEffect } from 'react'
 import './App.css'
 
 // 类型定义
+interface ToastMessage {
+  id: number
+  type: 'success' | 'error' | 'info'
+  message: string
+}
+
 interface ConnectionConfig {
   id: string
   name: string
@@ -45,7 +51,7 @@ interface IndexInfo {
 declare global {
   interface Window {
     pluginAPI: {
-      call: (method: string, params?: Record<string, unknown>) => Promise<unknown>
+      call: (pluginId: string, method: string, params?: Record<string, unknown>) => Promise<unknown>
     }
   }
 }
@@ -61,16 +67,32 @@ function App() {
   const [viewMode, setViewMode] = useState<ViewMode>('connections')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [toasts, setToasts] = useState<ToastMessage[]>([])
+
+  const showToast = (type: ToastMessage['type'], message: string) => {
+    const id = Date.now()
+    setToasts(prev => [...prev, { id, type, message }])
+    setTimeout(() => {
+      setToasts(prev => prev.filter(t => t.id !== id))
+    }, 3000)
+  }
 
   // 加载连接列表
   useEffect(() => {
-    loadConnections()
+    // 等待 pluginAPI 注入完成后再加载
+    const waitForAPI = setInterval(() => {
+      if (window.pluginAPI) {
+        clearInterval(waitForAPI)
+        loadConnections()
+      }
+    }, 100)
+    return () => clearInterval(waitForAPI)
   }, [])
 
   const loadConnections = async () => {
     try {
       setLoading(true)
-      const result = await window.pluginAPI.call('list_connections') as ConnectionConfig[]
+      const result = await window.pluginAPI.call('db-doc', 'list_connections', {}) as ConnectionConfig[]
       setConnections(result || [])
     } catch (e) {
       setError(e instanceof Error ? e.message : '加载连接失败')
@@ -83,14 +105,14 @@ function App() {
   const testConnection = async (config: Partial<ConnectionConfig>) => {
     try {
       setLoading(true)
-      const result = await window.pluginAPI.call('test_connection', config as Record<string, unknown>) as { success: boolean; message: string }
+      const result = await window.pluginAPI.call('db-doc', 'test_connection', config as Record<string, unknown>) as { success: boolean; message: string }
       if (result.success) {
-        alert('连接成功!')
+        showToast('success', '连接成功!')
       } else {
-        alert('连接失败: ' + result.message)
+        showToast('error', '连接失败: ' + result.message)
       }
     } catch (e) {
-      alert('连接失败: ' + (e instanceof Error ? e.message : '未知错误'))
+      showToast('error', '连接失败: ' + (e instanceof Error ? e.message : '未知错误'))
     } finally {
       setLoading(false)
     }
@@ -100,7 +122,7 @@ function App() {
   const loadTables = async (connectionId: string) => {
     try {
       setLoading(true)
-      const result = await window.pluginAPI.call('list_tables', { connection_id: connectionId }) as string[]
+      const result = await window.pluginAPI.call('db-doc', 'list_tables', { connection_id: connectionId }) as string[]
       setTables(result || [])
       setSelectedTables(new Set())
     } catch (e) {
@@ -113,7 +135,7 @@ function App() {
   // 获取表详情
   const loadTableInfo = async (connectionId: string, tableName: string) => {
     try {
-      const result = await window.pluginAPI.call('get_table_info', {
+      const result = await window.pluginAPI.call('db-doc', 'get_table_info', {
         connection_id: connectionId,
         table_name: tableName
       }) as TableInfo
@@ -172,7 +194,7 @@ function App() {
 
     try {
       setLoading(true)
-      const result = await window.pluginAPI.call('export_docs', {
+      const result = await window.pluginAPI.call('db-doc', 'export_docs', {
         connection_id: selectedConnection.id,
         tables: Array.from(selectedTables),
         output_dir: '~/.worktools/exports',
@@ -181,12 +203,12 @@ function App() {
       }) as { success: boolean; files?: string[]; message?: string }
 
       if (result.success) {
-        alert(`导出成功! 共 ${result.files?.length || 0} 个文件`)
+        showToast('success', `导出成功! 共 ${result.files?.length || 0} 个文件`)
       } else {
-        alert('导出失败: ' + (result.message || '未知错误'))
+        showToast('error', '导出失败: ' + (result.message || '未知错误'))
       }
     } catch (e) {
-      alert('导出失败: ' + (e instanceof Error ? e.message : '未知错误'))
+      showToast('error', '导出失败: ' + (e instanceof Error ? e.message : '未知错误'))
     } finally {
       setLoading(false)
     }
@@ -255,7 +277,7 @@ function App() {
               <h2>新建连接</h2>
               <ConnectionForm
                 onSave={async (config) => {
-                  await window.pluginAPI.call('save_connection', config as Record<string, unknown>)
+                  await window.pluginAPI.call('db-doc', 'save_connection', config as Record<string, unknown>)
                   loadConnections()
                 }}
                 onTest={testConnection}
@@ -317,6 +339,18 @@ function App() {
           </div>
         )}
       </main>
+
+      {toasts.length > 0 && (
+        <div className="toast-container">
+          {toasts.map(toast => (
+            <div key={toast.id} className={`toast toast-${toast.type}`}>
+              {toast.type === 'success' && '\u2713 '}
+              {toast.type === 'error' && '\u2717 '}
+              {toast.message}
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   )
 }
