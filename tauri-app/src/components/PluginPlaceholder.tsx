@@ -229,6 +229,10 @@ export default function PluginPlaceholder({
                 console.log(`[PluginAPI] 打开链接: ${url}`);
                 return await invoke("open_url", { url });
               },
+              open_folder_dialog: async (title?: string) => {
+                console.log(`[PluginAPI] 打开文件夹对话框`);
+                return await invoke("open_folder_dialog", { title: title || "选择导出目录" });
+              },
             };
             console.log("[PluginPlaceholder] pluginAPI 注入成功");
           }

@@ -539,3 +539,22 @@ pub async fn open_url(url: String) -> Result<(), String> {
         })
         .map_err(|e| format!("打开链接失败: {}", e))
 }
+
+/// 打开文件夹选择对话框
+#[tauri::command]
+pub async fn open_folder_dialog(
+    title: Option<String>,
+    app: tauri::AppHandle,
+) -> Result<Option<String>, String> {
+    use tauri_plugin_dialog::DialogExt;
+
+    let mut builder = app.dialog().file();
+
+    if let Some(title) = title {
+        builder = builder.set_title(title);
+    }
+
+    let folder_path = builder.blocking_pick_folder();
+
+    Ok(folder_path.map(|p| p.to_string()))
+}
