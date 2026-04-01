@@ -68,6 +68,11 @@ function App() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [toasts, setToasts] = useState<ToastMessage[]>([])
+  const [connectionSearch, setConnectionSearch] = useState('')
+  const [testingConnection, setTestingConnection] = useState(false)
+  const [testResult, setTestResult] = useState<{id: string, success: boolean, message?: string} | null>(null)
+
+  const filteredConnections = connections.filter(c => c.name.toLowerCase().includes(connectionSearch.toLowerCase()))
 
   const showToast = (type: ToastMessage['type'], message: string) => {
     const id = Date.now()
@@ -104,17 +109,20 @@ function App() {
   // 测试连接
   const testConnection = async (config: Partial<ConnectionConfig>) => {
     try {
-      setLoading(true)
+      setTestingConnection(true)
+      setTestResult(null)
       const result = await window.pluginAPI.call('db-doc', 'test_connection', config as Record<string, unknown>) as { success: boolean; message: string }
+      setTestResult({ id: config.id || '', success: result.success, message: result.message })
       if (result.success) {
         showToast('success', '连接成功!')
       } else {
         showToast('error', '连接失败: ' + result.message)
       }
     } catch (e) {
+      setTestResult({ id: config.id || '', success: false, message: e instanceof Error ? e.message : '未知错误' })
       showToast('error', '连接失败: ' + (e instanceof Error ? e.message : '未知错误'))
     } finally {
-      setLoading(false)
+      setTestingConnection(false)
     }
   }
 
@@ -151,6 +159,20 @@ function App() {
     setSelectedConnection(conn)
     await loadTables(conn.id)
     setViewMode('tables')
+  }
+
+  // 删除连接
+  const handleDeleteConnection = async (connId: string) => {
+    try {
+      await window.pluginAPI.call('db-doc', 'delete_connection', { id: connId })
+      showToast('success', '连接已删除')
+      loadConnections()
+      if (selectedConnection?.id === connId) {
+        setSelectedConnection(null)
+      }
+    } catch (e) {
+      showToast('error', '删除失败: ' + (e instanceof Error ? e.message : '未知错误'))
+    }
   }
 
   // 切换表选择
@@ -246,20 +268,37 @@ function App() {
           <div className="connections-view">
             <div className="connections-list">
               <h2>已保存的连接</h2>
-              {connections.length === 0 ? (
-                <p className="empty">暂无保存的连接配置</p>
+              {connections.length > 0 && (
+                <input
+                  className="search-input"
+                  type="text"
+                  placeholder="搜索连接..."
+                  value={connectionSearch}
+                  onChange={(e) => setConnectionSearch(e.target.value)}
+                />
+              )}
+              {filteredConnections.length === 0 ? (
+                <p className="empty">{connections.length === 0 ? '暂无保存的连接配置' : '没有匹配的连接'}</p>
               ) : (
                 <ul>
-                  {connections.map((conn) => (
+                  {filteredConnections.map((conn) => (
                     <li key={conn.id} className="connection-item">
                       <div className="connection-info">
                         <span className="connection-name">{conn.name}</span>
                         <span className="connection-type">{conn.db_type.toUpperCase()}</span>
                         <span className="connection-host">{conn.host}:{conn.port}</span>
+                        {testResult && testResult.id === conn.id && (
+                          <span className={`test-result ${testResult.success ? 'test-success' : 'test-fail'}`}>
+                            {testResult.success ? '\u2713' : '\u2717'}
+                          </span>
+                        )}
                       </div>
                       <div className="connection-actions">
                         <button onClick={() => handleSelectConnection(conn)}>选择</button>
-                        <button onClick={() => testConnection(conn)}>测试连接</button>
+                        <button onClick={() => testConnection(conn)} disabled={testingConnection}>
+                          {testingConnection ? '测试中...' : '测试连接'}
+                        </button>
+                        <button className="btn-danger" onClick={() => handleDeleteConnection(conn.id)}>删除</button>
                       </div>
                     </li>
                   ))}

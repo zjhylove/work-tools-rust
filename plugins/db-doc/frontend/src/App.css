@@ -190,6 +190,47 @@
   padding: 20px;
 }
 
+/* 搜索输入框 */
+.search-input {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  font-size: 14px;
+  margin-bottom: 12px;
+  box-sizing: border-box;
+}
+
+.search-input:focus {
+  outline: none;
+  border-color: var(--color-primary);
+}
+
+/* 测试结果指示 */
+.test-result {
+  font-size: 14px;
+  font-weight: bold;
+}
+
+.test-success {
+  color: var(--color-success);
+}
+
+.test-fail {
+  color: var(--color-error);
+}
+
+/* 危险按钮 */
+.btn-danger {
+  color: var(--color-error) !important;
+  border-color: var(--color-error) !important;
+}
+
+.btn-danger:hover {
+  background: var(--color-error) !important;
+  color: #fff !important;
+}
+
 /* 表单样式 */
 .connection-form {
   background: var(--color-card);
