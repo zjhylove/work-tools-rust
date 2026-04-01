@@ -45,7 +45,7 @@ impl MarkdownExporter {
     fn render_table(&self, table: &TableInfo) -> String {
         match self.template_style {
             TemplateStyle::Simple => self.render_simple(table),
-            TemplateStyle::Detailed | TemplateStyle::Enterprise => self.render_detailed(table),
+            TemplateStyle::Detailed => self.render_detailed(table),
         }
     }
 

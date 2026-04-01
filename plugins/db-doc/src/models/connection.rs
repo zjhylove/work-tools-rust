@@ -34,26 +34,47 @@ impl std::fmt::Display for DatabaseType {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ConnectionConfig {
     /// 配置 ID
+    #[serde(default)]
     pub id: String,
     /// 配置名称 (如 "生产环境")
     pub name: String,
     /// 数据库类型
+    #[serde(default)]
     pub db_type: DatabaseType,
     /// 主机地址
+    #[serde(default = "default_host")]
     pub host: String,
     /// 端口
+    #[serde(default)]
     pub port: u16,
     /// 数据库名
+    #[serde(default)]
     pub database: String,
     /// 用户名
+    #[serde(default = "default_username")]
     pub username: String,
     /// 密码 (加密存储)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub password: Option<String>,
     /// 创建时间 (Unix 时间戳)
+    #[serde(default)]
     pub created_at: u64,
     /// 最后使用时间
     pub last_used: Option<u64>,
+}
+
+fn default_host() -> String {
+    "localhost".to_string()
+}
+
+fn default_username() -> String {
+    "root".to_string()
+}
+
+impl Default for DatabaseType {
+    fn default() -> Self {
+        DatabaseType::MySQL
+    }
 }
 
 impl ConnectionConfig {
@@ -125,7 +146,6 @@ impl ExportFormat {
 pub enum TemplateStyle {
     Simple,      // 简洁版
     Detailed,    // 详细版
-    Enterprise,  // 企业版
 }
 
 impl Default for TemplateStyle {
