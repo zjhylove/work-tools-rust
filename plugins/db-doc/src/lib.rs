@@ -190,10 +190,6 @@ impl DbDocPlugin {
                 let exporter = exporter::WordExporter::new(config.template);
                 exporter::DocumentExporter::export(&exporter, &tables_info, &config)?
             }
-            ExportFormat::Pdf => {
-                let exporter = exporter::PdfExporter::new(config.template);
-                exporter::DocumentExporter::export(&exporter, &tables_info, &config)?
-            }
         };
 
         // 保存导出历史

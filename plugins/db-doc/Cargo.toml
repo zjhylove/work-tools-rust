@@ -27,9 +27,6 @@ handlebars = "5.1"
 quick-xml = "0.31"
 zip = "0.6"
 
-# PDF 生成
-printpdf = "0.6"
-
 # 加密 (复用密码管理器方案)
 aes = "0.8"
 sha2 = "0.10"

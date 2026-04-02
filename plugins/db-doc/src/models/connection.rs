@@ -122,12 +122,37 @@ impl ConnectionConfig {
 }
 
 /// 导出格式
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "lowercase")]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ExportFormat {
     Word,
     Markdown,
-    Pdf,
+}
+
+impl Serialize for ExportFormat {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        serializer.serialize_str(match self {
+            ExportFormat::Word => "word",
+            ExportFormat::Markdown => "markdown",
+        })
+    }
+}
+
+impl<'de> Deserialize<'de> for ExportFormat {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let s = String::deserialize(deserializer)?;
+        match s.as_str() {
+            "word" => Ok(ExportFormat::Word),
+            "markdown" => Ok(ExportFormat::Markdown),
+            // 未知格式（如已移除的 pdf）降级为 Markdown
+            _ => Ok(ExportFormat::Markdown),
+        }
+    }
 }
 
 impl ExportFormat {
@@ -135,7 +160,6 @@ impl ExportFormat {
         match self {
             ExportFormat::Word => "docx",
             ExportFormat::Markdown => "md",
-            ExportFormat::Pdf => "pdf",
         }
     }
 }

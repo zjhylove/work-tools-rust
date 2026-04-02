@@ -75,7 +75,7 @@ function App() {
   const [tableSearch, setTableSearch] = useState('')
   const [prefixFilter, setPrefixFilter] = useState('')
   const [showExportPanel, setShowExportPanel] = useState(false)
-  const [exportFormat, setExportFormat] = useState<'markdown' | 'word' | 'pdf'>('markdown')
+  const [exportFormat, setExportFormat] = useState<'markdown' | 'word'>('markdown')
   const [exportTemplate, setExportTemplate] = useState<'simple' | 'detailed'>('detailed')
   const [exporting, setExporting] = useState(false)
 
@@ -453,12 +453,6 @@ function App() {
                       checked={exportFormat === 'word'}
                       onChange={() => setExportFormat('word')} />
                     <span>Word</span>
-                  </label>
-                  <label className="radio-item">
-                    <input type="radio" name="format" value="pdf"
-                      checked={exportFormat === 'pdf'}
-                      onChange={() => setExportFormat('pdf')} />
-                    <span>PDF</span>
                   </label>
                 </div>
               </div>
