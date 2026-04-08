@@ -77,6 +77,22 @@ jobs:
         working-directory: tauri-app
         run: npm ci
 
+      - name: Install plugin frontend dependencies
+        run: |
+          for dir in plugins/*/frontend; do
+            if [ -f "$dir/package.json" ]; then
+              echo "Installing deps for $dir"
+              cd "$dir"
+              npm ci
+              cd -
+            fi
+          done
+        shell: bash
+
+      - name: Build plugins
+        run: bash scripts/build-plugins.sh
+        shell: bash
+
       - name: Build frontend
         working-directory: tauri-app
         run: npm run build
@@ -95,6 +111,7 @@ jobs:
           name: work-tools-${{ matrix.os }}-${{ matrix.target }}
           path: |
             tauri-app/src-tauri/target/release/bundle/*/
+            plugins/**/*.wtplugin.zip
           retention-days: 30
 
   release:
@@ -121,6 +138,7 @@ jobs:
             artifacts/**/*_x64_en-US.msi
             artifacts/**/*.deb
             artifacts/**/*.AppImage
+            artifacts/**/*.wtplugin.zip
           draft: false
           prerelease: false
           generate_release_notes: true
