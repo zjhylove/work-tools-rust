@@ -19,6 +19,22 @@ pub struct DbDocPlugin {
     runtime: Runtime,
 }
 
+/// 根据 db_type 获取对应的 extractor 并执行异步操作
+macro_rules! with_extractor {
+    ($self:expr, $config:expr, $extractor:ident . $method:ident($($arg:expr),*)) => {
+        match $config.db_type {
+            DatabaseType::MySQL => {
+                let $extractor = MySqlExtractor;
+                $self.runtime.block_on($extractor.$method($($arg),*))
+            }
+            DatabaseType::PostgreSQL => {
+                let $extractor = PostgresExtractor;
+                $self.runtime.block_on($extractor.$method($($arg),*))
+            }
+        }
+    };
+}
+
 impl DbDocPlugin {
     pub fn new() -> Self {
         Self {
@@ -77,16 +93,7 @@ impl DbDocPlugin {
     fn handle_test_connection(&self, params: Value) -> Result<Value> {
         let config: ConnectionConfig = serde_json::from_value(params)?;
 
-        let result = match config.db_type {
-            DatabaseType::MySQL => {
-                let extractor = MySqlExtractor;
-                self.runtime.block_on(extractor.test_connection(&config))
-            }
-            DatabaseType::PostgreSQL => {
-                let extractor = PostgresExtractor;
-                self.runtime.block_on(extractor.test_connection(&config))
-            }
-        };
+        let result = with_extractor!(self, config, extractor.test_connection(&config));
 
         match result {
             Ok(true) => Ok(serde_json::json!({ "success": true, "message": "连接成功" })),
@@ -109,16 +116,7 @@ impl DbDocPlugin {
             .find(|c| c.id == connection_id)
             .ok_or_else(|| anyhow::anyhow!("连接配置不存在"))?;
 
-        let tables = match config.db_type {
-            DatabaseType::MySQL => {
-                let extractor = MySqlExtractor;
-                self.runtime.block_on(extractor.list_tables(&config))?
-            }
-            DatabaseType::PostgreSQL => {
-                let extractor = PostgresExtractor;
-                self.runtime.block_on(extractor.list_tables(&config))?
-            }
-        };
+        let tables = with_extractor!(self, config, extractor.list_tables(&config))?;
 
         Ok(serde_json::to_value(tables)?)
     }
@@ -141,16 +139,7 @@ impl DbDocPlugin {
             .find(|c| c.id == connection_id)
             .ok_or_else(|| anyhow::anyhow!("连接配置不存在"))?;
 
-        let table_info = match config.db_type {
-            DatabaseType::MySQL => {
-                let extractor = MySqlExtractor;
-                self.runtime.block_on(extractor.get_table_info(&config, table_name))?
-            }
-            DatabaseType::PostgreSQL => {
-                let extractor = PostgresExtractor;
-                self.runtime.block_on(extractor.get_table_info(&config, table_name))?
-            }
-        };
+        let table_info = with_extractor!(self, config, extractor.get_table_info(&config, table_name))?;
 
         Ok(serde_json::to_value(table_info)?)
     }
@@ -167,18 +156,10 @@ impl DbDocPlugin {
             .ok_or_else(|| anyhow::anyhow!("连接配置不存在"))?;
 
         // 获取表信息
-        let tables_info = match conn_config.db_type {
-            DatabaseType::MySQL => {
-                let extractor = MySqlExtractor;
-                self.runtime
-                    .block_on(extractor.get_tables_info(&conn_config, &config.tables))?
-            }
-            DatabaseType::PostgreSQL => {
-                let extractor = PostgresExtractor;
-                self.runtime
-                    .block_on(extractor.get_tables_info(&conn_config, &config.tables))?
-            }
-        };
+        let tables_info = with_extractor!(
+            self, conn_config,
+            extractor.get_tables_info(&conn_config, &config.tables)
+        )?;
 
         // 选择导出器并导出
         let exported_files: Vec<String> = match config.format {

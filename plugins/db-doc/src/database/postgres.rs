@@ -2,7 +2,7 @@ use async_trait::async_trait;
 use anyhow::Result;
 use sqlx::postgres::{PgPoolOptions, PgRow};
 use sqlx::{Row, Pool, Postgres};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use crate::models::{ConnectionConfig, TableInfo, ColumnInfo, IndexInfo};
 use super::DatabaseExtractor;
 
@@ -94,7 +94,7 @@ impl PostgresExtractor {
                     data_type: row.try_get("data_type").unwrap_or_default(),
                     max_length: row.try_get::<i32, _>("character_maximum_length").ok().map(|v| v as u64),
                     is_nullable: nullable == "YES",
-                    is_primary_key: false, // 主键信息在 mark_primary_keys 中设置
+                    is_primary_key: false,
                     default_value: row.try_get("column_default").ok(),
                     comment: row.try_get::<Option<String>, _>("column_comment").ok().flatten(),
                     position: row.try_get::<i32, _>("ordinal_position").unwrap_or(0) as u32,
@@ -154,41 +154,13 @@ impl PostgresExtractor {
         Ok(index_map.into_values().collect())
     }
 
-    /// 在列信息中标记主键列
-    async fn mark_primary_keys(
-        &self,
-        pool: &Pool<Postgres>,
-        schema: &str,
-        table_name: &str,
-        columns: &mut [ColumnInfo],
-    ) -> Result<()> {
-        let sql = r#"
-            SELECT a.attname AS column_name
-            FROM pg_index ix
-            JOIN pg_class t ON t.oid = ix.indrelid
-            JOIN pg_namespace n ON n.oid = t.relnamespace
-            JOIN pg_attribute a ON a.attrelid = t.oid AND a.attnum = ANY(ix.indkey)
-            WHERE n.nspname = $1 AND t.relname = $2 AND ix.indisprimary = true
-        "#;
-
-        let rows = sqlx::query(sql)
-            .bind(schema)
-            .bind(table_name)
-            .fetch_all(pool)
-            .await?;
-
-        let pk_columns: Vec<String> = rows
-            .into_iter()
-            .filter_map(|r| r.try_get("column_name").ok())
-            .collect();
-
-        for col in columns.iter_mut() {
-            if pk_columns.contains(&col.name) {
-                col.is_primary_key = true;
-            }
-        }
-
-        Ok(())
+    /// 从索引结果中提取主键列名
+    fn collect_pk_columns(indexes: &[IndexInfo]) -> HashSet<&str> {
+        indexes
+            .iter()
+            .filter(|idx| idx.is_primary)
+            .flat_map(|idx| idx.columns.iter().map(|s| s.as_str()))
+            .collect()
     }
 }
 
@@ -234,8 +206,14 @@ impl DatabaseExtractor for PostgresExtractor {
 
         let comment = self.get_table_comment(&pool, &schema, table_name).await?;
         let mut columns = self.get_columns(&pool, &schema, table_name).await?;
-        self.mark_primary_keys(&pool, &schema, table_name, &mut columns).await?;
         let indexes = self.get_indexes(&pool, &schema, table_name).await?;
+
+        let pk_columns = Self::collect_pk_columns(&indexes);
+        for col in columns.iter_mut() {
+            if pk_columns.contains(col.name.as_str()) {
+                col.is_primary_key = true;
+            }
+        }
 
         Ok(TableInfo {
             name: table_name.to_string(),

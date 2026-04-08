@@ -24,7 +24,6 @@ sqlx = { version = "0.7", features = ["mysql", "postgres", "runtime-tokio-rustls
 handlebars = "5.1"
 
 # DOCX 生成
-quick-xml = "0.31"
 zip = "0.6"
 
 # 加密 (复用密码管理器方案)

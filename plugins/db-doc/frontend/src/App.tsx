@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import './App.css'
 
 // 类型定义
@@ -79,13 +79,19 @@ function App() {
   const [exportTemplate, setExportTemplate] = useState<'simple' | 'detailed'>('detailed')
   const [exporting, setExporting] = useState(false)
 
-  const filteredConnections = connections.filter(c => c.name.toLowerCase().includes(connectionSearch.toLowerCase()))
+  const filteredConnections = useMemo(
+    () => connections.filter(c => c.name.toLowerCase().includes(connectionSearch.toLowerCase())),
+    [connections, connectionSearch]
+  )
 
-  const filteredTables = tables.filter(t => {
-    const matchesSearch = t.toLowerCase().includes(tableSearch.toLowerCase())
-    const matchesPrefix = prefixFilter === '' || t.toLowerCase().startsWith(prefixFilter.toLowerCase())
-    return matchesSearch && matchesPrefix
-  })
+  const filteredTables = useMemo(
+    () => tables.filter(t => {
+      const matchesSearch = t.toLowerCase().includes(tableSearch.toLowerCase())
+      const matchesPrefix = prefixFilter === '' || t.toLowerCase().startsWith(prefixFilter.toLowerCase())
+      return matchesSearch && matchesPrefix
+    }),
+    [tables, tableSearch, prefixFilter]
+  )
 
   const selectByPrefix = () => {
     const matching = tables.filter(t => t.toLowerCase().startsWith(prefixFilter.toLowerCase()))
@@ -151,7 +157,7 @@ function App() {
     try {
       setTestingConnection(true)
       setTestResult(null)
-      const result = await window.pluginAPI.call('db-doc', 'test_connection', config as Record<string, unknown>) as { success: boolean; message: string }
+      const result = await callAPI<{ success: boolean; message: string }>('test_connection', config as Record<string, unknown>)
       setTestResult({ id: config.id || '', success: result.success, message: result.message })
       if (result.success) {
         showToast('success', '连接成功!')
@@ -160,7 +166,6 @@ function App() {
       }
     } catch (e) {
       setTestResult({ id: config.id || '', success: false, message: e instanceof Error ? e.message : '未知错误' })
-      showToast('error', '连接失败: ' + (e instanceof Error ? e.message : '未知错误'))
     } finally {
       setTestingConnection(false)
     }
@@ -239,14 +244,17 @@ function App() {
     if (!selectedConnection || selectedTables.size === 0) return
 
     setLoading(true)
-    const infos: TableInfo[] = []
-    for (const tableName of selectedTables) {
-      const info = await loadTableInfo(selectedConnection.id, tableName)
-      if (info) infos.push(info)
+    try {
+      const infos = await Promise.all(
+        Array.from(selectedTables).map(tableName =>
+          loadTableInfo(selectedConnection.id, tableName)
+        )
+      )
+      setTableInfos(infos.filter((info): info is TableInfo => info !== null))
+      setViewMode('preview')
+    } finally {
+      setLoading(false)
     }
-    setTableInfos(infos)
-    setViewMode('preview')
-    setLoading(false)
   }
 
   // 导出文档

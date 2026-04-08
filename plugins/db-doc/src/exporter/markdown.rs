@@ -1,6 +1,6 @@
 use anyhow::Result;
 use std::path::Path;
-use crate::models::{TableInfo, TemplateStyle, ColumnInfo, ExportConfig};
+use crate::models::{TableInfo, TemplateStyle, ExportConfig};
 
 /// Markdown 文档导出器
 pub struct MarkdownExporter {
@@ -70,7 +70,7 @@ impl MarkdownExporter {
             md.push_str(&format!(
                 "| {} | {} | {} |\n",
                 col.name,
-                self.format_data_type(col),
+                col.formatted_data_type(),
                 comment
             ));
         }
@@ -107,7 +107,7 @@ impl MarkdownExporter {
             md.push_str(&format!(
                 "| {} | {} | {} | {} | {} | {} |\n",
                 col.name,
-                self.format_data_type(col),
+                col.formatted_data_type(),
                 nullable,
                 pk,
                 default,
@@ -136,14 +136,6 @@ impl MarkdownExporter {
         md
     }
 
-    /// 格式化数据类型
-    fn format_data_type(&self, col: &ColumnInfo) -> String {
-        if let Some(len) = col.max_length {
-            format!("{}({})", col.data_type.to_uppercase(), len)
-        } else {
-            col.data_type.to_uppercase()
-        }
-    }
 }
 
 use super::DocumentExporter;
@@ -165,7 +157,7 @@ impl DocumentExporter for MarkdownExporter {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::models::IndexInfo;
+    use crate::models::{ColumnInfo, IndexInfo};
 
     fn create_test_table() -> TableInfo {
         let mut table = TableInfo::new("users", "mydb");

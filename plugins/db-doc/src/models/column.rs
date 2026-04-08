@@ -22,6 +22,15 @@ pub struct ColumnInfo {
 }
 
 impl ColumnInfo {
+    /// 格式化数据类型 (如 VARCHAR(255), BIGINT)
+    pub fn formatted_data_type(&self) -> String {
+        if let Some(len) = self.max_length {
+            format!("{}({})", self.data_type.to_uppercase(), len)
+        } else {
+            self.data_type.to_uppercase()
+        }
+    }
+
     /// 创建新的列信息
     pub fn new(name: impl Into<String>, data_type: impl Into<String>) -> Self {
         Self {

@@ -1,7 +1,7 @@
 use anyhow::Result;
 use std::io::{Cursor, Write};
 
-use crate::models::{ColumnInfo, ExportConfig, TableInfo, TemplateStyle};
+use crate::models::{ExportConfig, TableInfo, TemplateStyle};
 
 use super::DocumentExporter;
 
@@ -13,15 +13,6 @@ pub struct WordExporter {
 impl WordExporter {
     pub fn new(template_style: TemplateStyle) -> Self {
         Self { template_style }
-    }
-
-    /// 格式化数据类型
-    fn format_data_type(col: &ColumnInfo) -> String {
-        if let Some(len) = col.max_length {
-            format!("{}({})", col.data_type.to_uppercase(), len)
-        } else {
-            col.data_type.to_uppercase()
-        }
     }
 
     /// XML 转义
@@ -170,7 +161,7 @@ impl WordExporter {
             let comment = col.comment.as_deref().unwrap_or("-");
             let cells = vec![
                 Self::build_cell(&col.name),
-                Self::build_cell(&Self::format_data_type(col)),
+                Self::build_cell(&col.formatted_data_type()),
                 Self::build_cell(comment),
             ];
             body.push_str(&Self::build_row(&cells));
@@ -220,7 +211,7 @@ impl WordExporter {
 
             let cells = vec![
                 Self::build_cell(&col.name),
-                Self::build_cell(&Self::format_data_type(col)),
+                Self::build_cell(&col.formatted_data_type()),
                 Self::build_cell(nullable),
                 Self::build_cell(pk),
                 Self::build_cell(default),
@@ -360,7 +351,7 @@ impl DocumentExporter for WordExporter {
 mod tests {
     use super::*;
     use crate::exporter::DocumentExporter;
-    use crate::models::IndexInfo;
+    use crate::models::{ColumnInfo, IndexInfo};
     use std::io::Read;
 
     fn create_test_table() -> TableInfo {
