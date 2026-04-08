@@ -116,10 +116,11 @@ jobs:
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
-          files: artifacts/**/*.dmg
-          files: artifacts/**/*_x64_en-US.msi
-          files: artifacts/**/*.deb
-          files: artifacts/**/*.AppImage
+          files: |
+            artifacts/**/*.dmg
+            artifacts/**/*_x64_en-US.msi
+            artifacts/**/*.deb
+            artifacts/**/*.AppImage
           draft: false
           prerelease: false
           generate_release_notes: true

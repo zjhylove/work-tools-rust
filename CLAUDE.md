@@ -4,230 +4,121 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## 项目概述
 
-Work Tools Platform - 基于 Tauri + Rust 的可扩展工具平台,采用动态库插件架构。
+Work Tools Platform - 基于 Tauri 2.x + Rust 的可扩展工具平台，采用动态库插件架构。插件编译为 cdylib，主程序通过 libloading 同进程加载。
 
-**核心技术栈**:
-- **后端**: Rust + Tauri 2.x
-- **前端**: React 19 + TypeScript
-- **插件架构**: 动态库加载 (libloading)
-- **插件包**: ZIP 格式 (.wtplugin.zip) 包含动态库 + 前端资源
-- **数据存储**: JSON 文件,存储在 `~/.worktools/`
+**技术栈**: Rust + Tauri 2.x | React 19 + TypeScript + Vite 6 | libloading 动态库 | JSON 文件存储
 
-## 工作空间结构
+## 常用命令
+
+```bash
+# 开发
+cd tauri-app && npm run tauri dev          # 启动开发服务器 (前端 :1420)
+
+# 测试
+cargo test                                 # 全部 workspace 测试
+cargo test -p password-manager             # 单个插件测试
+
+# 前端检查
+cd tauri-app && npx tsc --noEmit           # TypeScript 类型检查
+
+# Rust 检查
+cargo fmt && cargo clippy
+
+# 构建
+cd tauri-app && npm run tauri build        # 生产构建 (macOS: .app + .dmg)
+bash scripts/build-plugins.sh              # 一键构建所有插件
+cd plugins/<name> && cargo build --release  # 单个插件编译
+
+# 插件打包产物位于: plugins/<name>/<name>.wtplugin.zip
+```
+
+## 架构
+
+### 整体结构
 
 ```
 work-tools-rust/
 ├── tauri-app/              # Tauri 主应用
-│   ├── src/               # React 前端源码
-│   │   ├── components/    # UI 组件
-│   │   ├── types/         # TypeScript 类型定义
-│   │   └── utils/         # 工具函数
-│   └── src-tauri/         # Rust 后端
-│       ├── plugin_manager.rs    # 插件管理器
-│       ├── plugin_package.rs    # 插件包解析
-│       ├── commands.rs          # Tauri 命令
-│       └── crypto.rs            # 密码加密服务
-├── plugins/                # 插件项目
-│   ├── password-manager/   # 密码管理器
+│   ├── src/               # React 前端
+│   └── src-tauri/src/     # Rust 后端
+│       ├── lib.rs              # 应用初始化、Tauri builder
+│       ├── commands.rs         # 12 个 Tauri 命令
+│       ├── plugin_manager.rs   # 动态库加载、插件生命周期
+│       ├── plugin_package.rs   # .wtplugin.zip 解析安装
+│       ├── plugin_registry.rs  # 插件注册表管理
+│       └── config.rs           # 插件配置持久化
+├── plugins/                # 5 个插件 (各有独立 frontend/ + React/Vite)
+│   ├── password-manager/   # 密码管理器 (AES 加密)
 │   ├── json-tools/         # JSON 工具
 │   ├── auth-plugin/        # 双因素验证 (TOTP)
-│   └── text-diff/          # 文本比对 (Monaco Editor)
-├── shared/                 # 共享库
+│   ├── text-diff/          # 文本比对 (Monaco Editor)
+│   └── db-doc/             # 数据库文档生成 (MySQL/PostgreSQL, Word/Markdown 导出)
+├── shared/
 │   ├── types/             # 共享数据类型
-│   └── plugin-api/        # 插件 API 定义
-└── scripts/               # 构建脚本
+│   └── plugin-api/        # Plugin trait + storage/error 辅助模块
+└── scripts/               # build-plugins.sh 等构建脚本
 ```
 
-## 常用命令
+### 插件渲染机制
 
-### 开发模式
-```bash
-cd tauri-app
-npm run tauri dev    # 启动开发服务器
+插件前端通过 **iframe srcdoc** 渲染，不是直接嵌入 React 组件：
+1. `PluginPlaceholder` 组件读取已安装插件的 `index.html`、`main.js`、`styles.css`
+2. 将它们内联到一个 HTML 字符串注入 iframe 的 srcdoc
+3. iframe 加载后注入 `window.pluginAPI` 对象，提供：`call()`、`get_plugin_config()`、`set_plugin_config()`、`open_url()`、`open_folder_dialog()`
+
+### 数据流
+
+```
+前端 iframe → window.pluginAPI.call(pluginId, method, params)
+  → Tauri command: call_plugin_method
+  → PluginManager::call_plugin_method()
+  → Plugin::handle_call(method, params)
+  → 返回 JSON 结果
 ```
 
-### 构建和测试
-```bash
-# 测试单个插件
-cargo test -p password-manager
+### 插件系统关键设计
 
-# 测试所有 workspace
-cargo test
-
-# 前端类型检查
-cd tauri-app && npx tsc --noEmit
-
-# Rust 格式化和 lint
-cargo fmt && cargo clippy
-```
-
-### 生产构建
-```bash
-cd tauri-app
-npm run tauri build
-
-# macOS 构建产物:
-# - src-tauri/target/release/bundle/macos/Work Tools.app
-# - src-tauri/target/release/bundle/dmg/Work Tools_<version>_x64.dmg
-```
-
-### 插件编译和打包
-```bash
-# 一键构建所有插件
-bash scripts/build-plugins.sh
-
-# 手动编译单个插件
-cd plugins/password-manager && cargo build --release
-```
-
-构建产物位于各插件目录: `plugins/<name>/<name>.wtplugin.zip`
-
-## 架构关键概念
-
-### 插件系统架构
-
-**核心设计**: 插件编译为动态库,主程序通过 libloading 动态加载,同进程通信。
+**Plugin trait** (`shared/plugin-api/src/lib.rs`):
+- 必须实现: `id()`、`name()`、`description()`、`version()`、`icon()`、`get_view()`
+- 可选覆盖: `init()`、`destroy()`、`handle_call()`、`get_assets_path()`
+- 辅助模块: `PluginStorage` (JSON 文件持久化)、`PluginError` / `method_error!` / `param_error!` (错误处理)
+- 插件必须编译为 `cdylib`，导出 `plugin_create()` 函数
+- trait bound: `Send + Sync`
 
 **插件包格式 (.wtplugin.zip)**:
 ```
-my-plugin.wtplugin.zip
 ├── manifest.json          # 插件元数据
-├── libmy_plugin.dylib     # macOS 动态库
-├── libmy_plugin.so        # Linux 动态库
-├── my_plugin.dll          # Windows 动态库
+├── lib<name>.dylib/.so/.dll   # 动态库 (按平台)
 └── assets/                # 前端资源
     ├── index.html
     ├── main.js
     └── styles.css
 ```
 
-**插件生命周期**:
-1. 导入 `.wtplugin.zip` → 解压到 `~/.worktools/plugins/<plugin-id>/`
-2. 加载动态库 → 获取 `plugin_create` 函数指针
-3. 创建插件实例 → 调用 `init()` 初始化
-4. 前端加载 `assets/index.html` → 通过 `window.pluginAPI.call()` 调用后端
+**安装路径**: `~/.worktools/plugins/<plugin-id>/`
+**注册表**: `~/.worktools/config/installed-plugins.json`
+**插件数据**: `~/.worktools/history/plugins/<plugin-id>.json`
 
-**关键实现文件**:
-- `shared/plugin-api/src/lib.rs` - Plugin trait 定义
-- `tauri-app/src-tauri/src/plugin_manager.rs` - 动态库加载
-- `tauri-app/src-tauri/src/plugin_package.rs` - ZIP 解析
+### Workspace 注意事项
 
-### 数据流向
+根 `Cargo.toml` 使用 `exclude = ["tauri-app"]` 但同时将 `tauri-app/src-tauri` 列为 workspace member。`cargo test` 在根目录运行时会测试所有 workspace members 包括 tauri 后端。
 
-```
-前端 (React)
-  → window.pluginAPI.call(pluginId, method, params)
-  → Tauri: call_plugin_method command
-  → PluginManager::call_plugin_method()
-  → Plugin::handle_call()
-  → 返回结果
-```
+## 插件开发要点
 
-### 配置和数据存储
+新建插件需要：
+1. `Cargo.toml` 中 `crate-type = ["cdylib"]`，依赖 `worktools-plugin-api`
+2. 实现 `Plugin` trait，导出 `#[no_mangle] pub extern "C" fn plugin_create()`
+3. 创建 `manifest.json` 和 `assets/` 前端资源
+4. 使用 `PluginStorage` 管理持久化数据，`PluginError` / 宏处理错误
 
-```
-~/.worktools/
-├── plugins/                # 已安装的插件
-├── history/plugins/        # 插件数据文件
-├── config/app.json         # 应用配置
-└── registry.json           # 插件注册表
-```
+### 前端插件开发
 
-## 插件开发
+每个插件有独立的 `frontend/` 目录 (React + Vite)，构建后输出到 `assets/`。插件前端通过 `window.pluginAPI` 与后端通信。
 
-### 创建新插件
+## CI/CD
 
-1. 创建项目结构:
-```bash
-mkdir -p my-plugin/{src,assets}
-cd my-plugin && cargo init --lib
-```
-
-2. 配置 `Cargo.toml`:
-```toml
-[lib]
-crate-type = ["cdylib"]
-
-[dependencies]
-worktools-plugin-api = { path = "../../shared/plugin-api" }
-serde_json = "1.0"
-```
-
-3. 创建 `manifest.json` 并实现 Plugin trait
-
-4. 编译并打包:
-```bash
-cargo build --release
-zip -r my-plugin.wtplugin.zip manifest.json target/release/libmy_plugin.dylib assets/
-```
-
-### Plugin trait 实现
-
-```rust
-use worktools_plugin_api::Plugin;
-use serde_json::Value;
-
-pub struct MyPlugin;
-
-impl Plugin for MyPlugin {
-    fn id(&self) -> &str { "my-plugin" }
-    fn name(&self) -> &str { "我的插件" }
-    fn description(&self) -> &str { "描述" }
-    fn version(&self) -> &str { "1.0.0" }
-    fn icon(&self) -> &str { "🔧" }
-
-    fn get_view(&self) -> String {
-        "<div>加载中...</div>".to_string()
-    }
-
-    fn handle_call(&mut self, method: &str, params: Value) -> Result<Value, Box<dyn std::error::Error + Send + Sync>> {
-        match method {
-            "my_method" => Ok(serde_json::json!({ "result": "ok" })),
-            _ => Err("unknown method".into()),
-        }
-    }
-}
-
-#[no_mangle]
-pub extern "C" fn plugin_create() -> *mut Box<dyn Plugin> {
-    let plugin: Box<Box<dyn Plugin>> = Box::new(Box::new(MyPlugin));
-    Box::leak(plugin) as *mut Box<dyn Plugin>
-}
-```
-
-## 调试技巧
-
-### 查看插件日志
-```bash
-cd tauri-app && npm run tauri dev
-# 插件日志输出到 stderr
-```
-
-### 检查动态库
-```bash
-# macOS: 检查导出符号
-nm -gU ~/.worktools/plugins/<plugin-id>/lib<name>.dylib | grep plugin_create
-
-# 检查依赖
-otool -L ~/.worktools/plugins/<plugin-id>/lib<name>.dylib
-```
-
-### 前端调试
-开发模式下右键 → 检查元素,使用 Chrome DevTools
-
-## 常见问题
-
-### 插件加载失败
-- 检查动态库文件名: `lib<name>.dylib` / `.so` / `.dll`
-- 检查 manifest.json 配置
-- 验证 `plugin_create` 导出函数存在
-
-### 编译错误: Send + Sync
-确保 Plugin trait 包含 `Send + Sync`:
-```rust
-pub trait Plugin: Send + Sync { ... }
-```
+GitHub Actions (`.github/workflows/build.yml`): Tag push (`v*`) 触发多平台构建 — macOS (universal/intel/arm .dmg)、Windows (.msi)、Linux (.deb/.AppImage)，自动创建 GitHub Release。
 
 ## Git 提交规范
 
-使用 Conventional Commits: `feat` / `fix` / `refactor` / `style` / `docs` / `test` / `chore`
+Conventional Commits: `feat` / `fix` / `refactor` / `style` / `docs` / `test` / `chore`
