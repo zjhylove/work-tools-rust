@@ -4,7 +4,7 @@
 $ErrorActionPreference = "Stop"
 
 # 项目根目录
-$PROJECT_ROOT = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
+$PROJECT_ROOT = Split-Path -Parent $PSScriptRoot
 $PLUGINS_DIR = Join-Path $PROJECT_ROOT "plugins"
 $TARGET_DIR = Join-Path $PROJECT_ROOT "target\release"
 

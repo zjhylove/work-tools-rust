@@ -378,7 +378,6 @@ export default function App() {
               <div>[INFO] Work Tools 应用启动成功</div>
               <div>[INFO] 插件管理器初始化完成</div>
               <div>[INFO] 发现 {plugins.length} 个已安装插件</div>
-              <div>[INFO] 密码管理器加载成功</div>
             </div>
           </div>
         </div>
