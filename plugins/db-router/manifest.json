@@ -1,0 +1,17 @@
+{
+  "id": "db-router",
+  "name": "数据库路由",
+  "description": "根据编号解析数据库和表路由规则，支持多表关联",
+  "version": "1.0.0",
+  "icon": "🔍",
+  "author": "Work Tools Team",
+  "files": {
+    "macos": "libdb_router.dylib",
+    "linux": "libdb_router.so",
+    "windows": "db_router.dll"
+  },
+  "assets": {
+    "entry": "index.html"
+  },
+  "permissions": ["filesystem"]
+}
