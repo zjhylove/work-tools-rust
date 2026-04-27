@@ -274,6 +274,19 @@ impl PluginManager {
         Ok(plugin.instance.get_view())
     }
 
+    /// 卸载指定插件 (释放 DLL 句柄)
+    pub async fn unload_plugin(&self, plugin_id: &str) -> Result<()> {
+        let mut plugins = self.plugins.write().await;
+        if let Some(mut loaded) = plugins.remove(plugin_id) {
+            tracing::info!("卸载插件: {}", plugin_id);
+            if let Err(e) = loaded.instance.destroy() {
+                tracing::warn!("插件 {} destroy 失败: {}", plugin_id, e);
+            }
+            // loaded 和 _library 在此处 drop, 释放 DLL 文件锁
+        }
+        Ok(())
+    }
+
     /// 调用插件方法
     pub async fn call_plugin_method(
         &self,

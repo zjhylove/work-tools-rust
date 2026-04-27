@@ -375,6 +375,19 @@ pub async fn uninstall_plugin(
 ) -> Result<String, String> {
     tracing::info!(plugin_id = %plugin_id, "开始卸载插件");
 
+    // 1. 先从内存中卸载插件, 释放 DLL 文件锁 (Windows 必须先释放才能删除)
+    manager
+        .unload_plugin(&plugin_id)
+        .await
+        .inspect_err(|e| {
+            tracing::error!(
+                plugin_id = %plugin_id,
+                "从内存卸载插件失败: {}",
+                e
+            )
+        })
+        .map_err(|e| format!("卸载插件失败: {}", e))?;
+
     let user_dirs = directories::UserDirs::new()
         .ok_or_else(|| {
             tracing::error!("获取用户主目录失败: 目录 API 不可用");
@@ -383,20 +396,21 @@ pub async fn uninstall_plugin(
 
     let plugins_base_dir = user_dirs.home_dir().join(".worktools/plugins");
 
-    // 首先尝试直接删除 plugin_id 对应的目录
+    // 2. 删除插件目录 (DLL 已释放, Windows 上可以正常删除)
     let plugin_dir = plugins_base_dir.join(&plugin_id);
 
     let mut deleted_dir = false;
     if plugin_dir.exists() {
-        fs::remove_dir_all(&plugin_dir)
-            .inspect_err(|e| {
-                tracing::error!(
-                    plugin_dir = %plugin_dir.display(),
-                    "删除插件目录失败: {}",
-                    e
-                )
-            })
-            .map_err(|e| format!("删除插件目录失败: {}", e))?;
+        // Windows 上 DLL 释放可能有短暂延迟, 加入重试
+        let delete_result = remove_dir_with_retry(&plugin_dir, 3);
+        if let Err(e) = delete_result {
+            tracing::error!(
+                plugin_dir = %plugin_dir.display(),
+                "删除插件目录失败: {}",
+                e
+            );
+            return Err(format!("删除插件目录失败: {}", e));
+        }
         deleted_dir = true;
         tracing::info!("删除插件目录: {:?}", plugin_dir);
     } else {
@@ -435,15 +449,15 @@ pub async fn uninstall_plugin(
                                     .unwrap_or(false)
                                 {
                                     // 找到匹配的插件目录,删除它
-                                    fs::remove_dir_all(&path)
-                                        .inspect_err(|e| {
-                                            tracing::error!(
-                                                plugin_dir = %path.display(),
-                                                "删除插件目录失败: {}",
-                                                e
-                                            )
-                                        })
-                                        .map_err(|e| format!("删除插件目录失败: {}", e))?;
+                                    let delete_result = remove_dir_with_retry(&path, 3);
+                                    if let Err(e) = delete_result {
+                                        tracing::error!(
+                                            plugin_dir = %path.display(),
+                                            "删除插件目录失败: {}",
+                                            e
+                                        );
+                                        return Err(format!("删除插件目录失败: {}", e));
+                                    }
                                     deleted_dir = true;
                                     tracing::info!("删除插件目录(扫描找到): {:?}", path);
                                     break;
@@ -460,7 +474,7 @@ pub async fn uninstall_plugin(
         tracing::warn!("未找到插件 {} 的目录", plugin_id);
     }
 
-    // 从注册表移除
+    // 3. 从注册表移除
     let mut registry = PluginRegistry::new()
         .inspect_err(|e| {
             tracing::error!("打开插件注册表失败: {}", e);
@@ -478,18 +492,28 @@ pub async fn uninstall_plugin(
         })
         .map_err(|e| format!("从注册表移除插件失败: {}", e))?;
 
-    // 重新加载插件管理器
-    manager
-        .init()
-        .await
-        .inspect_err(|e| {
-            tracing::error!("重新加载插件管理器失败: {}", e);
-        })
-        .map_err(|e| format!("重新加载插件管理器失败: {}", e))?;
-
     tracing::info!(plugin_id = %plugin_id, "插件卸载成功");
 
     Ok(format!("插件 {} 卸载成功", plugin_id))
+}
+
+/// 带重试的目录删除 (Windows DLL 释放可能有短暂延迟)
+fn remove_dir_with_retry(path: &std::path::Path, max_retries: u32) -> std::io::Result<()> {
+    let mut last_err = fs::remove_dir_all(path);
+    for attempt in 1..=max_retries {
+        if last_err.is_ok() {
+            return Ok(());
+        }
+        tracing::warn!(
+            path = %path.display(),
+            attempt,
+            "删除目录失败, 重试中...: {}",
+            last_err.unwrap_err()
+        );
+        std::thread::sleep(std::time::Duration::from_millis(200 * attempt as u64));
+        last_err = fs::remove_dir_all(path);
+    }
+    last_err
 }
 
 /// 读取插件前端资源内容
