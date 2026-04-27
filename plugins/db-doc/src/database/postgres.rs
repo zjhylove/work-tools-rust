@@ -1,3 +1,4 @@
+use std::time::Duration;
 use async_trait::async_trait;
 use anyhow::Result;
 use sqlx::postgres::{PgPoolOptions, PgRow};
@@ -13,10 +14,14 @@ impl PostgresExtractor {
     /// 创建数据库连接池
     async fn create_pool(config: &ConnectionConfig) -> Result<Pool<Postgres>> {
         let url = config.to_connection_string();
-        let pool = PgPoolOptions::new()
-            .max_connections(1)
-            .connect(&url)
-            .await?;
+        let pool = tokio::time::timeout(
+            Duration::from_secs(3),
+            PgPoolOptions::new()
+                .max_connections(1)
+                .acquire_timeout(Duration::from_secs(3))
+                .connect(&url),
+        )
+        .await??;
         Ok(pool)
     }
 

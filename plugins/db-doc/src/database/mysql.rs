@@ -1,3 +1,4 @@
+use std::time::Duration;
 use async_trait::async_trait;
 use anyhow::Result;
 use sqlx::mysql::{MySqlPoolOptions, MySqlRow};
@@ -12,10 +13,14 @@ impl MySqlExtractor {
     /// 创建数据库连接池
     async fn create_pool(config: &ConnectionConfig) -> Result<Pool<MySql>> {
         let url = config.to_connection_string();
-        let pool = MySqlPoolOptions::new()
-            .max_connections(1)
-            .connect(&url)
-            .await?;
+        let pool = tokio::time::timeout(
+            Duration::from_secs(3),
+            MySqlPoolOptions::new()
+                .max_connections(1)
+                .acquire_timeout(Duration::from_secs(3))
+                .connect(&url),
+        )
+        .await??;
         Ok(pool)
     }
 
