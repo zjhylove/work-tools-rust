@@ -1,0 +1,186 @@
+import { useState, useEffect, useCallback } from "react";
+import type { ForwardRule, SshStatus } from "../types";
+
+const PLUGIN_ID = "k8s-forward";
+
+export default function TabSshForward() {
+  const [sshStatus, setSshStatus] = useState<SshStatus>({ connected: false });
+  const [rules, setRules] = useState<ForwardRule[]>([]);
+  const [form, setForm] = useState({ host: "", port: 22, username: "", password: "" });
+  const [editing, setEditing] = useState<ForwardRule | null>(null);
+  const [toast, setToast] = useState<string | null>(null);
+
+  const call = useCallback(async (method: string, params?: unknown) => {
+    return await window.pluginAPI.call(PLUGIN_ID, method, (params ?? {}) as Record<string, unknown>);
+  }, []);
+
+  const showToast = (msg: string, isErr = false) => {
+    setToast(isErr ? `❌ ${msg}` : `✅ ${msg}`);
+    setTimeout(() => setToast(null), 3000);
+  };
+
+  const loadStatus = async () => {
+    const s = await call("ssh_status") as SshStatus;
+    setSshStatus(s);
+  };
+
+  const loadRules = async () => {
+    const r = await call("list_forward_rules") as ForwardRule[];
+    setRules(r.filter(r => r.rule_type === "manual"));
+  };
+
+  useEffect(() => { loadStatus(); loadRules(); }, []);
+
+  const handleConnect = async () => {
+    try {
+      await call("ssh_connect", form);
+      showToast("SSH 连接成功");
+      loadStatus();
+    } catch (e: unknown) { showToast(`连接失败: ${e}`, true); }
+  };
+
+  const handleDisconnect = async () => {
+    await call("ssh_disconnect");
+    setSshStatus({ connected: false });
+    showToast("已断开");
+  };
+
+  const handleAdd = async () => {
+    try {
+      const rule = {
+        id: window.crypto.randomUUID(),
+        name: `rule-${Date.now()}`,
+        local_host: "127.0.0.1",
+        local_port: 0,
+        remote_host: "",
+        remote_port: 0,
+        rule_type: "manual" as const,
+      };
+      await call("add_forward_rule", rule);
+      showToast("规则已添加");
+      loadRules();
+      setEditing(rule);
+    } catch (e: unknown) { showToast(`添加失败: ${e}`, true); }
+  };
+
+  const handleSave = async () => {
+    if (!editing) return;
+    try {
+      await call("update_forward_rule", editing);
+      showToast("已保存");
+      setEditing(null);
+      loadRules();
+    } catch (e: unknown) { showToast(`保存失败: ${e}`, true); }
+  };
+
+  const handleDelete = async (id: string) => {
+    try {
+      await call("remove_forward_rule", { id });
+      showToast("已删除");
+      loadRules();
+    } catch (e: unknown) { showToast(`删除失败: ${e}`, true); }
+  };
+
+  const handleImport = () => {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = ".json";
+    input.onchange = async (e) => {
+      const file = (e.target as HTMLInputElement).files?.[0];
+      if (!file) return;
+      try {
+        const text = await file.text();
+        const parsed = JSON.parse(text);
+        const arr = Array.isArray(parsed) ? parsed : parsed.rules || [];
+        await call("import_rules", { rules: arr });
+        showToast(`已导入 ${arr.length} 条规则`);
+        loadRules();
+      } catch { showToast("导入失败: 格式错误", true); }
+    };
+    input.click();
+  };
+
+  const handleExport = async () => {
+    const data = await call("export_rules") as ForwardRule[];
+    const json = JSON.stringify(data.filter(r => r.rule_type === "manual"), null, 2);
+    const blob = new Blob([json], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = `k8s-forward-rules-${new Date().toISOString().split("T")[0]}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  return (
+    <div>
+      {toast && <div className={`toast ${toast.startsWith("❌") ? "toast-error" : "toast-success"}`}>{toast}</div>}
+
+      <div className="card">
+        <div className="card-header">SSH 连接配置</div>
+        <div className="form-row">
+          <div className="form-group"><label>主机地址</label><input value={form.host} onChange={e => setForm({...form, host: e.target.value})} placeholder="10.73.x.x" /></div>
+          <div className="form-group"><label>端口</label><input type="number" value={form.port} onChange={e => setForm({...form, port: +e.target.value})} /></div>
+          <div className="form-group"><label>用户名</label><input value={form.username} onChange={e => setForm({...form, username: e.target.value})} /></div>
+          <div className="form-group"><label>密码</label><input type="password" value={form.password} onChange={e => setForm({...form, password: e.target.value})} /></div>
+          {sshStatus.connected
+            ? <button className="btn btn-danger" onClick={handleDisconnect}>断开</button>
+            : <button className="btn btn-primary" onClick={handleConnect}>连接</button>
+          }
+        </div>
+        <div style={{marginTop:8}}>
+          <span className={`status-dot ${sshStatus.connected ? "online" : "offline"}`}></span>
+          {sshStatus.connected ? `已连接 → ${sshStatus.host}:${sshStatus.port}` : "未连接"}
+        </div>
+      </div>
+
+      <div className="card">
+        <div className="card-header" style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+          <span>转发规则</span>
+          <div style={{display:"flex",gap:8}}>
+            <button className="btn btn-primary btn-sm" onClick={handleAdd}>+ 添加规则</button>
+            <button className="btn btn-default btn-sm" onClick={handleImport}>导入</button>
+            <button className="btn btn-default btn-sm" onClick={handleExport}>导出</button>
+          </div>
+        </div>
+        <table>
+          <thead><tr><th>名称</th><th>本地地址</th><th>本地端口</th><th>远程地址</th><th>远程端口</th><th>操作</th></tr></thead>
+          <tbody>
+            {rules.map(r => (
+              <tr key={r.id}>
+                <td>{r.name}</td>
+                <td>{r.local_host}</td>
+                <td>{r.local_port}</td>
+                <td>{r.remote_host}</td>
+                <td>{r.remote_port}</td>
+                <td>
+                  <button className="btn btn-default btn-sm" onClick={() => setEditing(r)} style={{marginRight:4}}>编辑</button>
+                  <button className="btn btn-danger btn-sm" onClick={() => handleDelete(r.id)}>删除</button>
+                </td>
+              </tr>
+            ))}
+            {rules.length === 0 && <tr><td colSpan={6} style={{textAlign:"center",color:"#666",padding:20}}>暂无规则</td></tr>}
+          </tbody>
+        </table>
+      </div>
+
+      {editing && (
+        <div className="modal-overlay" onClick={() => setEditing(null)}>
+          <div className="modal" onClick={e => e.stopPropagation()}>
+            <h3>编辑规则</h3>
+            <div className="form-row">
+              <div className="form-group"><label>名称</label><input value={editing.name} onChange={e => setEditing({...editing, name: e.target.value})} /></div>
+              <div className="form-group"><label>本地地址</label><input value={editing.local_host} onChange={e => setEditing({...editing, local_host: e.target.value})} /></div>
+              <div className="form-group"><label>本地端口</label><input type="number" value={editing.local_port} onChange={e => setEditing({...editing, local_port: +e.target.value})} /></div>
+              <div className="form-group"><label>远程地址</label><input value={editing.remote_host} onChange={e => setEditing({...editing, remote_host: e.target.value})} /></div>
+              <div className="form-group"><label>远程端口</label><input type="number" value={editing.remote_port} onChange={e => setEditing({...editing, remote_port: +e.target.value})} /></div>
+            </div>
+            <div className="modal-actions">
+              <button className="btn btn-default" onClick={() => setEditing(null)}>取消</button>
+              <button className="btn btn-primary" onClick={handleSave}>保存</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
