@@ -1,0 +1,20 @@
+{
+  "id": "k8s-forward",
+  "name": "K8s IP转发",
+  "description": "通过Kuboard发现K8s Pod,SSH隧道+HTTP代理转发流量",
+  "version": "1.0.0",
+  "icon": "🌐",
+  "author": "Work Tools Team",
+  "files": {
+    "macos": "libk8s_forward.dylib",
+    "linux": "libk8s_forward.so",
+    "windows": "k8s_forward.dll"
+  },
+  "assets": {
+    "entry": "index.html"
+  },
+  "permissions": [
+    "filesystem",
+    "network"
+  ]
+}

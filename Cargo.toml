@@ -8,6 +8,7 @@ members = [
     "plugins/text-diff",
     "plugins/db-doc",
     "plugins/db-router",
+    "plugins/k8s-forward",
     "tauri-app/src-tauri",
 ]
 resolver = "2"
