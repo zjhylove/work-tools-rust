@@ -1,7 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-#[serde(rename_all = "snake_case")]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum RuleType {
     Manual,
     K8s,
@@ -67,6 +66,12 @@ pub struct ProxyConfig {
 }
 
 fn default_proxy_port() -> u16 { 80 }
+
+impl Default for ProxyConfig {
+    fn default() -> Self {
+        Self { port: 80 }
+    }
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PluginData {
