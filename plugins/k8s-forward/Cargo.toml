@@ -21,7 +21,7 @@ anyhow = "1.0"
 tokio = { version = "1.0", features = ["rt-multi-thread", "sync", "net", "io-util"] }
 
 # HTTP 客户端
-reqwest = { version = "0.12", features = ["cookies"] }
+reqwest = { version = "0.12", features = ["cookies", "json"] }
 
 # SSH 连接
 ssh2 = "0.9"
