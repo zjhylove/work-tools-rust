@@ -311,11 +311,7 @@ pub async fn install_plugin(
 
     // 获取动态库路径
     let lib_name = manifest
-        .files
-        .macos
-        .as_ref()
-        .or(manifest.files.linux.as_ref())
-        .or(manifest.files.windows.as_ref())
+        .get_library_filename()
         .ok_or_else(|| "未找到动态库配置".to_string())?;
 
     let library_path = plugin_dir.join(lib_name);
@@ -501,15 +497,17 @@ pub async fn uninstall_plugin(
 fn remove_dir_with_retry(path: &std::path::Path, max_retries: u32) -> std::io::Result<()> {
     let mut last_err = fs::remove_dir_all(path);
     for attempt in 1..=max_retries {
-        if last_err.is_ok() {
-            return Ok(());
+        match &last_err {
+            Ok(()) => return Ok(()),
+            Err(e) => {
+                tracing::warn!(
+                    path = %path.display(),
+                    attempt,
+                    "删除目录失败, 重试中...: {}",
+                    e
+                );
+            }
         }
-        tracing::warn!(
-            path = %path.display(),
-            attempt,
-            "删除目录失败, 重试中...: {}",
-            last_err.unwrap_err()
-        );
         std::thread::sleep(std::time::Duration::from_millis(200 * attempt as u64));
         last_err = fs::remove_dir_all(path);
     }

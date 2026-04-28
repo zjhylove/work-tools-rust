@@ -46,6 +46,21 @@ pub struct PlatformFiles {
     pub windows: Option<String>,
 }
 
+impl PluginManifest {
+    /// 获取当前平台对应的动态库文件名
+    pub fn get_library_filename(&self) -> Option<&String> {
+        if cfg!(target_os = "macos") {
+            self.files.macos.as_ref()
+        } else if cfg!(target_os = "linux") {
+            self.files.linux.as_ref()
+        } else if cfg!(target_os = "windows") {
+            self.files.windows.as_ref()
+        } else {
+            None
+        }
+    }
+}
+
 /// 前端资源配置
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AssetsConfig {

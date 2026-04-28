@@ -341,7 +341,13 @@ function App() {
       input.accept = ".json";
       input.style.position = "absolute";
       input.style.left = "-9999px";
+
+      const removeInput = () => {
+        if (input.parentNode) document.body.removeChild(input);
+      };
+
       input.onchange = async (e) => {
+        removeInput();
         const file = (e.target as HTMLInputElement).files?.[0];
         if (!file) return;
         try {
@@ -354,8 +360,15 @@ function App() {
         } catch {
           addToast("导入失败: 文件格式不正确", "error");
         }
-        document.body.removeChild(input);
       };
+
+      // Clean up if user cancels the file dialog (onchange won't fire)
+      const onFocus = () => {
+        window.removeEventListener("focus", onFocus);
+        setTimeout(removeInput, 300);
+      };
+      window.addEventListener("focus", onFocus);
+
       document.body.appendChild(input);
       input.click();
     } catch {

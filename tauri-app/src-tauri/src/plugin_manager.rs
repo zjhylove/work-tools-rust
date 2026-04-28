@@ -7,6 +7,8 @@ use tokio::sync::RwLock;
 use worktools_plugin_api::{Plugin, PluginCreateFn};
 use worktools_shared_types::PluginInfo;
 
+use crate::plugin_package::PluginManifest;
+
 /// 已加载的插件
 pub struct LoadedPlugin {
     pub info: PluginInfo,
@@ -45,22 +47,8 @@ impl PluginManager {
     }
 
     /// 从 manifest 读取当前平台的动态库文件名
-    fn get_library_from_manifest(manifest: &serde_json::Value) -> Option<String> {
-        let platform = if cfg!(target_os = "macos") {
-            "macos"
-        } else if cfg!(target_os = "linux") {
-            "linux"
-        } else if cfg!(target_os = "windows") {
-            "windows"
-        } else {
-            return None;
-        };
-
-        manifest
-            .get("files")
-            .and_then(|f| f.get(platform))
-            .and_then(|v| v.as_str())
-            .map(|s| s.to_string())
+    fn get_library_from_manifest(manifest: &PluginManifest) -> Option<String> {
+        manifest.get_library_filename().cloned()
     }
 
     /// 创建新的插件管理器
@@ -123,7 +111,7 @@ impl PluginManager {
                     std::fs::read_to_string(&manifest_path)
                         .ok()
                         .and_then(|content| {
-                            serde_json::from_str::<serde_json::Value>(&content).ok()
+                            serde_json::from_str::<PluginManifest>(&content).ok()
                         })
                         .and_then(|manifest| Self::get_library_from_manifest(&manifest))
                         .map(|name| {
