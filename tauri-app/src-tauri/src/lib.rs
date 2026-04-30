@@ -3,27 +3,15 @@ mod config;
 pub mod plugin_manager;
 mod plugin_package;
 mod plugin_registry;
+mod logger;
 
 use anyhow::Result;
 use plugin_manager::PluginManager;
 use std::sync::Arc;
 use tauri::Manager;
 
-/// 初始化日志系统
 fn init_logging() -> Result<()> {
-    let user_dirs =
-        directories::UserDirs::new().ok_or_else(|| anyhow::anyhow!("无法找到用户主目录"))?;
-    let log_dir = user_dirs.home_dir().join(".worktools/logs");
-
-    std::fs::create_dir_all(&log_dir)?;
-
-    // 简化日志:只输出到控制台
-    tracing_subscriber::fmt()
-        .with_max_level(tracing::Level::INFO)
-        .with_target(false)
-        .init();
-
-    Ok(())
+    logger::init_logging()
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -75,6 +63,7 @@ pub fn run() {
             commands::open_url,
             commands::open_folder_dialog,
             commands::write_file,
+            commands::get_logs,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

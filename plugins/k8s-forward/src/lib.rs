@@ -70,7 +70,7 @@ impl K8sForwardPlugin {
                     restored += 1;
                 }
                 Err(e) => {
-                    eprintln!("恢复转发规则失败 [{}]: {}", rule.name, e);
+                    tracing::warn!("恢复转发规则失败 [{}]: {}", rule.name, e);
                 }
             }
         }

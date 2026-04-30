@@ -109,11 +109,11 @@ impl HttpProxySvc {
                                         .serve_connection(io, svc)
                                         .await
                                     {
-                                        eprintln!("代理连接错误: {}", e);
+                                        tracing::error!("代理连接错误: {}", e);
                                     }
                                 });
                             }
-                            Err(e) => eprintln!("Accept error: {}", e),
+                            Err(e) => tracing::error!("Accept error: {}", e),
                         }
                     }
                     _ = &mut graceful => break,
@@ -171,7 +171,7 @@ async fn forward_or_502(
     match forward_request(req, target).await {
         Ok(resp) => Ok(resp),
         Err(e) => {
-            eprintln!("[proxy] ✗ 转发失败: {} — {}", target, e);
+            tracing::error!("[proxy] 转发失败: {} - {}", target, e);
             let mut resp = Response::new(Full::new(Bytes::from(
                 format!("转发目标不可达: {}", target)
             )));

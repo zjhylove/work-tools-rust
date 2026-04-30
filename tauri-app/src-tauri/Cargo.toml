@@ -28,7 +28,7 @@ serde_json = "1"
 tokio = { version = "1", features = ["full"] }
 anyhow = "1.0"
 tracing = "0.1"
-tracing-subscriber = { version = "0.3", features = ["fmt", "json"] }
+tracing-subscriber = { version = "0.3", features = ["fmt", "json", "registry"] }
 tracing-appender = "0.2"
 directories = "6.0.0"
 dirs = "6.0.0"

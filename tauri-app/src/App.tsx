@@ -3,6 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import PluginStore from "./components/PluginStore";
 import PluginPlaceholder from "./components/PluginPlaceholder";
 import ErrorBoundary from "./components/ErrorBoundary";
+import LogViewer from "./components/LogViewer";
 import { devError, devLog, devWarn } from "./utils/logger";
 import type { PluginInfo } from "./types/plugin";
 
@@ -330,74 +331,7 @@ export default function App() {
       </div>
 
       {/* 日志对话框 */}
-      {showLogs && (
-        <div
-          style={{
-            position: "fixed",
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            background: "rgba(0,0,0,0.5)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            zIndex: 1000,
-          }}
-        >
-          <div
-            style={{
-              background: "white",
-              borderRadius: "8px",
-              width: "800px",
-              height: "600px",
-              boxShadow: "0 4px 20px rgba(0,0,0,0.3)",
-              display: "flex",
-              flexDirection: "column",
-            }}
-          >
-            <div
-              style={{
-                padding: "20px",
-                borderBottom: "1px solid #dee2e6",
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-              }}
-            >
-              <h3 style={{ margin: 0 }}>系统日志</h3>
-              <button
-                onClick={() => setShowLogs(false)}
-                style={{
-                  background: "transparent",
-                  border: "none",
-                  fontSize: "20px",
-                  cursor: "pointer",
-                  color: "#999",
-                }}
-              >
-                ✕
-              </button>
-            </div>
-            <div
-              style={{
-                flex: 1,
-                padding: "20px",
-                overflow: "auto",
-                background: "#1e1e1e",
-                color: "#d4d4d4",
-                fontFamily: "monospace",
-                fontSize: "13px",
-                lineHeight: "1.6",
-              }}
-            >
-              <div>[INFO] Work Tools 应用启动成功</div>
-              <div>[INFO] 插件管理器初始化完成</div>
-              <div>[INFO] 发现 {plugins.length} 个已安装插件</div>
-            </div>
-          </div>
-        </div>
-      )}
+      {showLogs && <LogViewer onClose={() => setShowLogs(false)} />}
 
       {/* 插件市场对话框 */}
       {showPluginMarket && (

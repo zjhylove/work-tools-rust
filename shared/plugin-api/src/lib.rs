@@ -4,6 +4,7 @@ pub mod storage;
 pub mod error;
 
 pub use error::{PluginError, PluginResult};
+pub use tracing;
 
 /// 插件 Trait - 所有插件必须实现此接口
 pub trait Plugin: Send + Sync {

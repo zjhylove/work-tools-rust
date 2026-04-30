@@ -147,6 +147,8 @@ impl Plugin for PasswordManager {
                 data.entries.push(entry.clone());
                 Self::save_data(&data)?;
 
+                tracing::info!(service = %entry.service, "添加密码条目");
+
                 Ok(serde_json::json!({
                     "id": entry.id,
                     "url": entry.url.as_deref().unwrap_or_default(),
@@ -200,6 +202,8 @@ impl Plugin for PasswordManager {
                 data.entries[index] = entry.clone();
                 Self::save_data(&data)?;
 
+                tracing::info!(service = %entry.service, "更新密码条目");
+
                 Ok(serde_json::json!({
                     "id": entry.id,
                     "url": entry.url.as_deref().unwrap_or_default(),
@@ -224,17 +228,22 @@ impl Plugin for PasswordManager {
                 data.entries.remove(index);
                 Self::save_data(&data)?;
 
+                tracing::info!(%id, "删除密码条目");
+
                 Ok(serde_json::json!({ "success": true }))
             }
             "clear_all_passwords" => {
                 let mut data = Self::load_data()?;
+                let count = data.entries.len();
                 data.entries.clear();
                 Self::save_data(&data)?;
+                tracing::warn!(count, "清空所有密码条目");
                 Ok(serde_json::json!({ "success": true }))
             }
             "export_passwords" => {
                 let data = Self::load_data()?;
                 let json = serde_json::to_string_pretty(&data)?;
+                tracing::info!(count = data.entries.len(), "导出密码数据");
                 Ok(serde_json::json!({ "data": json }))
             }
             "import_passwords" => {
@@ -244,14 +253,16 @@ impl Plugin for PasswordManager {
 
                 let imported_data: PasswordData = serde_json::from_str(json_data)?;
                 let mut data = Self::load_data()?;
+                let imported_count = imported_data.entries.len();
 
-                for entry in imported_data.entries {
+                for entry in &imported_data.entries {
                     if !data.entries.iter().any(|e| e.id == entry.id) {
-                        data.entries.push(entry);
+                        data.entries.push(entry.clone());
                     }
                 }
 
                 Self::save_data(&data)?;
+                tracing::info!(count = imported_count, "导入密码数据");
                 Ok(serde_json::json!({ "success": true }))
             }
             _ => Err(format!("未知方法: {method}").into()),

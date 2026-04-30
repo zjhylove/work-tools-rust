@@ -1,7 +1,9 @@
 use crate::config::{load_plugin_config, save_plugin_config};
+use crate::logger::{LogEntry, LOG_RING};
 use crate::plugin_manager::PluginManager;
 use crate::plugin_package::{PluginManifest, PluginPackage};
 use crate::plugin_registry::{InstalledPlugin, PluginRegistry};
+use serde::Deserialize;
 use serde_json::Value;
 use std::fs;
 use std::sync::Arc;
@@ -590,4 +592,49 @@ pub async fn open_folder_dialog(
     let folder_path = builder.blocking_pick_folder();
 
     Ok(folder_path.map(|p| p.to_string()))
+}
+
+// ── 日志查询 ──
+
+/// 日志查询参数
+#[derive(Debug, Deserialize)]
+pub struct LogQuery {
+    pub level: Option<String>,
+    pub plugin: Option<String>,
+    pub since: Option<String>,
+}
+
+/// 查询日志（从内存环形缓冲区）
+#[tauri::command]
+pub fn get_logs(query: Option<LogQuery>) -> Result<Vec<LogEntry>, String> {
+    const DEFAULT_LIMIT: usize = 100;
+
+    let ring = LOG_RING.lock().map_err(|e| format!("Lock error: {}", e))?;
+    let mut entries: Vec<LogEntry> = ring.iter().cloned().collect();
+    drop(ring);
+
+    if let Some(q) = query {
+        if let Some(ref level_filter) = q.level {
+            let upper = level_filter.to_uppercase();
+            entries.retain(|e| e.level == upper);
+        }
+        if let Some(ref plugin_filter) = q.plugin {
+            let lower = plugin_filter.to_lowercase();
+            entries.retain(|e| e.target.to_lowercase().contains(&lower));
+        }
+        if let Some(ref since_str) = q.since {
+            if let Ok(since_dt) = chrono::DateTime::parse_from_rfc3339(since_str) {
+                entries.retain(|e| {
+                    chrono::DateTime::parse_from_rfc3339(&e.timestamp)
+                        .map(|dt| dt > since_dt)
+                        .unwrap_or(true)
+                });
+            }
+        }
+    }
+
+    entries.reverse();
+    entries.truncate(DEFAULT_LIMIT);
+
+    Ok(entries)
 }

@@ -36,10 +36,12 @@ impl DbRouterPlugin {
         )?;
 
         let mut data = Self::load_data()?;
+        let is_new = rule.id.is_empty();
 
-        if rule.id.is_empty() {
+        if is_new {
             rule.id = uuid::Uuid::new_v4().to_string();
             data.rules.push(rule.clone());
+            tracing::info!(name = %rule.name, id = %rule.id, "新建路由规则");
         } else {
             let idx = data
                 .rules
@@ -47,6 +49,7 @@ impl DbRouterPlugin {
                 .position(|r| r.id == rule.id)
                 .ok_or_else(|| anyhow::anyhow!("规则不存在"))?;
             data.rules[idx] = rule.clone();
+            tracing::info!(name = %rule.name, id = %rule.id, "更新路由规则");
         }
 
         Self::save_data(&data)?;
@@ -62,6 +65,7 @@ impl DbRouterPlugin {
         let mut data = Self::load_data()?;
         data.rules.retain(|r| r.id != id);
         Self::save_data(&data)?;
+        tracing::info!(%id, "删除路由规则");
         Ok(serde_json::to_value(data)?)
     }
 
@@ -85,6 +89,8 @@ impl DbRouterPlugin {
             .clone();
 
         let (database, table_suffix) = engine::execute_script(code, &rule)?;
+
+        tracing::info!(%database, %table_suffix, rule = %rule.name, "路由解析完成");
 
         let tables: Vec<String> = if rule.tables.is_empty() {
             vec![format!("table{table_suffix}")]
@@ -131,6 +137,7 @@ impl DbRouterPlugin {
         )?;
 
         let mut data = Self::load_data()?;
+        let imported_count = imported_rules.len();
 
         for rule in imported_rules {
             if let Some(existing) = data.rules.iter_mut().find(|r| r.id == rule.id) {
@@ -141,11 +148,13 @@ impl DbRouterPlugin {
         }
 
         Self::save_data(&data)?;
+        tracing::info!(count = imported_count, "导入路由规则");
         Ok(serde_json::to_value(data)?)
     }
 
     fn handle_export_rules(&self) -> Result<Value> {
         let data = Self::load_data()?;
+        tracing::info!(count = data.rules.len(), "导出路由规则");
         Ok(serde_json::to_value(&data.rules)?)
     }
 

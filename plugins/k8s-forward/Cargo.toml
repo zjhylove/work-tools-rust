@@ -17,6 +17,9 @@ serde_json = "1.0"
 # 错误处理
 anyhow = "1.0"
 
+# 日志
+tracing = "0.1"
+
 # 异步运行时
 tokio = { version = "1.0", features = ["rt-multi-thread", "sync", "net", "io-util", "macros"] }
 

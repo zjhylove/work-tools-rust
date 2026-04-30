@@ -38,6 +38,7 @@ impl Plugin for JsonTools {
 
                 let parsed: Value = serde_json::from_str(json_str)?;
                 let formatted = serde_json::to_string_pretty(&parsed)?;
+                tracing::info!(size = json_str.len(), "格式化 JSON");
                 Ok(serde_json::json!({ "result": formatted }))
             }
             "minify_json" => {
@@ -48,6 +49,7 @@ impl Plugin for JsonTools {
 
                 let parsed: Value = serde_json::from_str(json_str)?;
                 let minified = serde_json::to_string(&parsed)?;
+                tracing::info!(size = json_str.len(), "压缩 JSON");
                 Ok(serde_json::json!({ "result": minified }))
             }
             "escape_json" => {
@@ -85,9 +87,13 @@ impl Plugin for JsonTools {
                     .ok_or_else(|| anyhow::anyhow!("缺少 json 参数"))?;
 
                 match serde_json::from_str::<Value>(json_str) {
-                    Ok(_) => Ok(serde_json::json!({ "valid": true, "error": null })),
+                    Ok(_) => {
+                        tracing::info!(size = json_str.len(), "JSON 验证通过");
+                        Ok(serde_json::json!({ "valid": true, "error": null }))
+                    }
                     Err(e) => {
                         let error_msg = e.to_string();
+                        tracing::warn!(%error_msg, "JSON 验证失败");
                         Ok(serde_json::json!({
                             "valid": false,
                             "error": error_msg

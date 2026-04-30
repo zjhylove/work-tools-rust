@@ -50,6 +50,7 @@ impl DbDocPlugin {
         config.created_at = chrono::Utc::now().timestamp() as u64;
 
         let saved = self.storage.save_connection(config)?;
+        tracing::info!(name = %saved.name, db_type = %saved.db_type, "新建连接配置");
         Ok(serde_json::to_value(saved)?)
     }
 
@@ -69,6 +70,7 @@ impl DbDocPlugin {
         config.created_at = existing.created_at;
 
         let saved = self.storage.save_connection(config)?;
+        tracing::info!(name = %saved.name, db_type = %saved.db_type, "更新连接配置");
         Ok(serde_json::to_value(saved)?)
     }
 
@@ -86,6 +88,7 @@ impl DbDocPlugin {
             .ok_or_else(|| anyhow::anyhow!("缺少 id 参数"))?;
 
         self.storage.delete_connection(id)?;
+        tracing::info!(%id, "删除连接配置");
         Ok(serde_json::json!({ "success": true }))
     }
 
@@ -93,12 +96,23 @@ impl DbDocPlugin {
     fn handle_test_connection(&self, params: Value) -> Result<Value> {
         let config: ConnectionConfig = serde_json::from_value(params)?;
 
+        tracing::info!(host = %config.host, port = config.port, db_type = %config.db_type, "测试数据库连接");
+
         let result = with_extractor!(self, config, extractor.test_connection(&config));
 
         match result {
-            Ok(true) => Ok(serde_json::json!({ "success": true, "message": "连接成功" })),
-            Ok(false) => Ok(serde_json::json!({ "success": false, "message": "连接失败" })),
-            Err(e) => Ok(serde_json::json!({ "success": false, "message": e.to_string() })),
+            Ok(true) => {
+                tracing::info!(host = %config.host, "数据库连接测试成功");
+                Ok(serde_json::json!({ "success": true, "message": "连接成功" }))
+            }
+            Ok(false) => {
+                tracing::warn!(host = %config.host, "数据库连接测试失败");
+                Ok(serde_json::json!({ "success": false, "message": "连接失败" }))
+            }
+            Err(e) => {
+                tracing::error!(host = %config.host, error = %e, "数据库连接测试异常");
+                Ok(serde_json::json!({ "success": false, "message": e.to_string() }))
+            }
         }
     }
 
@@ -184,6 +198,8 @@ impl DbDocPlugin {
             exported_at: chrono::Utc::now().to_rfc3339(),
         };
         self.storage.add_export_history(history)?;
+
+        tracing::info!(format = ?config.format, tables = config.tables.len(), files = exported_files.len(), "导出数据库文档");
 
         Ok(serde_json::json!({
             "success": true,

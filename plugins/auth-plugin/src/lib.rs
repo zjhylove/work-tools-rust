@@ -155,6 +155,8 @@ impl Plugin for AuthPlugin {
                 data.entries.push(entry.clone());
                 Self::save_data(&data)?;
 
+                tracing::info!(issuer = %entry.issuer, name = %entry.name, "添加认证条目");
+
                 Ok(serde_json::to_value(entry)?)
             }
             "update_entry" => {
@@ -174,6 +176,8 @@ impl Plugin for AuthPlugin {
                 data.entries[index] = entry.clone();
                 Self::save_data(&data)?;
 
+                tracing::info!(issuer = %entry.issuer, name = %entry.name, "更新认证条目");
+
                 Ok(serde_json::to_value(entry)?)
             }
             "delete_entry" => {
@@ -189,6 +193,8 @@ impl Plugin for AuthPlugin {
 
                 data.entries.remove(index);
                 Self::save_data(&data)?;
+
+                tracing::info!(%id, "删除认证条目");
 
                 Ok(serde_json::json!({ "success": true }))
             }

@@ -222,6 +222,7 @@ impl Plugin for TextDiff {
                     .ok_or_else(|| anyhow::anyhow!("缺少 file_path 参数"))?;
 
                 let result = Self::load_text_file_impl(file_path)?;
+                tracing::info!(%file_path, size = result.content.len(), "加载文本文件");
                 Ok(serde_json::to_value(result)?)
             }
 
@@ -237,6 +238,7 @@ impl Plugin for TextDiff {
                     .ok_or_else(|| anyhow::anyhow!("缺少 content 参数"))?;
 
                 Self::save_text_file_impl(file_path, content)?;
+                tracing::info!(%file_path, size = content.len(), "保存文本文件");
                 Ok(serde_json::json!({ "success": true }))
             }
 
@@ -280,6 +282,7 @@ impl Plugin for TextDiff {
                     .ok_or_else(|| anyhow::anyhow!("缺少 modified 参数"))?;
 
                 let stats = Self::count_diff_lines(original, modified);
+                tracing::info!(additions = stats.additions, deletions = stats.deletions, modifications = stats.modifications, "计算差异统计");
                 Ok(serde_json::to_value(stats)?)
             }
 
@@ -300,6 +303,7 @@ impl Plugin for TextDiff {
                     .unwrap_or("changes.diff");
 
                 let diff = Self::export_unified_diff(original, modified, filename);
+                tracing::info!(%filename, "导出 Unified Diff");
                 Ok(serde_json::json!({ "diff": diff }))
             }
 

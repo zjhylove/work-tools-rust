@@ -49,8 +49,6 @@ impl PluginRegistry {
             HashMap::new()
         };
 
-        tracing::info!("插件注册表已加载,已安装 {} 个插件", installed.len());
-
         Ok(Self {
             registry_file,
             installed,

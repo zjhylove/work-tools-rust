@@ -47,6 +47,7 @@
 
 .dialog-large {
   max-width: 900px;
+  height: 650px;
 }
 
 .dialog-header {
@@ -159,10 +160,111 @@
   padding: var(--space-md);
   font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', monospace;
   font-size: 12px;
-  max-height: 500px;
+  min-height: 400px;
   overflow-y: auto;
   border: 1px solid var(--border-light);
   line-height: 1.6;
+}
+
+.log-filter-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  padding: var(--space-md) var(--space-2xl);
+  border-bottom: 1px solid var(--border-light);
+  background: var(--bg-primary);
+  flex-wrap: wrap;
+}
+
+.log-filter-select,
+.log-filter-input {
+  padding: 6px 10px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  font-size: 12px;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+.log-filter-select:focus,
+.log-filter-input:focus {
+  border-color: var(--accent);
+}
+
+.log-filter-select {
+  min-width: 110px;
+}
+
+.log-filter-input {
+  flex: 1;
+  min-width: 140px;
+}
+
+.log-filter-input::placeholder {
+  color: var(--text-secondary);
+}
+
+.log-auto-refresh {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  white-space: nowrap;
+  user-select: none;
+}
+
+.log-entry {
+  display: flex;
+  gap: 8px;
+  padding: 2px 0;
+  font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', monospace;
+  font-size: 12px;
+  line-height: 1.6;
+  align-items: baseline;
+  border-bottom: 1px solid rgba(128, 128, 128, 0.08);
+}
+
+.log-entry:hover {
+  background: var(--hover-bg);
+  border-radius: 2px;
+}
+
+.log-time {
+  color: var(--text-secondary);
+  flex-shrink: 0;
+  min-width: 75px;
+}
+
+.log-level {
+  font-weight: 600;
+  flex-shrink: 0;
+  min-width: 52px;
+}
+
+.log-target {
+  color: var(--text-secondary);
+  flex-shrink: 0;
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.log-message {
+  color: var(--text-primary);
+  word-break: break-word;
+  flex: 1;
+}
+
+.log-empty {
+  color: var(--text-secondary);
+  text-align: center;
+  padding: 40px 0;
+  font-style: italic;
 }
 
 .settings-section {
