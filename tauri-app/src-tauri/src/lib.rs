@@ -4,6 +4,7 @@ pub mod plugin_manager;
 mod plugin_package;
 mod plugin_registry;
 mod logger;
+mod tray;
 
 use anyhow::Result;
 use plugin_manager::PluginManager;
@@ -44,6 +45,9 @@ pub fn run() {
 
             // 设置插件管理器状态
             app.manage(plugin_manager);
+
+            // 初始化系统托盘（失败不影响应用启动）
+            tray::start_tray(app);
 
             println!("Work Tools 应用启动成功");
             Ok(())
