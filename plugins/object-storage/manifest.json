@@ -1,0 +1,20 @@
+{
+  "id": "object-storage",
+  "name": "对象存储",
+  "description": "管理阿里云OSS和腾讯云COS，支持文件浏览/上传/下载/搜索/删除",
+  "version": "1.0.0",
+  "icon": "📦",
+  "author": "Work Tools Team",
+  "files": {
+    "macos": "libobject_storage.dylib",
+    "linux": "libobject_storage.so",
+    "windows": "object_storage.dll"
+  },
+  "assets": {
+    "entry": "index.html"
+  },
+  "permissions": [
+    "network",
+    "filesystem"
+  ]
+}

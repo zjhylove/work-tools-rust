@@ -594,6 +594,25 @@ pub async fn open_folder_dialog(
     Ok(folder_path.map(|p| p.to_string()))
 }
 
+/// 打开文件选择对话框
+#[tauri::command]
+pub async fn open_file_dialog(
+    title: Option<String>,
+    app: tauri::AppHandle,
+) -> Result<Option<String>, String> {
+    use tauri_plugin_dialog::DialogExt;
+
+    let mut builder = app.dialog().file();
+
+    if let Some(title) = title {
+        builder = builder.set_title(title);
+    }
+
+    let file_path = builder.blocking_pick_file();
+
+    Ok(file_path.map(|p| p.to_string()))
+}
+
 #[derive(Debug, Deserialize)]
 pub struct LogQuery {
     pub level: Option<String>,

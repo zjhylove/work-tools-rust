@@ -66,6 +66,7 @@ pub fn run() {
             commands::read_plugin_asset,
             commands::open_url,
             commands::open_folder_dialog,
+            commands::open_file_dialog,
             commands::write_file,
             commands::get_logs,
             commands::clear_logs,
