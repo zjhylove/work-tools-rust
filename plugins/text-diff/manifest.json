@@ -3,7 +3,7 @@
   "name": "文本比对",
   "description": "并排文本比对,字符级差异高亮与统计",
   "version": "1.0.0",
-  "icon": "🔍",
+  "icon": "📝",
   "author": "Work Tools Team",
   "homepage": "https://github.com/worktools/text-diff",
   "files": {

@@ -445,8 +445,8 @@ function App() {
             entries.map((entry) => (
               <div key={entry.id} className="auth-item">
                 <div className="auth-item-info">
-                  <div className="auth-item-issuer">{entry.issuer}</div>
                   <div className="auth-item-name">{entry.name}</div>
+                  <div className="auth-item-issuer">{entry.issuer}</div>
                 </div>
 
                 {totpMap[entry.id] && (

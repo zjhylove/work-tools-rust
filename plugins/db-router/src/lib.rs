@@ -230,7 +230,7 @@ impl Plugin for DbRouterPlugin {
         "1.0.0"
     }
     fn icon(&self) -> &str {
-        "🔍"
+        "🗄️"
     }
     fn get_view(&self) -> String {
         "<div>插件前端资源加载中...</div>".to_string()

@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc && vite build --outDir ../assets",
+    "build": "npx tsc && vite build --outDir ../assets",
     "preview": "vite preview"
   },
   "dependencies": {

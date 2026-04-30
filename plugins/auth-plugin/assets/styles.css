@@ -105,19 +105,19 @@
 }
 
 .auth-item-issuer {
-  font-size: 15px;
-  font-weight: 600;
-  color: var(--text-primary);
-  margin-bottom: 4px;
+  font-size: 13px;
+  color: var(--text-secondary);
+  opacity: 0.8;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .auth-item-name {
-  font-size: 13px;
-  color: var(--text-secondary);
-  opacity: 0.8;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 4px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

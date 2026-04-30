@@ -200,7 +200,7 @@ impl Plugin for TextDiff {
     }
 
     fn icon(&self) -> &str {
-        "🔍"
+        "📝"
     }
 
     fn get_view(&self) -> String {

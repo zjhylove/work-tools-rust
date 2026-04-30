@@ -7348,8 +7348,8 @@ function App() {
     ),
     viewMode === "list" && /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "auth-list", children: !loading && entries.length > 0 ? entries.map((entry) => /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "auth-item", children: [
       /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "auth-item-info", children: [
-        /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "auth-item-issuer", children: entry.issuer }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "auth-item-name", children: entry.name })
+        /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "auth-item-name", children: entry.name }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "auth-item-issuer", children: entry.issuer })
       ] }),
       totpMap[entry.id] && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "auth-item-totp", children: [
         /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "totp-code", children: totpMap[entry.id].code }),
