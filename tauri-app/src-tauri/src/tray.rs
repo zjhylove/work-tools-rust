@@ -1,3 +1,4 @@
+use serde::{Deserialize, Serialize};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
@@ -7,6 +8,11 @@ use tauri::{menu::MenuBuilder, menu::MenuItemBuilder, Runtime, Manager};
 const TRAY_ID: &str = "worktools-tray";
 const DEFAULT_TOOLTIP: &str = "Work Tools";
 const HIDE_HINT_TOOLTIP: &str = "应用已最小化到托盘，双击图标可恢复窗口";
+
+#[derive(Deserialize, Serialize)]
+struct TrayConfig {
+    hide_to_tray_hint_shown: bool,
+}
 
 /// 系统托盘入口，由 lib.rs 的 setup 中调用。
 /// 不会 panic，所有错误仅记录日志。托盘创建失败不影响应用正常启动。
@@ -25,26 +31,7 @@ pub fn start_tray<R: Runtime>(app: &mut tauri::App<R>) {
     let hint_shown = Arc::new(AtomicBool::new(hint_already_shown()));
 
     // 初始菜单：窗口默认可见，显示"隐藏窗口"
-    let toggle_item = match MenuItemBuilder::with_id("toggle", "隐藏窗口").build(app) {
-        Ok(v) => v,
-        Err(e) => {
-            tracing::warn!("创建托盘菜单项失败: {}", e);
-            return;
-        }
-    };
-    let quit_item = match MenuItemBuilder::with_id("quit", "退出").build(app) {
-        Ok(v) => v,
-        Err(e) => {
-            tracing::warn!("创建托盘退出菜单项失败: {}", e);
-            return;
-        }
-    };
-    let menu = match MenuBuilder::new(app)
-        .item(&toggle_item)
-        .separator()
-        .item(&quit_item)
-        .build()
-    {
+    let menu = match build_menu(app.handle(), "隐藏窗口") {
         Ok(m) => m,
         Err(e) => {
             tracing::warn!("创建托盘菜单失败: {}", e);
@@ -78,7 +65,7 @@ pub fn start_tray<R: Runtime>(app: &mut tauri::App<R>) {
                 } = event
                 {
                     if let Err(e) = toggle_window(&app_handle) {
-                        tracing::warn!("双击托盘切换窗口失败: {}", e);
+                        tracing::warn!("托盘点击切换窗口失败: {}", e);
                     }
                 }
             }
@@ -124,7 +111,7 @@ pub fn start_tray<R: Runtime>(app: &mut tauri::App<R>) {
                 }
 
                 // 重建菜单（窗口已隐藏 → "显示窗口"）
-                rebuild_toggle_menu(&app_handle, "显示窗口");
+                replace_tray_menu(&app_handle, "显示窗口");
             }
         }
     });
@@ -140,38 +127,44 @@ fn toggle_window<R: Runtime>(app_handle: &tauri::AppHandle<R>) -> anyhow::Result
 
     if window.is_visible()? {
         window.hide()?;
-        rebuild_toggle_menu(app_handle, "显示窗口");
+        replace_tray_menu(app_handle, "显示窗口");
     } else {
         window.show()?;
         window.set_focus()?;
-        rebuild_toggle_menu(app_handle, "隐藏窗口");
+        replace_tray_menu(app_handle, "隐藏窗口");
     }
 
     Ok(())
 }
 
-/// 重建托盘右键菜单
-///
-/// Tauri 2.x 无法原地修改菜单项文本，每次切换都需要重新创建整个菜单。
-fn rebuild_toggle_menu<R: Runtime>(app_handle: &tauri::AppHandle<R>, label: &str) {
-    let Some(tray_icon) = app_handle.tray_by_id(TRAY_ID) else {
-        return;
-    };
-    let Ok(toggle_item) = MenuItemBuilder::with_id("toggle", label).build(app_handle) else {
-        return;
-    };
-    let Ok(quit_item) = MenuItemBuilder::with_id("quit", "退出").build(app_handle) else {
-        return;
-    };
-    let Ok(menu) = MenuBuilder::new(app_handle)
+/// 构建托盘右键菜单
+fn build_menu<R: Runtime>(
+    app_handle: &tauri::AppHandle<R>,
+    label: &str,
+) -> anyhow::Result<tauri::menu::Menu<R>> {
+    let toggle_item = MenuItemBuilder::with_id("toggle", label).build(app_handle)?;
+    let quit_item = MenuItemBuilder::with_id("quit", "退出").build(app_handle)?;
+    Ok(MenuBuilder::new(app_handle)
         .item(&toggle_item)
         .separator()
         .item(&quit_item)
-        .build()
-    else {
-        return;
-    };
-    let _ = tray_icon.set_menu(Some(menu));
+        .build()?)
+}
+
+/// 替换托盘右键菜单
+///
+/// Tauri 2.x 无法原地修改菜单项文本，每次切换都需要重建并替换整个菜单。
+fn replace_tray_menu<R: Runtime>(app_handle: &tauri::AppHandle<R>, label: &str) {
+    if let Some(tray_icon) = app_handle.tray_by_id(TRAY_ID) {
+        match build_menu(app_handle, label) {
+            Ok(menu) => {
+                let _ = tray_icon.set_menu(Some(menu));
+            }
+            Err(e) => {
+                tracing::warn!("重建托盘菜单失败: {}", e);
+            }
+        }
+    }
 }
 
 // ── 首次隐藏提示状态持久化 ────────────────────────
@@ -191,8 +184,8 @@ fn hint_already_shown() -> bool {
     }
     std::fs::read_to_string(path)
         .ok()
-        .and_then(|s| serde_json::from_str::<serde_json::Value>(&s).ok())
-        .and_then(|v| v.get("hide_to_tray_hint_shown").and_then(|v| v.as_bool()))
+        .and_then(|s| serde_json::from_str::<TrayConfig>(&s).ok())
+        .map(|c| c.hide_to_tray_hint_shown)
         .unwrap_or(false)
 }
 
@@ -201,7 +194,9 @@ fn mark_hint_shown() -> anyhow::Result<()> {
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)?;
     }
-    let config = serde_json::json!({"hide_to_tray_hint_shown": true});
+    let config = TrayConfig {
+        hide_to_tray_hint_shown: true,
+    };
     std::fs::write(path, serde_json::to_string_pretty(&config)?)?;
     Ok(())
 }
