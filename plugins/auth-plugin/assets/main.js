@@ -7407,12 +7407,15 @@ function App() {
     (viewMode === "add" || viewMode === "edit") && /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "auth-form-container", children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "auth-form-content", children: [
       /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "auth-form-header", children: [
         /* @__PURE__ */ jsxRuntimeExports.jsx("h2", { children: viewMode === "add" ? "添加认证" : "编辑认证" }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx(
+        /* @__PURE__ */ jsxRuntimeExports.jsxs(
           "button",
           {
             className: "btn-secondary",
             onClick: () => setViewMode("list"),
-            children: "✕ 返回列表"
+            children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: { fontSize: 18, lineHeight: 1 }, children: "×" }),
+              " 返回列表"
+            ]
           }
         )
       ] }),
