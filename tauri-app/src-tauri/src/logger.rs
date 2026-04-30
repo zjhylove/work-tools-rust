@@ -8,7 +8,6 @@ use tracing_subscriber::layer::{Context, Layer};
 use tracing_subscriber::prelude::*;
 use tracing_subscriber::registry::LookupSpan;
 
-/// 日志条目（序列化给前端）
 #[derive(Debug, Clone, Serialize)]
 pub struct LogEntry {
     pub timestamp: String,
@@ -19,10 +18,7 @@ pub struct LogEntry {
 
 const MAX_LOG_ENTRIES: usize = 1000;
 
-/// 全局环形缓冲区，存储最近 N 条日志
 pub static LOG_RING: Mutex<VecDeque<LogEntry>> = Mutex::new(VecDeque::new());
-
-// ── 自定义 Layer：将事件写入 LOG_RING ──
 
 pub struct LogRingLayer;
 
@@ -52,18 +48,22 @@ where
     }
 }
 
-// ── Visitor：收集事件字段值 ──
-
 struct StringVisitor(String);
+
+macro_rules! record_field {
+    ($self:expr, $field:expr, $val:expr) => {
+        if !$field.name().starts_with("log.") {
+            if !$self.0.is_empty() {
+                $self.0.push(' ');
+            }
+            $self.0.push_str(&$val.to_string());
+        }
+    };
+}
 
 impl tracing::field::Visit for StringVisitor {
     fn record_str(&mut self, field: &tracing::field::Field, value: &str) {
-        if !field.name().starts_with("log.") {
-            if !self.0.is_empty() {
-                self.0.push(' ');
-            }
-            self.0.push_str(value);
-        }
+        record_field!(self, field, value);
     }
 
     fn record_debug(&mut self, field: &tracing::field::Field, value: &dyn std::fmt::Debug) {
@@ -77,36 +77,18 @@ impl tracing::field::Visit for StringVisitor {
     }
 
     fn record_u64(&mut self, field: &tracing::field::Field, value: u64) {
-        if !field.name().starts_with("log.") {
-            if !self.0.is_empty() {
-                self.0.push(' ');
-            }
-            self.0.push_str(&value.to_string());
-        }
+        record_field!(self, field, value);
     }
 
     fn record_i64(&mut self, field: &tracing::field::Field, value: i64) {
-        if !field.name().starts_with("log.") {
-            if !self.0.is_empty() {
-                self.0.push(' ');
-            }
-            self.0.push_str(&value.to_string());
-        }
+        record_field!(self, field, value);
     }
 
     fn record_bool(&mut self, field: &tracing::field::Field, value: bool) {
-        if !field.name().starts_with("log.") {
-            if !self.0.is_empty() {
-                self.0.push(' ');
-            }
-            self.0.push_str(&value.to_string());
-        }
+        record_field!(self, field, value);
     }
 }
 
-// ── 初始化 ──
-
-/// 初始化日志系统：stdout + 文件滚动 + 内存环形缓冲
 pub fn init_logging() -> Result<()> {
     let user_dirs =
         directories::UserDirs::new().ok_or_else(|| anyhow::anyhow!("无法找到用户主目录"))?;
@@ -114,11 +96,8 @@ pub fn init_logging() -> Result<()> {
 
     std::fs::create_dir_all(&log_dir)?;
 
-    // 按天滚动的文件 writer
     let file_appender = tracing_appender::rolling::daily(&log_dir, "work-tools.log");
     let (non_blocking_file, guard) = tracing_appender::non_blocking(file_appender);
-
-    // 泄漏 guard 以保持文件 writer 存活（程序生命周期内有效）
     Box::leak(Box::new(guard));
 
     tracing_subscriber::registry()

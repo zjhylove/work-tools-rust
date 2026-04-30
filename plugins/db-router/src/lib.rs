@@ -36,9 +36,8 @@ impl DbRouterPlugin {
         )?;
 
         let mut data = Self::load_data()?;
-        let is_new = rule.id.is_empty();
 
-        if is_new {
+        if rule.id.is_empty() {
             rule.id = uuid::Uuid::new_v4().to_string();
             data.rules.push(rule.clone());
             tracing::info!(name = %rule.name, id = %rule.id, "新建路由规则");

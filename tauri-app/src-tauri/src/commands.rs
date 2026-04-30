@@ -594,9 +594,6 @@ pub async fn open_folder_dialog(
     Ok(folder_path.map(|p| p.to_string()))
 }
 
-// ── 日志查询 ──
-
-/// 日志查询参数
 #[derive(Debug, Deserialize)]
 pub struct LogQuery {
     pub level: Option<String>,
@@ -604,37 +601,50 @@ pub struct LogQuery {
     pub since: Option<String>,
 }
 
-/// 查询日志（从内存环形缓冲区）
 #[tauri::command]
 pub fn get_logs(query: Option<LogQuery>) -> Result<Vec<LogEntry>, String> {
     const DEFAULT_LIMIT: usize = 100;
 
     let ring = LOG_RING.lock().map_err(|e| format!("Lock error: {}", e))?;
-    let mut entries: Vec<LogEntry> = ring.iter().cloned().collect();
-    drop(ring);
 
-    if let Some(q) = query {
-        if let Some(ref level_filter) = q.level {
-            let upper = level_filter.to_uppercase();
-            entries.retain(|e| e.level == upper);
-        }
-        if let Some(ref plugin_filter) = q.plugin {
-            let lower = plugin_filter.to_lowercase();
-            entries.retain(|e| e.target.to_lowercase().contains(&lower));
-        }
-        if let Some(ref since_str) = q.since {
-            if let Ok(since_dt) = chrono::DateTime::parse_from_rfc3339(since_str) {
-                entries.retain(|e| {
-                    chrono::DateTime::parse_from_rfc3339(&e.timestamp)
-                        .map(|dt| dt > since_dt)
-                        .unwrap_or(true)
-                });
+    let entries: Vec<LogEntry> = ring
+        .iter()
+        .rev()
+        .filter(|e| match &query {
+            Some(q) => {
+                if let Some(ref lvl) = q.level {
+                    if e.level != *lvl {
+                        return false;
+                    }
+                }
+                if let Some(ref plugin) = q.plugin {
+                    if !e.target.to_lowercase().contains(&plugin.to_lowercase()) {
+                        return false;
+                    }
+                }
+                if let Some(ref since_str) = q.since {
+                    if let Ok(since_dt) = chrono::DateTime::parse_from_rfc3339(since_str) {
+                        if let Ok(dt) = chrono::DateTime::parse_from_rfc3339(&e.timestamp) {
+                            if dt <= since_dt {
+                                return false;
+                            }
+                        }
+                    }
+                }
+                true
             }
-        }
-    }
-
-    entries.reverse();
-    entries.truncate(DEFAULT_LIMIT);
+            None => true,
+        })
+        .take(DEFAULT_LIMIT)
+        .cloned()
+        .collect();
 
     Ok(entries)
+}
+
+#[tauri::command]
+pub fn clear_logs() -> Result<(), String> {
+    let mut ring = LOG_RING.lock().map_err(|e| format!("Lock error: {}", e))?;
+    ring.clear();
+    Ok(())
 }

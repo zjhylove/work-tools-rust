@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { devError } from "../utils/logger";
 import "./Dialog.css";
 
 export interface LogEntry {
@@ -23,20 +24,27 @@ const LEVEL_COLORS: Record<string, string> = {
 
 const LogViewer: React.FC<LogViewerProps> = ({ onClose }) => {
   const [allLogs, setAllLogs] = useState<LogEntry[]>([]);
-  const [levelFilter, setLevelFilter] = useState("ALL");
+  const [levelFilter, setLevelFilter] = useState("");
   const [pluginFilter, setPluginFilter] = useState("");
   const [autoRefresh, setAutoRefresh] = useState(true);
   const containerRef = useRef<HTMLDivElement>(null);
+  const prevLogsRef = useRef<string>("");
 
   const fetchLogs = useCallback(async () => {
     try {
       const query: Record<string, unknown> = {};
+      if (levelFilter) query.level = levelFilter;
+      if (pluginFilter) query.plugin = pluginFilter;
       const logs = await invoke<LogEntry[]>("get_logs", { query });
-      setAllLogs(logs);
+      const snapshot = JSON.stringify(logs);
+      if (snapshot !== prevLogsRef.current) {
+        prevLogsRef.current = snapshot;
+        setAllLogs(logs);
+      }
     } catch (e) {
-      console.error("获取日志失败:", e);
+      devError("获取日志失败:", e);
     }
-  }, []);
+  }, [levelFilter, pluginFilter]);
 
   useEffect(() => {
     fetchLogs();
@@ -47,22 +55,6 @@ const LogViewer: React.FC<LogViewerProps> = ({ onClose }) => {
     const interval = setInterval(fetchLogs, 3000);
     return () => clearInterval(interval);
   }, [fetchLogs, autoRefresh]);
-
-  useEffect(() => {
-    if (containerRef.current) {
-      containerRef.current.scrollTop = 0;
-    }
-  }, [allLogs]);
-
-  const filteredLogs = allLogs.filter((entry) => {
-    if (levelFilter !== "ALL" && entry.level !== levelFilter) return false;
-    if (
-      pluginFilter &&
-      !entry.target.toLowerCase().includes(pluginFilter.toLowerCase())
-    )
-      return false;
-    return true;
-  });
 
   const formatTime = (timestamp: string) => {
     try {
@@ -92,7 +84,7 @@ const LogViewer: React.FC<LogViewerProps> = ({ onClose }) => {
             value={levelFilter}
             onChange={(e) => setLevelFilter(e.target.value)}
           >
-            <option value="ALL">所有级别</option>
+            <option value="">所有级别</option>
             <option value="ERROR">ERROR</option>
             <option value="WARN">WARN</option>
             <option value="INFO">INFO</option>
@@ -120,16 +112,31 @@ const LogViewer: React.FC<LogViewerProps> = ({ onClose }) => {
           <button className="button-secondary" onClick={fetchLogs}>
             刷新
           </button>
+
+          <button
+            className="button-secondary"
+            onClick={async () => {
+              try {
+                await invoke("clear_logs");
+                setAllLogs([]);
+                prevLogsRef.current = "";
+              } catch (e) {
+                devError("清理日志失败:", e);
+              }
+            }}
+          >
+            清理
+          </button>
         </div>
 
         <div className="dialog-body">
           <div className="log-viewer" ref={containerRef}>
-            {filteredLogs.length === 0 ? (
+            {allLogs.length === 0 ? (
               <div className="log-empty">暂无日志记录</div>
             ) : (
-              filteredLogs.map((entry, i) => (
+              allLogs.map((entry, i) => (
                 <div
-                  key={`${entry.timestamp}-${i}`}
+                  key={`${entry.timestamp}-${entry.target}-${i}`}
                   className="log-entry"
                 >
                   <span className="log-time">
