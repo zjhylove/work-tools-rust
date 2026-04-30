@@ -108,7 +108,7 @@ export default function TabHttpProxy() {
                   <td><code>{g.addr}</code></td>
                   <td>{g.target}</td>
                   <td>
-                    <button className="btn btn-default btn-sm" onClick={() => setEditing({ rule_id: g.rule_id, domain: g.addr, target: g.target })}>编辑</button>
+                    <button className="btn btn-secondary btn-sm" onClick={() => setEditing({ rule_id: g.rule_id, domain: g.addr, target: g.target })}>编辑</button>
                   </td>
                 </tr>
               ))}
@@ -122,10 +122,10 @@ export default function TabHttpProxy() {
         <div className="modal-overlay" onClick={() => setEditing(null)}>
           <div className="modal" onClick={e => e.stopPropagation()}>
             <h3>编辑 Pod 地址</h3>
-            <div className="form-group"><label>Pod地址</label><input value={editing.domain} onChange={e => setEditing({...editing, domain: e.target.value})} style={{width:"100%"}} /></div>
+            <div className="form-group"><label>Pod地址</label><input value={editing.domain} onChange={e => setEditing({...editing, domain: e.target.value})} /></div>
             <div style={{marginTop:8,fontSize:11,color:"#888"}}>目标: {editing.target}</div>
             <div className="modal-actions">
-              <button className="btn btn-default" onClick={() => setEditing(null)}>取消</button>
+              <button className="btn btn-secondary" onClick={() => setEditing(null)}>取消</button>
               <button className="btn btn-primary" onClick={handleUpdate}>保存</button>
             </div>
           </div>

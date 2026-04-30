@@ -44,6 +44,13 @@ interface PluginAPI {
    * @param title - 对话框标题
    */
   open_folder_dialog: (title?: string) => Promise<string | null>;
+
+  /**
+   * 写入文本文件到指定路径
+   * @param path - 文件完整路径
+   * @param content - 文件内容
+   */
+  write_file: (path: string, content: string) => Promise<void>;
 }
 
 /**

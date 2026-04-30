@@ -121,14 +121,16 @@ export default function TabSshForward() {
   };
 
   const handleExport = async () => {
-    const data = await call("export_rules") as ForwardRule[];
-    const json = JSON.stringify(data.filter(r => r.rule_type === "Manual"), null, 2);
-    const blob = new Blob([json], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url; a.download = `k8s-forward-rules-${new Date().toISOString().split("T")[0]}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
+    try {
+      const dir = await window.pluginAPI.open_folder_dialog("选择导出目录");
+      if (!dir) return;
+      const data = await call("export_rules") as ForwardRule[];
+      const json = JSON.stringify(data.filter(r => r.rule_type === "Manual"), null, 2);
+      const filename = `k8s-forward-rules-${new Date().toISOString().split("T")[0]}.json`;
+      const filePath = `${dir.replace(/\\/g, "/")}/${filename}`;
+      await window.pluginAPI.write_file(filePath, json);
+      showToast(`已导出到 ${filePath}`);
+    } catch (e: unknown) { showToast(`导出失败: ${e}`, true); }
   };
 
   return (
@@ -158,8 +160,8 @@ export default function TabSshForward() {
           <span>转发规则</span>
           <div style={{display:"flex",gap:8}}>
             <button className="btn btn-primary btn-sm" onClick={handleAdd}>+ 添加规则</button>
-            <button className="btn btn-default btn-sm" onClick={handleImport}>导入</button>
-            <button className="btn btn-default btn-sm" onClick={handleExport}>导出</button>
+            <button className="btn btn-secondary btn-sm" onClick={handleImport}>导入</button>
+            <button className="btn btn-secondary btn-sm" onClick={handleExport}>导出</button>
           </div>
         </div>
         <table>
@@ -173,7 +175,7 @@ export default function TabSshForward() {
                 <td>{r.remote_host}</td>
                 <td>{r.remote_port}</td>
                 <td>
-                  <button className="btn btn-default btn-sm" onClick={() => { setEditing(r); setIsNewRule(false); }} style={{marginRight:4}}>编辑</button>
+                  <button className="btn btn-secondary btn-sm" onClick={() => { setEditing(r); setIsNewRule(false); }} style={{marginRight:4}}>编辑</button>
                   <button className="btn btn-danger btn-sm" onClick={() => handleDelete(r.id)}>删除</button>
                 </td>
               </tr>
@@ -195,7 +197,7 @@ export default function TabSshForward() {
               <div className="form-group"><label>远程端口</label><input type="number" value={editing.remote_port} onChange={e => setEditing({...editing, remote_port: +e.target.value})} /></div>
             </div>
             <div className="modal-actions">
-              <button className="btn btn-default" onClick={() => { setEditing(null); setIsNewRule(false); }}>取消</button>
+              <button className="btn btn-secondary" onClick={() => { setEditing(null); setIsNewRule(false); }}>取消</button>
               <button className="btn btn-primary" onClick={handleSave}>保存</button>
             </div>
           </div>

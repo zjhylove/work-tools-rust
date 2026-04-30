@@ -562,6 +562,17 @@ pub async fn open_url(url: String) -> Result<(), String> {
         .map_err(|e| format!("打开链接失败: {}", e))
 }
 
+/// 写入文本文件到指定路径
+#[tauri::command]
+pub async fn write_file(path: String, content: String) -> Result<(), String> {
+    tracing::info!(path = %path, size = content.len(), "写入文件");
+    fs::write(&path, &content)
+        .inspect_err(|e| {
+            tracing::error!(path = %path, "写入文件失败: {}", e);
+        })
+        .map_err(|e| format!("写入文件失败: {}", e))
+}
+
 /// 打开文件夹选择对话框
 #[tauri::command]
 pub async fn open_folder_dialog(

@@ -378,32 +378,16 @@ function App() {
 
   const handleExport = async () => {
     try {
+      const dir = await window.pluginAPI!.open_folder_dialog("选择导出目录");
+      if (!dir) return;
+
       const exportData = (await call("export_rules")) as RouteRule[];
       const json = JSON.stringify(exportData, null, 2);
-      const blob = new Blob([json], { type: "application/json" });
 
-      const defaultName = `db-router-rules-${new Date().toISOString().split("T")[0]}.json`;
-
-      if ("showSaveFilePicker" in window) {
-        const handle = await (window as unknown as { showSaveFilePicker: (opts: unknown) => Promise<FileSystemFileHandle> }).showSaveFilePicker({
-          suggestedName: defaultName,
-          types: [{ description: "JSON Files", accept: { "application/json": [".json"] } }],
-        });
-        const writable = await handle.createWritable();
-        await writable.write(blob);
-        await writable.close();
-        addToast(`规则已导出到 ${handle.name}`, "success");
-      } else {
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = defaultName;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-        addToast("规则已导出", "success");
-      }
+      const filename = `db-router-rules-${new Date().toISOString().split("T")[0]}.json`;
+      const filePath = `${dir.replace(/\\/g, "/")}/${filename}`;
+      await window.pluginAPI!.write_file(filePath, json);
+      addToast(`规则已导出到 ${filePath}`, "success");
     } catch (err) {
       if ((err as Error).name !== "AbortError") {
         addToast("导出失败", "error");

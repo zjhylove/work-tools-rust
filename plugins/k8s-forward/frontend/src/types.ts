@@ -2,6 +2,8 @@ declare global {
   interface Window {
     pluginAPI: {
       call: (pluginId: string, method: string, params?: Record<string, unknown>) => Promise<unknown>;
+      open_folder_dialog: (title?: string) => Promise<string | null>;
+      write_file: (path: string, content: string) => Promise<void>;
     };
   }
 }

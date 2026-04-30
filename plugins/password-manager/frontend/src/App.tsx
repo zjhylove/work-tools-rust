@@ -351,12 +351,14 @@ function App() {
     }
   };
 
-  // 导出密码 (不使用 confirm,直接导出)
   const handleExportPasswords = async () => {
     try {
       if (!window.pluginAPI) {
         throw new Error("pluginAPI 未初始化");
       }
+
+      const dir = await window.pluginAPI.open_folder_dialog("选择导出目录");
+      if (!dir) return;
 
       const result = (await window.pluginAPI.call(
         "password-manager",
@@ -368,17 +370,11 @@ function App() {
         throw new Error("插件返回数据格式错误: " + JSON.stringify(result));
       }
 
-      const blob = new Blob([result.data], { type: "application/json" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `passwords-backup-${new Date().toISOString().split("T")[0]}.json`;
-      document.body.appendChild(a);
-      a.click();
-      safeRemoveChild(a);
-      URL.revokeObjectURL(url);
+      const filename = `passwords-backup-${new Date().toISOString().split("T")[0]}.json`;
+      const filePath = `${dir.replace(/\\/g, "/")}/${filename}`;
+      await window.pluginAPI.write_file(filePath, result.data);
 
-      setError("✅ 密码已导出 - 请记得安全存储后删除文件");
+      setError(`✅ 密码已导出到 ${filePath}`);
       setTimeout(() => setError(""), 1500);
     } catch (err) {
       setError("❌ 导出失败: " + (err as Error).message);

@@ -8,6 +8,8 @@ export interface PluginAPI {
   get_plugin_config: (pluginId: string) => Promise<Record<string, unknown>>;
   set_plugin_config: (pluginId: string, config: Record<string, unknown>) => Promise<void>;
   open_url?: (url: string) => Promise<void>;
+  open_folder_dialog: (title?: string) => Promise<string | null>;
+  write_file: (path: string, content: string) => Promise<void>;
 }
 
 declare global {

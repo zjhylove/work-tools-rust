@@ -233,6 +233,10 @@ export default function PluginPlaceholder({
                 console.log(`[PluginAPI] 打开文件夹对话框`);
                 return await invoke("open_folder_dialog", { title: title || "选择导出目录" });
               },
+              write_file: async (path: string, content: string) => {
+                console.log(`[PluginAPI] 写入文件: ${path}`);
+                return await invoke("write_file", { path, content });
+              },
             };
             console.log("[PluginPlaceholder] pluginAPI 注入成功");
           }

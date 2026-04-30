@@ -211,7 +211,7 @@ export default function TabK8sForward() {
                 </select>
               </div>
               <button className="btn btn-primary btn-sm" onClick={loadClusters}>加载集群</button>
-              <button className="btn btn-default btn-sm" onClick={() => loadPods(selCluster, selNs)}>刷新 Pod</button>
+              <button className="btn btn-secondary btn-sm" onClick={() => loadPods(selCluster, selNs)}>刷新 Pod</button>
             </div>
           </div>
 
@@ -268,7 +268,7 @@ export default function TabK8sForward() {
                         <td>{r.local_port}</td>
                         <td>{r.remote_host}:{r.remote_port}</td>
                         <td>
-                          <button className="btn btn-default btn-sm" style={{marginRight:4}} onClick={() => setEditingForward({ rule_id: r.id, domain: m?.domain || `${r.remote_host}:${r.remote_port}`, local_port: r.local_port, pod_name: r.pod_name || "", remote_host: r.remote_host, remote_port: r.remote_port, local_host: r.local_host })}>编辑</button>
+                          <button className="btn btn-secondary btn-sm" style={{marginRight:4}} onClick={() => setEditingForward({ rule_id: r.id, domain: m?.domain || `${r.remote_host}:${r.remote_port}`, local_port: r.local_port, pod_name: r.pod_name || "", remote_host: r.remote_host, remote_port: r.remote_port, local_host: r.local_host })}>编辑</button>
                           <button className="btn btn-danger btn-sm" onClick={() => handleUnforward(r.id)}>取消</button>
                         </td>
                       </tr>
@@ -290,7 +290,7 @@ export default function TabK8sForward() {
               <div className="form-group"><label>本地端口</label><input type="number" value={editingForward.local_port} onChange={e => setEditingForward({...editingForward, local_port: +e.target.value})} /></div>
             </div>
             <div className="modal-actions">
-              <button className="btn btn-default" onClick={() => setEditingForward(null)}>取消</button>
+              <button className="btn btn-secondary" onClick={() => setEditingForward(null)}>取消</button>
               <button className="btn btn-primary" onClick={handleUpdateForward}>保存</button>
             </div>
           </div>
