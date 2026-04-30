@@ -99,15 +99,11 @@ pub async fn import_plugin_package(
         .map_err(|e| format!("插件包验证失败: {}", e))?;
 
     // 2. 创建插件目录
-    let user_dirs = directories::UserDirs::new()
-        .ok_or_else(|| {
-            tracing::error!("获取用户主目录失败: 目录 API 不可用");
-            "无法找到用户主目录".to_string()
-        })?;
-
-    let plugin_dir = user_dirs
-        .home_dir()
-        .join(".worktools/plugins")
+    let plugin_dir = crate::paths::plugins_dir()
+        .map_err(|e| {
+            tracing::error!("获取插件目录失败: {}", e);
+            e.to_string()
+        })?
         .join(&pkg.manifest.id);
 
     tracing::info!(plugin_dir = %plugin_dir.display(), "目标插件目录");
@@ -187,13 +183,11 @@ pub async fn import_plugin_package(
 /// 获取所有可用插件 (已安装 + 可安装)
 #[tauri::command]
 pub async fn get_available_plugins() -> Result<Vec<PluginManifest>, String> {
-    let user_dirs = directories::UserDirs::new()
-        .ok_or_else(|| {
-            tracing::error!("获取用户主目录失败: 目录 API 不可用");
-            "无法找到用户主目录".to_string()
+    let plugins_dir = crate::paths::plugins_dir()
+        .map_err(|e| {
+            tracing::error!("获取插件目录失败: {}", e);
+            e.to_string()
         })?;
-
-    let plugins_dir = user_dirs.home_dir().join(".worktools/plugins");
 
     let mut plugins = Vec::new();
 
@@ -269,15 +263,11 @@ pub async fn install_plugin(
 ) -> Result<String, String> {
     tracing::info!(plugin_id = %plugin_id, "开始安装插件");
 
-    let user_dirs = directories::UserDirs::new()
-        .ok_or_else(|| {
-            tracing::error!("获取用户主目录失败: 目录 API 不可用");
-            "无法找到用户主目录".to_string()
-        })?;
-
-    let plugin_dir = user_dirs
-        .home_dir()
-        .join(".worktools/plugins")
+    let plugin_dir = crate::paths::plugins_dir()
+        .map_err(|e| {
+            tracing::error!("获取插件目录失败: {}", e);
+            e.to_string()
+        })?
         .join(&plugin_id);
 
     let manifest_path = plugin_dir.join("manifest.json");
@@ -386,13 +376,11 @@ pub async fn uninstall_plugin(
         })
         .map_err(|e| format!("卸载插件失败: {}", e))?;
 
-    let user_dirs = directories::UserDirs::new()
-        .ok_or_else(|| {
-            tracing::error!("获取用户主目录失败: 目录 API 不可用");
-            "无法找到用户主目录".to_string()
+    let plugins_base_dir = crate::paths::plugins_dir()
+        .map_err(|e| {
+            tracing::error!("获取插件目录失败: {}", e);
+            e.to_string()
         })?;
-
-    let plugins_base_dir = user_dirs.home_dir().join(".worktools/plugins");
 
     // 2. 删除插件目录 (DLL 已释放, Windows 上可以正常删除)
     let plugin_dir = plugins_base_dir.join(&plugin_id);

@@ -4,6 +4,7 @@ pub mod plugin_manager;
 mod plugin_package;
 mod plugin_registry;
 mod logger;
+mod paths;
 mod tray;
 
 use anyhow::Result;
@@ -71,6 +72,6 @@ pub fn run() {
             commands::get_logs,
             commands::clear_logs,
         ])
-        .run(tauri::generate_context!())
+        .run(include!(concat!(env!("OUT_DIR"), "/tauri-build-context.rs")))
         .expect("error while running tauri application");
 }

@@ -1,6 +1,5 @@
 use serde::{Deserialize, Serialize};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
 
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 use tauri::{menu::MenuBuilder, menu::MenuItemBuilder, Runtime, Manager};
@@ -14,6 +13,10 @@ const LABEL_SHOW: &str = "显示窗口";
 const LABEL_QUIT: &str = "退出";
 const DEFAULT_TOOLTIP: &str = "Work Tools";
 const HIDE_HINT_TOOLTIP: &str = "应用已最小化到托盘，双击图标可恢复窗口";
+
+// 点击"退出"时 handle.exit(0) 会触发 Tauri 销毁窗口，CloseRequested 随之被调用。
+// 必须跳过 prevent_close()，否则窗口关闭被拦截，WebView2 清理顺序出错导致 Error 1412。
+static IS_QUITTING: AtomicBool = AtomicBool::new(false);
 
 #[derive(Deserialize, Serialize)]
 struct TrayConfig {
@@ -33,7 +36,6 @@ pub fn start_tray<R: Runtime>(app: &mut tauri::App<R>) {
     };
 
     let app_handle = app.handle().clone();
-    let hint_shown = Arc::new(AtomicBool::new(hint_already_shown()));
 
     let menu = match build_menu(app.handle(), LABEL_HIDE) {
         Ok(m) => m,
@@ -54,6 +56,14 @@ pub fn start_tray<R: Runtime>(app: &mut tauri::App<R>) {
                 }
             }
             MENU_QUIT => {
+                IS_QUITTING.store(true, Ordering::Relaxed);
+                // window.close() 和 handle.exit(0) 都通过事件队列发送消息，按 FIFO 顺序处理。
+                // close 先入队先处理，CloseRequested 因 IS_QUITTING 跳过 prevent_close，
+                // 窗口正常关闭、WebView2 完成清理，然后 exit 才被处理。
+                // 若只调 exit() 而不先 close()，窗口直接销毁，WebView2 类注销 Error 1412。
+                if let Some(w) = handle.get_webview_window(MAIN_WINDOW) {
+                    let _ = w.close();
+                }
                 handle.exit(0);
             }
             _ => {}
@@ -82,9 +92,12 @@ pub fn start_tray<R: Runtime>(app: &mut tauri::App<R>) {
     let window_hide = window.clone();
     window.on_window_event({
         let app_handle = app_handle.clone();
-        let hint_shown = hint_shown.clone();
         move |event| {
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                if IS_QUITTING.load(Ordering::Relaxed) {
+                    return;
+                }
+
                 api.prevent_close();
 
                 if let Err(e) = window_hide.hide() {
@@ -92,9 +105,8 @@ pub fn start_tray<R: Runtime>(app: &mut tauri::App<R>) {
                     return;
                 }
 
-                if !hint_shown.load(Ordering::Relaxed) {
+                if !hint_already_shown() {
                     show_hint_tooltip(&app_handle);
-                    hint_shown.store(true, Ordering::Relaxed);
                 }
 
                 replace_tray_menu(&app_handle, LABEL_SHOW);
@@ -168,9 +180,7 @@ fn show_hint_tooltip<R: Runtime>(app_handle: &tauri::AppHandle<R>) {
 // ── 首次隐藏提示状态持久化 ────────────────────────
 
 fn tray_config_path() -> anyhow::Result<std::path::PathBuf> {
-    let user_dirs =
-        directories::UserDirs::new().ok_or_else(|| anyhow::anyhow!("无法找到用户主目录"))?;
-    Ok(user_dirs.home_dir().join(".worktools/config/tray-config.json"))
+    Ok(crate::paths::config_dir()?.join("tray-config.json"))
 }
 
 fn hint_already_shown() -> bool {

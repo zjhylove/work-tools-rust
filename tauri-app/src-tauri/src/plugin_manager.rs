@@ -53,10 +53,7 @@ impl PluginManager {
 
     /// 创建新的插件管理器
     pub fn new() -> Result<Self> {
-        let user_dirs = directories::UserDirs::new()
-            .ok_or_else(|| anyhow::anyhow!("无法找到用户主目录"))?;
-
-        let plugin_dir = user_dirs.home_dir().join(".worktools/plugins");
+        let plugin_dir = crate::paths::plugins_dir()?;
 
         // 创建插件目录
         std::fs::create_dir_all(&plugin_dir)

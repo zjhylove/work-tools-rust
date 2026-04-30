@@ -57,10 +57,7 @@ impl PluginRegistry {
 
     /// 获取默认注册表文件路径
     fn default_registry_path() -> Result<PathBuf> {
-        let user_dirs =
-            directories::UserDirs::new().ok_or_else(|| anyhow::anyhow!("无法找到用户主目录"))?;
-
-        let config_dir = user_dirs.home_dir().join(".worktools/config");
+        let config_dir = crate::paths::config_dir()?;
         fs::create_dir_all(&config_dir).context("创建配置目录失败")?;
 
         Ok(config_dir.join("installed-plugins.json"))

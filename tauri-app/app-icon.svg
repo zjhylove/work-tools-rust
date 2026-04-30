@@ -1,0 +1,46 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#4F46E5"/>
+      <stop offset="100%" stop-color="#2563EB"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#818CF8"/>
+      <stop offset="100%" stop-color="#60A5FA"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Rounded square background -->
+  <rect x="0" y="0" width="1024" height="1024" rx="224" ry="224" fill="url(#bg)"/>
+
+  <!-- Outer gear ring (8 teeth using stroke-dasharray) -->
+  <!-- r=280, circumference=1759.3, 8 teeth => dash=110 gap=110 -->
+  <circle cx="512" cy="512" r="280" fill="none" stroke="white" stroke-width="64"
+    stroke-dasharray="109.96 109.96" stroke-linecap="round" opacity="0.95"/>
+
+  <!-- Middle ring connecting teeth -->
+  <circle cx="512" cy="512" r="248" fill="none" stroke="white" stroke-width="24" opacity="0.9"/>
+
+  <!-- Inner gear hub ring -->
+  <!-- r=170, circumference=1068.1, 8 segments => dash=66.76 gap=66.76 -->
+  <circle cx="512" cy="512" r="170" fill="none" stroke="white" stroke-width="40"
+    stroke-dasharray="66.76 66.76" stroke-linecap="round" opacity="0.85"/>
+
+  <!-- Hub solid ring -->
+  <circle cx="512" cy="512" r="150" fill="none" stroke="white" stroke-width="16" opacity="0.9"/>
+
+  <!-- Center dot -->
+  <circle cx="512" cy="512" r="48" fill="white" opacity="0.95"/>
+
+  <!-- 8 small connector dots between outer and inner rings -->
+  <g fill="white" opacity="0.7">
+    <circle cx="512" cy="232" r="16"/>
+    <circle cx="710" cy="314" r="16"/>
+    <circle cx="792" cy="512" r="16"/>
+    <circle cx="710" cy="710" r="16"/>
+    <circle cx="512" cy="792" r="16"/>
+    <circle cx="314" cy="710" r="16"/>
+    <circle cx="232" cy="512" r="16"/>
+    <circle cx="314" cy="314" r="16"/>
+  </g>
+</svg>

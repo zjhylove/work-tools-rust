@@ -90,9 +90,7 @@ impl tracing::field::Visit for StringVisitor {
 }
 
 pub fn init_logging() -> Result<()> {
-    let user_dirs =
-        directories::UserDirs::new().ok_or_else(|| anyhow::anyhow!("无法找到用户主目录"))?;
-    let log_dir = user_dirs.home_dir().join(".worktools/logs");
+    let log_dir = crate::paths::logs_dir()?;
 
     std::fs::create_dir_all(&log_dir)?;
 

@@ -2,10 +2,8 @@ use anyhow::{Context, Result};
 use std::path::PathBuf;
 
 /// 获取历史记录目录
-pub fn get_history_dir() -> Result<PathBuf> {
-    let user_dirs =
-        directories::UserDirs::new().ok_or_else(|| anyhow::anyhow!("无法找到用户主目录"))?;
-    Ok(user_dirs.home_dir().join(".worktools/history"))
+pub fn get_history_dir() -> anyhow::Result<PathBuf> {
+    crate::paths::history_dir()
 }
 
 /// 加载插件配置
