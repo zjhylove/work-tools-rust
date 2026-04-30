@@ -1,9 +1,6 @@
 :root {
-  font-family: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
   line-height: 1.5;
   font-weight: 400;
-  color: #213547;
-  background-color: #ffffff;
 }
 
 * {
@@ -13,6 +10,7 @@
 }
 
 body {
+  font-family: var(--font-sans);
   min-height: 100vh;
   padding: 20px;
 }

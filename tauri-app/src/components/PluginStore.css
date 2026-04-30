@@ -1,120 +1,139 @@
+/* ═══════════════════════════════════════════════════════
+   Plugin Store — 插件市场
+   ═══════════════════════════════════════════════════════ */
+
 .plugin-store {
-  padding: 20px;
+  padding: 20px 24px;
   height: 100%;
   display: flex;
   flex-direction: column;
-  background-color: #f5f5f5;
 }
 
-.search-bar {
+/* ── Search ───────────────────────────── */
+.plugin-store .search-bar {
   display: flex;
   gap: 10px;
   margin-bottom: 20px;
 }
 
-.search-input {
+.plugin-store .search-input {
   flex: 1;
-  padding: 10px 15px;
-  border: 1px solid #ddd;
-  border-radius: 6px;
-  font-size: 14px;
+  padding: 9px 14px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  font-size: var(--font-size-base);
+  color: var(--text-primary);
+  background: var(--bg-secondary);
   outline: none;
-  transition: border-color 0.2s;
+  transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
 }
 
-.search-input:focus {
-  border-color: #0078d4;
+.plugin-store .search-input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-ring);
+  background: var(--bg-primary);
 }
 
-.import-button {
-  padding: 10px 20px;
-  background-color: #0078d4;
-  color: white;
+.plugin-store .search-input::placeholder {
+  color: var(--text-tertiary);
+}
+
+.plugin-store .import-button {
+  padding: 9px 18px;
+  background: var(--accent);
+  color: var(--text-inverse);
   border: none;
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   cursor: pointer;
-  font-size: 14px;
+  font-size: var(--font-size-base);
   font-weight: 500;
-  transition: background-color 0.2s;
+  font-family: inherit;
+  transition: all var(--transition-fast);
+  white-space: nowrap;
 }
 
-.import-button:hover:not(:disabled) {
-  background-color: #005a9e;
+.plugin-store .import-button:hover:not(:disabled) {
+  background: var(--accent-hover);
+  box-shadow: var(--shadow-sm);
 }
 
-.import-button:disabled {
-  opacity: 0.6;
+.plugin-store .import-button:disabled {
+  opacity: 0.45;
   cursor: not-allowed;
 }
 
-.loading {
+/* ── Loading ──────────────────────────── */
+.plugin-store .loading {
   text-align: center;
-  padding: 40px;
-  color: #666;
-  font-size: 16px;
+  padding: 48px 20px;
+  color: var(--text-tertiary);
+  font-size: var(--font-size-base);
 }
 
-.plugin-list {
+/* ── Plugin List ──────────────────────── */
+.plugin-store .plugin-list {
   flex: 1;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 10px;
 }
 
-.empty-state {
+.plugin-store .empty-state {
   text-align: center;
-  padding: 40px;
-  color: #999;
-  font-size: 16px;
+  padding: 48px 20px;
+  color: var(--text-tertiary);
+  font-size: var(--font-size-base);
 }
 
-.plugin-card {
+/* ── Plugin Card ──────────────────────── */
+.plugin-store .plugin-card {
   display: flex;
   align-items: center;
-  gap: 15px;
-  padding: 15px;
-  background-color: white;
-  border-radius: 8px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-  transition: box-shadow 0.2s;
+  gap: 14px;
+  padding: 14px 16px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-lg);
+  transition: all var(--transition-fast);
 }
 
-.plugin-card:hover {
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+.plugin-store .plugin-card:hover {
+  border-color: var(--border-color);
+  box-shadow: var(--shadow-sm);
 }
 
-.plugin-icon {
-  font-size: 32px;
-  width: 48px;
-  height: 48px;
+.plugin-store .plugin-icon {
+  font-size: 28px;
+  width: 44px;
+  height: 44px;
   display: flex;
   align-items: center;
   justify-content: center;
-  background-color: #f0f0f0;
-  border-radius: 8px;
+  background: var(--bg-tertiary);
+  border-radius: var(--radius-md);
   flex-shrink: 0;
 }
 
-.plugin-info {
+.plugin-store .plugin-info {
   flex: 1;
   min-width: 0;
 }
 
-.plugin-name {
-  margin: 0 0 4px 0;
-  font-size: 16px;
+.plugin-store .plugin-name {
+  margin: 0 0 3px 0;
+  font-size: var(--font-size-md);
   font-weight: 600;
-  color: #333;
+  color: var(--text-primary);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
-.plugin-description {
-  margin: 0 0 8px 0;
-  font-size: 13px;
-  color: #666;
+.plugin-store .plugin-description {
+  margin: 0 0 6px 0;
+  font-size: var(--font-size-sm);
+  color: var(--text-secondary);
   line-height: 1.4;
   display: -webkit-box;
   -webkit-line-clamp: 2;
@@ -122,67 +141,67 @@
   overflow: hidden;
 }
 
-.plugin-meta {
+.plugin-store .plugin-meta {
   display: flex;
-  gap: 12px;
-  font-size: 12px;
-  color: #999;
+  gap: 10px;
+  font-size: var(--font-size-xs);
+  color: var(--text-tertiary);
 }
 
-.version {
-  font-family: monospace;
-  background-color: #f0f0f0;
+.plugin-store .version {
+  font-family: var(--font-mono);
+  background: var(--bg-tertiary);
   padding: 2px 6px;
-  border-radius: 4px;
+  border-radius: var(--radius-xs);
 }
 
-.author {
-  color: #666;
+.plugin-store .author {
+  color: var(--text-tertiary);
 }
 
-.action-button {
-  padding: 8px 20px;
-  border: 1px solid #0078d4;
-  border-radius: 6px;
-  background-color: white;
-  color: #0078d4;
-  font-size: 14px;
+.plugin-store .action-button {
+  padding: 7px 18px;
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-md);
+  background: var(--bg-primary);
+  color: var(--accent);
+  font-size: var(--font-size-base);
   font-weight: 500;
+  font-family: inherit;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all var(--transition-fast);
   white-space: nowrap;
 }
 
-.action-button.install:hover {
-  background-color: #0078d4;
-  color: white;
+.plugin-store .action-button.install:hover {
+  background: var(--accent);
+  color: var(--text-inverse);
 }
 
-.action-button.uninstall {
-  border-color: #d13438;
-  color: #d13438;
+.plugin-store .action-button.uninstall {
+  border-color: var(--error);
+  color: var(--error);
 }
 
-.action-button.uninstall:hover {
-  background-color: #d13438;
-  color: white;
+.plugin-store .action-button.uninstall:hover {
+  background: var(--error);
+  color: var(--text-inverse);
 }
 
-/* 滚动条样式 */
-.plugin-list::-webkit-scrollbar {
-  width: 8px;
+/* ── Scrollbar ────────────────────────── */
+.plugin-store .plugin-list::-webkit-scrollbar {
+  width: 5px;
 }
 
-.plugin-list::-webkit-scrollbar-track {
-  background: #f0f0f0;
-  border-radius: 4px;
+.plugin-store .plugin-list::-webkit-scrollbar-track {
+  background: transparent;
 }
 
-.plugin-list::-webkit-scrollbar-thumb {
-  background: #ccc;
-  border-radius: 4px;
+.plugin-store .plugin-list::-webkit-scrollbar-thumb {
+  background: var(--border-color);
+  border-radius: 3px;
 }
 
-.plugin-list::-webkit-scrollbar-thumb:hover {
-  background: #999;
+.plugin-store .plugin-list::-webkit-scrollbar-thumb:hover {
+  background: var(--text-tertiary);
 }

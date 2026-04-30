@@ -5,7 +5,7 @@
 
 .file-picker-button button {
   padding: 6px 12px;
-  background: #fff;
+  background: var(--bg-primary);
   border: 1.5px solid #dee2e6;
   border-radius: 6px;
   color: #495057;
@@ -24,9 +24,9 @@
 }
 
 .file-picker-button button:hover:not(:disabled) {
-  background: #007aff;
-  color: #fff;
-  border-color: #007aff;
+  background: var(--accent);
+  color: var(--bg-primary);
+  border-color: var(--accent);
   transform: translateY(-1px);
   box-shadow: 0 3px 6px rgba(0, 122, 255, 0.25);
 }
@@ -57,7 +57,7 @@
   right: 0;
   padding: 8px 12px;
   background: #d32f2f;
-  color: #fff;
+  color: var(--bg-primary);
   font-size: 12px;
   border-radius: 4px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
@@ -85,6 +85,6 @@
 
 .file-picker-button.drag-over button {
   background: #2196f3;
-  color: #fff;
+  color: var(--bg-primary);
   border-color: #2196f3;
 }

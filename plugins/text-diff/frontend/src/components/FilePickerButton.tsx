@@ -109,13 +109,13 @@ export function FilePickerButton({
         className={isLoading ? 'loading' : ''}
         title={fileName || `点击选择${label}`}
       >
-        {isLoading ? '⏳' : '📂'}
+        {isLoading ? '...' : '+'}
         {isLoading ? '加载中...' : fileName || label}
       </button>
 
       {error && (
         <div className="file-picker-error">
-          ❌ {error}
+          × {error}
         </div>
       )}
     </div>

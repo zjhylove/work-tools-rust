@@ -128,7 +128,7 @@ function App() {
             <div className="json-error">
               <div className="error-message">
                 <div className="error-title">
-                  ⚠️ {error.error}
+                  ! {error.error}
                 </div>
                 <div className="error-details">
                   {(error.line || error.column) && (
@@ -140,7 +140,7 @@ function App() {
                   )}
                   {error.suggestion && (
                     <span className="error-suggestion">
-                      💡 {error.suggestion}
+                      [?] {error.suggestion}
                     </span>
                   )}
                 </div>
@@ -166,7 +166,7 @@ function App() {
       {/* 空状态提示 */}
       {(!parsedData && jsonText === '{\n  \n}') && (
         <div className="empty-state">
-          <div className="empty-icon">📝</div>
+          <div className="empty-icon">{'{ }'}</div>
           <div className="empty-title">开始使用 JSON 工具</div>
           <div className="empty-description">
             在左侧输入 JSON 文本,或点击上方"格式化"按钮查看示例
@@ -185,19 +185,19 @@ function App() {
       <div className="json-statusbar">
         <div className="statusbar-left">
           <div className="status-item">
-            <span>📊</span>
+            <span>*</span>
             <span>共 {nodeCount} 个节点</span>
           </div>
           {isFormatted && (
             <div className="status-item">
-              <span>✨</span>
+              <span>*</span>
               <span>已格式化</span>
             </div>
           )}
         </div>
         <div className="statusbar-right">
           <div className="status-item">
-            <span>📦</span>
+            <span>#</span>
             <span>大小: {dataSize}</span>
           </div>
         </div>

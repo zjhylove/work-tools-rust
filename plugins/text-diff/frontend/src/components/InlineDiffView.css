@@ -3,8 +3,8 @@
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  background: #fff;
-  border: 1px solid #e5e5e5;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
   border-radius: 8px;
 }
 
@@ -56,7 +56,7 @@
 .inline-line {
   display: flex;
   padding: 2px 8px;
-  border-bottom: 1px solid #f0f0f0;
+  border-bottom: 1px solid var(--border-color);
   font-family: 'Menlo', 'Monaco', 'Courier New', monospace;
   font-size: 14px;
   line-height: 22px;
@@ -79,7 +79,7 @@
   flex-shrink: 0;
   text-align: right;
   padding-right: 12px;
-  color: #999;
+  color: var(--text-tertiary);
   font-size: 12px;
   user-select: none;
   border-right: 1px solid #e8e8e8;

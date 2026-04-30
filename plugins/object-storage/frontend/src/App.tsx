@@ -1,8 +1,12 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import './App.css';
 import type { ConnectionConfig, ObjectInfo, ListObjectsResult } from './models';
 
 const PLUGIN_ID = 'object-storage';
+
+const EMPTY_FORM = {
+  name: '', provider: 'aliyun', access_key: '', secret_key: '', region: 'oss-cn-hangzhou', bucket: '', endpoint: '',
+};
 
 function App() {
   const [connections, setConnections] = useState<ConnectionConfig[]>([]);
@@ -16,8 +20,7 @@ function App() {
   const [showForm, setShowForm] = useState(false);
   const [editingConnId, setEditingConnId] = useState<string | null>(null);
 
-  const emptyForm = { name: '', provider: 'aliyun', access_key: '', secret_key: '', region: 'oss-cn-hangzhou', bucket: '', endpoint: '' };
-  const [connForm, setConnForm] = useState(emptyForm);
+  const [connForm, setConnForm] = useState(EMPTY_FORM);
 
   useEffect(() => { loadConnections(); }, []);
 
@@ -27,8 +30,19 @@ function App() {
     []
   );
 
-  const showError = (msg: string) => { setError(msg); setTimeout(() => setError(''), 3000); };
-  const showSuccess = (msg: string) => { setSuccess(msg); setTimeout(() => setSuccess(''), 2000); };
+  const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
+
+  useEffect(() => () => timers.current.forEach(clearTimeout), []);
+
+  const showError = (msg: string) => {
+    setError(msg);
+    timers.current.push(setTimeout(() => setError(''), 3000));
+  };
+
+  const showSuccess = (msg: string) => {
+    setSuccess(msg);
+    timers.current.push(setTimeout(() => setSuccess(''), 2000));
+  };
 
   const loadConnections = async () => {
     try {
@@ -150,7 +164,7 @@ function App() {
         await api('add_connection', connForm);
         showSuccess('连接已保存');
       }
-      setShowForm(false); setEditingConnId(null); setConnForm(emptyForm);
+      setShowForm(false); setEditingConnId(null); setConnForm(EMPTY_FORM);
       await loadConnections();
     } catch (e) { showError((editingConnId ? '更新' : '添加') + '连接失败: ' + (e as Error).message); } finally { setLoading(false); }
   };
@@ -172,7 +186,8 @@ function App() {
   const formatSize = (bytes: number) => {
     if (bytes < 1024) return `${bytes} B`;
     if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+    if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+    return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
   };
 
   return (
@@ -189,7 +204,7 @@ function App() {
             </option>
           ))}
         </select>
-        <button className="btn-secondary" onClick={() => { setEditingConnId(null); setConnForm(emptyForm); setShowForm(!showForm); }}>+ 添加连接</button>
+        <button className="btn-secondary" onClick={() => { setEditingConnId(null); setConnForm(EMPTY_FORM); setShowForm(!showForm); }}>+ 添加连接</button>
         {selectedConnId && (
           <>
             <button className="btn-secondary" onClick={handleEditConn}>编辑连接</button>
@@ -237,7 +252,7 @@ function App() {
                 <button className="btn-primary" onClick={handleUpload}>上传文件</button>
               </div>
 
-              {currentPrefix && <div className="go-up" onClick={handleGoUp}>⬆ 返回上级目录</div>}
+              {currentPrefix && <div className="go-up" onClick={handleGoUp}>返回上级目录</div>}
 
               <div className="table-scroll">
                 <table className="obj-table">
@@ -246,15 +261,15 @@ function App() {
                   </thead>
                   <tbody>
                     {filteredObjects.map((o, i) => (
-                      <tr key={o.key + i}>
+                      <tr key={o.key}>
                         <td>
-                          {o.is_dir ? <span className="obj-link" onClick={() => handleNavigate(o.key)}>📁 {o.key.replace(currentPrefix, '')}</span>
-                            : <span>📄 {o.key.replace(currentPrefix, '')}</span>}
+                          {o.is_dir ? <span className="obj-link" onClick={() => handleNavigate(o.key)}>{o.key.replace(currentPrefix, '')}</span>
+                            : <span>{o.key.replace(currentPrefix, '')}</span>}
                         </td>
                         <td>{o.is_dir ? '-' : formatSize(o.size)}</td>
                         <td>{o.last_modified ? new Date(o.last_modified).toLocaleString('zh-CN') : ''}</td>
                         <td>
-                          <button className="btn-sm" onClick={() => handleDownload(o.key)} disabled={o.is_dir}>下载</button>
+                          {!o.is_dir && <button className="btn-sm" onClick={() => handleDownload(o.key)}>下载</button>}
                           <button className="btn-sm btn-danger" onClick={() => handleDelete(o.key)}>删除</button>
                         </td>
                       </tr>
@@ -266,7 +281,6 @@ function App() {
             </>
           ) : (
             <div className="empty-state">
-              <div className="empty-icon">📦</div>
               <div className="empty-title">开始使用对象存储</div>
               <div className="empty-desc">添加云服务连接，浏览和管理您的 OSS/COS 文件</div>
             </div>

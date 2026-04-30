@@ -510,7 +510,7 @@ function App() {
                 className="btn-secondary"
                 onClick={() => setViewMode("list")}
               >
-                ✕ 返回列表
+                <span style={{ fontSize: 18, lineHeight: 1 }}>×</span> 返回列表
               </button>
             </div>
 

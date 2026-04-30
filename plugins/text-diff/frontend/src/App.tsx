@@ -83,7 +83,7 @@ function App() {
     <div className="app">
       {error && (
         <div className="error-banner">
-          ❌ {error}
+          × {error}
           <button onClick={() => setError(null)} className="close-btn">×</button>
         </div>
       )}

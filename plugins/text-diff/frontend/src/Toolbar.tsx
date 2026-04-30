@@ -29,7 +29,7 @@ export function Toolbar({
         className="file-select-btn"
         title="打开原始文件"
       >
-        <span className="icon">📄</span>
+        <span className="icon">+</span>
         <span className="label">原始</span>
         <span className="filename">{originalFileName || '未选择'}</span>
       </button>
@@ -64,7 +64,7 @@ export function Toolbar({
         className="file-select-btn"
         title="打开修改后的文件"
       >
-        <span className="icon">📝</span>
+        <span className="icon">~</span>
         <span className="label">修改</span>
         <span className="filename">{modifiedFileName || '未选择'}</span>
       </button>

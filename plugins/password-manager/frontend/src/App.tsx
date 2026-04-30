@@ -677,7 +677,7 @@ function App() {
                 setFormErrors({});
               }}
             >
-              ✕ 返回列表
+              <span style={{ fontSize: 18, lineHeight: 1 }}>×</span> 返回列表
             </button>
           </div>
 
@@ -706,18 +706,13 @@ function App() {
               )}
               {field.type === "button" && (
                 <button
-                  className="btn-submit"
+                  className={`btn-submit${!isFormValid() ? " disabled" : ""}`}
                   disabled={!isFormValid()}
                   onClick={(e) => {
                     e.preventDefault();
                     e.stopPropagation();
                     handleAction(field.key);
                   }}
-                  style={
-                    !isFormValid()
-                      ? { opacity: 0.5, cursor: "not-allowed" }
-                      : {}
-                  }
                 >
                   {isEditMode ? "💾 更新密码" : field.label}
                 </button>

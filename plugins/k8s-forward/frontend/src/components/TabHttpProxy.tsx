@@ -22,7 +22,7 @@ export default function TabHttpProxy() {
   }, []);
 
   const showToast = (msg: string, isErr = false) => {
-    setToast(isErr ? `❌ ${msg}` : `✅ ${msg}`);
+    setToast(msg);
     setTimeout(() => setToast(null), 3000);
   };
 
@@ -76,7 +76,7 @@ export default function TabHttpProxy() {
 
   return (
     <div>
-      {toast && <div className={`toast ${toast.startsWith("❌") ? "toast-error" : "toast-success"}`}>{toast}</div>}
+      {toast && <div className="toast toast-info">{toast}</div>}
 
       <div className="card">
         <div className="card-header">HTTP 代理服务器</div>

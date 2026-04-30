@@ -79,11 +79,11 @@
 }
 
 .stat-item.added .count {
-  color: var(--success-color);
+  color: var(--success);
 }
 
 .stat-item.removed .count {
-  color: var(--error-color);
+  color: var(--error);
 }
 
 .stat-item.modified .count {

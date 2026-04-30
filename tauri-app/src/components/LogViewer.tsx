@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { devError } from "../utils/logger";
+import { IconX } from "./icons";
 import "./Dialog.css";
 
 export interface LogEntry {
@@ -74,7 +75,7 @@ const LogViewer: React.FC<LogViewerProps> = ({ onClose }) => {
         <div className="dialog-header">
           <h2>系统日志</h2>
           <button className="dialog-close" onClick={onClose}>
-            ✕
+            <IconX size={18} />
           </button>
         </div>
 
@@ -109,12 +110,12 @@ const LogViewer: React.FC<LogViewerProps> = ({ onClose }) => {
             自动刷新
           </label>
 
-          <button className="button-secondary" onClick={fetchLogs}>
+          <button className="btn btn-secondary" onClick={fetchLogs}>
             刷新
           </button>
 
           <button
-            className="button-secondary"
+            className="btn btn-secondary"
             onClick={async () => {
               try {
                 await invoke("clear_logs");

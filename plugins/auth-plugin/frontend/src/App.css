@@ -1,3 +1,7 @@
+body {
+  font-family: var(--font-sans);
+}
+
 .auth-plugin {
   flex: 1;
   padding: 24px;
@@ -28,10 +32,10 @@
   left: 50%;
   transform: translateX(-50%);
   padding: 10px 16px;
-  background: #fef2f2;
-  border: 1px solid #fecaca;
+  background: var(--error-light);
+  border: 1px solid var(--error-border);
   border-radius: 8px;
-  color: #dc2626;
+  color: var(--error);
   font-size: 13px;
   font-weight: 500;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
@@ -41,16 +45,16 @@
 
 /* 成功提示样式 */
 .error-message.success {
-  background: #f0fdf4;
-  border-color: #bbf7d0;
-  color: #16a34a;
+  background: var(--success-light);
+  border-color: var(--success-border);
+  color: var(--success-text);
 }
 
 /* 警告提示样式 */
 .error-message.warning {
-  background: #fffbeb;
-  border-color: #fde68a;
-  color: #d97706;
+  background: var(--warning-light);
+  border-color: var(--warning-border);
+  color: var(--warning-text);
 }
 
 /* 信息提示样式 */
@@ -282,6 +286,11 @@
   padding-right: 36px;
 }
 
+.form-group .input-error {
+  border-color: var(--error);
+  box-shadow: 0 0 0 3px var(--error-light);
+}
+
 .form-group input:focus,
 .form-group select:focus {
   outline: none;
@@ -333,7 +342,7 @@
 
 .btn-primary {
   background: var(--accent);
-  color: white;
+  color: var(--text-inverse);
   box-shadow: var(--shadow-sm);
 }
 
@@ -353,8 +362,8 @@
 }
 
 .btn-danger {
-  background: #dc3545;
-  color: white;
+  background: var(--error);
+  color: var(--text-inverse);
 }
 
 .btn-danger:hover {
@@ -369,7 +378,7 @@
 }
 
 .btn-icon:hover {
-  background: rgba(0, 0, 0, 0.05);
+  background: var(--hover-bg);
 }
 
 /* 空状态 */

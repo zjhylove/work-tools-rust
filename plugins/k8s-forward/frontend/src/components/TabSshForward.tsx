@@ -16,7 +16,7 @@ export default function TabSshForward() {
   }, []);
 
   const showToast = (msg: string, isErr = false) => {
-    setToast(isErr ? `❌ ${msg}` : `✅ ${msg}`);
+    setToast(msg);
     setTimeout(() => setToast(null), 3000);
   };
 
@@ -135,7 +135,7 @@ export default function TabSshForward() {
 
   return (
     <div>
-      {toast && <div className={`toast ${toast.startsWith("❌") ? "toast-error" : "toast-success"}`}>{toast}</div>}
+      {toast && <div className="toast toast-info">{toast}</div>}
 
       <div className="card">
         <div className="card-header">SSH 连接配置</div>

@@ -1,3 +1,7 @@
+body {
+  font-family: var(--font-sans);
+}
+
 /* 密码管理器主容器 */
 .password-manager {
   flex: 1;
@@ -15,10 +19,10 @@
   left: 50%;
   transform: translateX(-50%);
   padding: 10px 16px;
-  background: #fef2f2;
-  border: 1px solid #fecaca;
+  background: var(--error-light);
+  border: 1px solid var(--error-border);
   border-radius: 8px;
-  color: #dc2626;
+  color: var(--error);
   font-size: 13px;
   font-weight: 500;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
@@ -28,23 +32,23 @@
 
 /* 成功提示样式 */
 .error-message.success {
-  background: #f0fdf4;
-  border-color: #bbf7d0;
-  color: #16a34a;
+  background: var(--success-light);
+  border-color: var(--success-border);
+  color: var(--success-text);
 }
 
 /* 警告提示样式 */
 .error-message.warning {
-  background: #fffbeb;
-  border-color: #fde68a;
-  color: #d97706;
+  background: var(--warning-light);
+  border-color: var(--warning-border);
+  color: var(--warning-text);
 }
 
 /* 信息提示样式 */
 .error-message.info {
-  background: #eff6ff;
-  border-color: #bfdbfe;
-  color: #2563eb;
+  background: var(--accent-light);
+  border-color: var(--accent);
+  color: var(--accent);
 }
 
 @keyframes slideDown {
@@ -274,13 +278,13 @@
 }
 
 .field-input-error {
-  border-color: var(--error-color);
-  background-color: rgba(220, 53, 69, 0.03);
+  border-color: var(--error);
+  background-color: var(--error-light);
 }
 
 .field-error {
   margin-top: 8px;
-  color: var(--error-color);
+  color: var(--error);
   font-size: 12px;
   font-weight: 500;
   display: flex;
@@ -333,7 +337,7 @@
 
 .btn-primary {
   background: var(--accent);
-  color: white;
+  color: var(--text-inverse);
   box-shadow: var(--shadow-sm);
 }
 
@@ -353,12 +357,12 @@
 }
 
 .btn-danger {
-  background: #dc3545;
-  color: white;
+  background: var(--error);
+  color: var(--text-inverse);
 }
 
 .btn-danger:hover {
-  background: #c82333;
+  background: var(--error-text);
 }
 
 .btn-icon {
@@ -375,14 +379,14 @@
 }
 
 .btn-icon:hover {
-  background: rgba(0, 0, 0, 0.05);
+  background: var(--hover-bg);
   transform: scale(1.1);
 }
 
 .btn-submit {
   padding: 14px 28px;
   background: linear-gradient(135deg, var(--accent) 0%, var(--accent-hover) 100%);
-  color: white;
+  color: var(--text-inverse);
   border: none;
   border-radius: 12px;
   font-weight: 600;

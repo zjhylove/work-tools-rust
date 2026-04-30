@@ -1,48 +1,30 @@
+/* ═══════════════════════════════════════════════════════
+   Dialog & Shared Component Styles
+   ═══════════════════════════════════════════════════════ */
+
+/* ── Dialog Overlay ───────────────────── */
 .dialog-overlay {
   position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
+  inset: 0;
   background: rgba(0, 0, 0, 0.4);
   backdrop-filter: blur(4px);
   display: flex;
   align-items: center;
   justify-content: center;
   z-index: 1000;
-  animation: fadeIn 0.2s ease;
-}
-
-@keyframes fadeIn {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
+  animation: fadeIn var(--transition-base);
 }
 
 .dialog-content {
   background: var(--bg-primary);
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-lg);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-xl);
   max-width: 600px;
-  width: 90%;
+  width: 92%;
   max-height: 85vh;
   display: flex;
   flex-direction: column;
-  animation: slideUp 0.3s ease;
-}
-
-@keyframes slideUp {
-  from {
-    opacity: 0;
-    transform: translateY(20px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+  animation: slideUp var(--transition-slow) var(--ease-out);
 }
 
 .dialog-large {
@@ -54,33 +36,31 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: var(--space-xl) var(--space-2xl);
+  padding: 18px 24px;
   border-bottom: 1px solid var(--border-light);
+  flex-shrink: 0;
 }
 
 .dialog-header h2 {
   margin: 0;
-  font-size: 18px;
-  font-weight: 600;
+  font-size: var(--font-size-lg);
+  font-weight: 700;
   color: var(--text-primary);
   letter-spacing: -0.2px;
 }
 
 .dialog-close {
-  background: none;
-  border: none;
-  font-size: 20px;
-  cursor: pointer;
-  color: var(--text-secondary);
-  padding: 0;
   width: 32px;
   height: 32px;
   display: flex;
   align-items: center;
   justify-content: center;
+  background: transparent;
+  border: none;
   border-radius: var(--radius-sm);
-  transition: all 0.2s ease;
-  user-select: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all var(--transition-fast);
 }
 
 .dialog-close:hover {
@@ -91,75 +71,104 @@
 .dialog-body {
   flex: 1;
   overflow-y: auto;
-  padding: var(--space-2xl);
+  padding: 24px;
 }
 
 .dialog-footer {
   display: flex;
   gap: var(--space-md);
   justify-content: flex-end;
-  padding: var(--space-lg) var(--space-2xl);
+  padding: 14px 24px;
   border-top: 1px solid var(--border-light);
 }
 
-.button-primary,
-.button-secondary {
-  padding: var(--space-sm) var(--space-lg);
+/* ── Buttons ──────────────────────────── */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
   border-radius: var(--radius-md);
-  font-size: 13px;
+  font-size: var(--font-size-base);
   font-weight: 500;
   cursor: pointer;
-  transition: all 0.2s ease;
-  user-select: none;
+  transition: all var(--transition-fast);
   white-space: nowrap;
+  line-height: 1.4;
+  border: 1px solid transparent;
+  font-family: inherit;
 }
 
-.button-primary {
+.btn:active {
+  transform: scale(0.97);
+}
+
+.btn-primary {
   background: var(--accent);
-  color: white;
-  border: none;
+  color: var(--text-inverse);
 }
 
-.button-primary:hover {
+.btn-primary:hover {
   background: var(--accent-hover);
   box-shadow: var(--shadow-sm);
-  transform: translateY(-1px);
 }
 
-.button-primary:active {
-  transform: translateY(0);
-  box-shadow: none;
-}
-
-.button-secondary {
+.btn-secondary {
   background: var(--bg-secondary);
   color: var(--text-primary);
-  border: 1px solid var(--border-color);
+  border-color: var(--border-color);
 }
 
-.button-secondary:hover {
+.btn-secondary:hover {
   background: var(--hover-bg);
   border-color: var(--accent);
+  color: var(--accent);
 }
 
-.plugin-list {
-  display: grid;
-  gap: var(--space-md);
+.btn-danger {
+  background: var(--error);
+  color: var(--text-inverse);
 }
 
-.plugin-empty {
-  text-align: center;
-  padding: var(--space-2xl) var(--space-xl);
-  color: var(--text-secondary);
-  font-size: 13px;
+.btn-danger:hover {
+  background: var(--error-text);
 }
 
+.btn-sm {
+  padding: 4px 12px;
+  font-size: var(--font-size-sm);
+}
+
+.btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.btn-icon {
+  padding: 6px;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  color: var(--text-tertiary);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: all var(--transition-fast);
+}
+
+.btn-icon:hover {
+  background: var(--hover-bg);
+  color: var(--text-primary);
+}
+
+/* ── Log Viewer ───────────────────────── */
 .log-viewer {
   background: var(--bg-secondary);
   border-radius: var(--radius-md);
   padding: var(--space-md);
-  font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', monospace;
-  font-size: 12px;
+  font-family: var(--font-mono);
+  font-size: var(--font-size-sm);
   min-height: 400px;
   overflow-y: auto;
   border: 1px solid var(--border-light);
@@ -170,7 +179,7 @@
   display: flex;
   align-items: center;
   gap: var(--space-md);
-  padding: var(--space-md) var(--space-2xl);
+  padding: var(--space-md) 24px;
   border-bottom: 1px solid var(--border-light);
   background: var(--bg-primary);
   flex-wrap: wrap;
@@ -183,14 +192,15 @@
   border-radius: var(--radius-md);
   background: var(--bg-secondary);
   color: var(--text-primary);
-  font-size: 12px;
+  font-size: var(--font-size-sm);
   outline: none;
-  transition: border-color 0.2s;
+  transition: border-color var(--transition-fast);
 }
 
 .log-filter-select:focus,
 .log-filter-input:focus {
   border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-ring);
 }
 
 .log-filter-select {
@@ -210,7 +220,7 @@
   display: flex;
   align-items: center;
   gap: 4px;
-  font-size: 12px;
+  font-size: var(--font-size-sm);
   color: var(--text-secondary);
   cursor: pointer;
   white-space: nowrap;
@@ -220,12 +230,13 @@
 .log-entry {
   display: flex;
   gap: 8px;
-  padding: 2px 0;
-  font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', monospace;
-  font-size: 12px;
+  padding: 3px 0;
+  font-family: var(--font-mono);
+  font-size: var(--font-size-sm);
   line-height: 1.6;
   align-items: baseline;
-  border-bottom: 1px solid rgba(128, 128, 128, 0.08);
+  border-bottom: 1px solid rgba(128, 128, 128, 0.06);
+  transition: background var(--transition-fast);
 }
 
 .log-entry:hover {
@@ -267,41 +278,19 @@
   font-style: italic;
 }
 
-.settings-section {
-  margin-bottom: var(--space-xl);
+/* ── Animations ───────────────────────── */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 
-.settings-section:last-child {
-  margin-bottom: 0;
-}
-
-.settings-section h3 {
-  margin: 0 0 var(--space-lg) 0;
-  font-size: 15px;
-  font-weight: 600;
-  color: var(--text-primary);
-  letter-spacing: -0.2px;
-}
-
-.settings-item {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: var(--space-md) 0;
-  border-bottom: 1px solid var(--border-light);
-}
-
-.settings-item:last-child {
-  border-bottom: none;
-}
-
-.settings-item label {
-  font-weight: 500;
-  font-size: 13px;
-  color: var(--text-primary);
-}
-
-.settings-item select,
-.settings-item input[type='checkbox'] {
-  cursor: pointer;
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }

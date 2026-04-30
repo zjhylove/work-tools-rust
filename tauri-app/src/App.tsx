@@ -1,13 +1,18 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import PluginStore from "./components/PluginStore";
 import PluginPlaceholder from "./components/PluginPlaceholder";
 import ErrorBoundary from "./components/ErrorBoundary";
 import LogViewer from "./components/LogViewer";
 import { devError, devLog, devWarn } from "./utils/logger";
+import {
+  IconTerminal,
+  IconPackage,
+  IconX,
+  IconCode,
+} from "./components/icons";
 import type { PluginInfo } from "./types/plugin";
 
-// 安全的 invoke 包装函数
 const safeInvoke = async <T,>(
   command: string,
   args?: Record<string, unknown>,
@@ -28,14 +33,12 @@ export default function App() {
   const [showLogs, setShowLogs] = useState(false);
   const [showPluginMarket, setShowPluginMarket] = useState(false);
 
-  // 加载插件列表的函数
-  const loadPlugins = async () => {
+  const loadPlugins = useCallback(async () => {
     const tauriAvailable =
       typeof window !== "undefined" && "__TAURI__" in window;
     devLog("Tauri 环境检查:", tauriAvailable);
 
     if (!tauriAvailable) {
-      devWarn("不在 Tauri 环境,使用模拟数据");
       const mockPlugins: PluginInfo[] = [
         {
           id: "password-manager",
@@ -53,9 +56,8 @@ export default function App() {
         },
       ];
       setPlugins(mockPlugins);
-      if (!selectedPlugin) {
-        setSelectedPlugin(mockPlugins[0].id);
-      }
+      setSelectedPlugin((prev) => prev ?? mockPlugins[0].id);
+      setVisitedPlugins((prev) => (prev.length === 0 ? [mockPlugins[0].id] : prev));
       setLoading(false);
       return;
     }
@@ -64,245 +66,93 @@ export default function App() {
       const installedPlugins = await safeInvoke<PluginInfo[]>(
         "get_installed_plugins",
       );
-
       if (Array.isArray(installedPlugins)) {
         devLog(`加载了 ${installedPlugins.length} 个插件`);
         setPlugins(installedPlugins);
-
-        if (!selectedPlugin && installedPlugins.length > 0) {
-          setSelectedPlugin(installedPlugins[0].id);
-        }
-      } else {
-        devError(
-          "get_installed_plugins 返回的不是数组:",
-          typeof installedPlugins,
+        setSelectedPlugin((prev) =>
+          prev ?? (installedPlugins.length > 0 ? installedPlugins[0].id : null),
+        );
+        setVisitedPlugins((prev) =>
+          prev.length === 0 && installedPlugins.length > 0
+            ? [installedPlugins[0].id]
+            : prev,
         );
       }
     } catch (error) {
       devError("加载插件失败:", error);
-
-      setPlugins([
-        {
-          id: "password-manager",
-          name: "密码管理器",
-          description: "本地安全存储和管理密码",
-          version: "1.0.0",
-          icon: "🔐",
-        },
-      ]);
     } finally {
       setLoading(false);
     }
-  };
-
-  // 组件挂载时加载插件列表
-  useEffect(() => {
-    loadPlugins();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // 当默认选中第一个插件时，将其加入 visitedPlugins
-  useEffect(() => {
-    if (selectedPlugin && visitedPlugins.length === 0) {
-      setVisitedPlugins([selectedPlugin]);
-    }
-  }, [selectedPlugin, visitedPlugins.length]);
+  useEffect(() => { loadPlugins(); }, [loadPlugins]);
 
-  const openPlugin = async (pluginId: string) => {
+  const MAX_CACHED = 5;
+
+  const openPlugin = (pluginId: string) => {
     devLog("打开插件:", pluginId);
     setSelectedPlugin(pluginId);
-    setVisitedPlugins(prev => {
-      if (prev.includes(pluginId)) return prev;
+    setVisitedPlugins((prev) => {
+      const idx = prev.indexOf(pluginId);
+      if (idx !== -1) {
+        return [...prev.slice(0, idx), ...prev.slice(idx + 1), pluginId];
+      }
+      if (prev.length >= MAX_CACHED) {
+        return [...prev.slice(1), pluginId];
+      }
       return [...prev, pluginId];
     });
   };
 
   return (
-    <div
-      style={
-        {
-          display: "flex",
-          height: "100vh",
-          fontFamily: "Arial, sans-serif",
-          margin: 0,
-          padding: 0,
-          overflow: "hidden",
-        } as React.CSSProperties
-      }
-    >
-      {/* 左侧侧边栏 */}
-      <div
-        className="sidebar-container"
-        style={
-          {
-            width: "260px",
-            display: "flex",
-            flexDirection: "column",
-            flexShrink: 0,
-          } as React.CSSProperties
-        }
-      >
-        {/* 插件列表 */}
+    <div className="app-container">
+      {/* ── 侧边栏 ── */}
+      <aside className="sidebar">
         {!loading && (
-          <div
-            style={{
-              flex: 1,
-              overflow: "auto",
-              padding: "8px",
-            }}
-          >
+          <nav className="sidebar-list">
             {plugins.map((plugin) => (
               <div
                 key={plugin.id}
+                className={`sidebar-item${selectedPlugin === plugin.id ? " active" : ""}`}
                 title={plugin.description}
-                onClick={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  devLog("点击了插件:", plugin.id, plugin.name);
-                  openPlugin(plugin.id);
-                }}
-                style={{
-                  padding: "12px 14px",
-                  cursor: "pointer",
-                  userSelect: "none",
-                  borderRadius: "8px",
-                  margin: "0 0 4px 0",
-                  background:
-                    selectedPlugin === plugin.id
-                      ? "var(--accent-light)"
-                      : "transparent",
-                  border:
-                    selectedPlugin === plugin.id
-                      ? "1px solid var(--accent)"
-                      : "1px solid transparent",
-                  transition: "all 0.15s ease",
-                  color:
-                    selectedPlugin === plugin.id
-                      ? "var(--accent)"
-                      : "var(--text-primary)",
-                }}
-                onMouseEnter={(e) => {
-                  if (selectedPlugin !== plugin.id) {
-                    e.currentTarget.style.background = "var(--hover-bg)";
-                  }
-                }}
-                onMouseLeave={(e) => {
-                  if (selectedPlugin !== plugin.id) {
-                    e.currentTarget.style.background = "transparent";
-                  }
-                }}
+                onClick={() => openPlugin(plugin.id)}
               >
-                <div
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "12px",
-                  }}
-                >
-                  <span
-                    style={{
-                      fontSize: "28px",
-                      width: "40px",
-                      height: "40px",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      background: "var(--bg-tertiary)",
-                      borderRadius: "8px",
-                      transition: "all 0.15s ease",
-                    }}
-                  >
-                    {plugin.icon}
-                  </span>
-                  <div style={{ flex: 1 }}>
-                    <div
-                      style={{
-                        fontSize: "14px",
-                        fontWeight: "600",
-                      }}
-                    >
-                      {plugin.name}
-                    </div>
-                  </div>
+                <div className="sidebar-item-icon">
+                  <span className="emoji">{plugin.icon}</span>
+                </div>
+                <div className="sidebar-item-body">
+                  <span className="sidebar-item-name">{plugin.name}</span>
+                  <span className="sidebar-item-desc">{plugin.description}</span>
                 </div>
               </div>
             ))}
-          </div>
+          </nav>
         )}
 
-        {/* 底部工具栏 */}
-        <div
-          style={{
-            padding: "12px 16px",
-            borderTop: "1px solid var(--border-color)",
-            display: "flex",
-            justifyContent: "center",
-            gap: "12px",
-          }}
-        >
+        <div className="sidebar-footer">
           <button
+            className="sidebar-footer-btn"
+            title="系统日志"
             onClick={() => setShowLogs(true)}
-            title="查看系统日志"
-            style={{
-              width: "44px",
-              height: "44px",
-              background: "var(--bg-tertiary)",
-              border: "1px solid var(--border-color)",
-              color: "var(--text-primary)",
-              cursor: "pointer",
-              borderRadius: "10px",
-              fontSize: "20px",
-              transition: "all 0.2s",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-            }}
           >
-            📋
+            <IconTerminal size={20} />
           </button>
           <button
+            className="sidebar-footer-btn"
+            title="插件市场"
             onClick={() => setShowPluginMarket(true)}
-            title="打开插件市场"
-            style={{
-              width: "44px",
-              height: "44px",
-              background: "var(--bg-tertiary)",
-              border: "1px solid var(--border-color)",
-              color: "var(--text-primary)",
-              cursor: "pointer",
-              borderRadius: "10px",
-              fontSize: "20px",
-              transition: "all 0.2s",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-            }}
           >
-            🧩
+            <IconPackage size={20} />
           </button>
         </div>
-      </div>
+      </aside>
 
-      {/* 右侧内容区 */}
-      <div
-        style={{
-          flex: 1,
-          background: "var(--bg-tertiary)",
-          overflow: "auto",
-          display: "flex",
-          flexDirection: "column",
-        }}
-      >
-        {/* 渲染所有已访问过的插件 iframe，仅选中插件可见，保持状态不丢失 */}
+      {/* ── 内容区 ── */}
+      <main className="content-area">
         {visitedPlugins.map((pluginId) => (
           <div
             key={pluginId}
-            style={{
-              display: pluginId === selectedPlugin ? "flex" : "none",
-              flex: 1,
-              flexDirection: "column",
-              overflow: "hidden",
-            }}
+            className={`content-pane${pluginId === selectedPlugin ? "" : " content-pane--hidden"}`}
           >
             <ErrorBoundary>
               <PluginPlaceholder
@@ -314,82 +164,35 @@ export default function App() {
         ))}
 
         {!selectedPlugin && (
-          <div
-            style={{
-              padding: "40px",
-              textAlign: "center",
-              color: "#7f8c8d",
-            }}
-          >
-            <div style={{ fontSize: "64px", marginBottom: "20px" }}>👋</div>
-            <h2 style={{ fontSize: "24px", margin: "0 0 10px 0" }}>
-              欢迎使用 Work Tools
-            </h2>
-            <p>请从左侧选择一个插件开始使用</p>
+          <div className="welcome-screen">
+            <div className="welcome-icon">
+              <IconCode size={36} />
+            </div>
+            <h2 className="welcome-title">欢迎使用 Work Tools</h2>
+            <p className="welcome-subtitle">
+              请从左侧选择一个插件开始使用
+            </p>
           </div>
         )}
-      </div>
+      </main>
 
-      {/* 日志对话框 */}
+      {/* ── 日志对话框 ── */}
       {showLogs && <LogViewer onClose={() => setShowLogs(false)} />}
 
-      {/* 插件市场对话框 */}
+      {/* ── 插件市场对话框 ── */}
       {showPluginMarket && (
-        <div
-          style={{
-            position: "fixed",
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            background: "rgba(0,0,0,0.5)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            zIndex: 1000,
-          }}
-        >
-          <div
-            style={{
-              background: "white",
-              borderRadius: "8px",
-              width: "800px",
-              height: "600px",
-              boxShadow: "0 4px 20px rgba(0,0,0,0.3)",
-              display: "flex",
-              flexDirection: "column",
-            }}
-          >
-            <div
-              style={{
-                padding: "20px",
-                borderBottom: "1px solid #dee2e6",
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-              }}
-            >
-              <h3 style={{ margin: 0 }}>插件市场</h3>
+        <div className="market-overlay" onClick={() => setShowPluginMarket(false)}>
+          <div className="market-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="market-header">
+              <h3>插件市场</h3>
               <button
+                className="market-close"
                 onClick={() => setShowPluginMarket(false)}
-                style={{
-                  background: "transparent",
-                  border: "none",
-                  fontSize: "20px",
-                  cursor: "pointer",
-                  color: "#999",
-                }}
               >
-                ✕
+                <IconX size={18} />
               </button>
             </div>
-            <div
-              style={{
-                flex: 1,
-                padding: "0",
-                overflow: "auto",
-              }}
-            >
+            <div className="market-body">
               <PluginStore onPluginsChange={loadPlugins} />
             </div>
           </div>

@@ -23,7 +23,7 @@ export default function TabK8sForward() {
   }, []);
 
   const showToast = (msg: string, isErr = false) => {
-    setToast(isErr ? `❌ ${msg}` : `✅ ${msg}`);
+    setToast(msg);
     setTimeout(() => setToast(null), 3000);
   };
 
@@ -162,7 +162,7 @@ export default function TabK8sForward() {
 
   return (
     <div>
-      {toast && <div className={`toast ${toast.startsWith("❌") ? "toast-error" : "toast-success"}`}>{toast}</div>}
+      {toast && <div className="toast toast-info">{toast}</div>}
 
       <div className="card">
         <div className="card-header">Kuboard 连接</div>
@@ -182,7 +182,7 @@ export default function TabK8sForward() {
       </div>
 
       {mfaRequired && (
-        <div className="card" style={{borderColor:"#ffa502"}}>
+        <div className="card card-warning">
           <div className="card-header">双因子认证</div>
           <div className="form-row">
             <div className="form-group"><label>验证码</label><input value={passcode} onChange={e => setPasscode(e.target.value)} placeholder="6位验证码" maxLength={6} /></div>
@@ -218,7 +218,7 @@ export default function TabK8sForward() {
           <div className="card">
             <div className="card-header" style={{display:"flex",justifyContent:"space-between"}}>
               <span>Pod 列表 ({filteredPods.length})</span>
-              <input placeholder="搜索 Pod..." value={search} onChange={e => setSearch(e.target.value)} style={{padding:"4px 8px",border:"1px solid #e5e5e5",borderRadius:4,background:"#fafafa",color:"#1a1a1a",fontSize:12,width:200}} />
+              <input placeholder="搜索 Pod..." value={search} onChange={e => setSearch(e.target.value)} className="search-input-sm" />
             </div>
             <div style={{maxHeight:400,overflow:"auto"}}>
               <table>
