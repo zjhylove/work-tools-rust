@@ -16,7 +16,7 @@ export default function TabK8sForward() {
   const [search, setSearch] = useState("");
   const [forwards, setForwards] = useState<K8sForwardInfo>({ rules: [], mappings: [] });
   const [toast, setToast] = useState<string | null>(null);
-  const [editingDomain, setEditingDomain] = useState<{ rule_id: string; domain: string } | null>(null);
+  const [editingForward, setEditingForward] = useState<{ rule_id: string; domain: string; local_port: number; pod_name: string; remote_host: string; remote_port: number; local_host: string } | null>(null);
 
   const call = useCallback(async (method: string, params?: unknown) => {
     return await window.pluginAPI.call(PLUGIN_ID, method, (params ?? {}) as Record<string, unknown>);
@@ -29,14 +29,42 @@ export default function TabK8sForward() {
 
   const loadStatus = async () => { setKstatus(await call("kuboard_status") as KuboardStatus); };
   const loadForwards = async () => { setForwards(await call("list_k8s_forwards") as K8sForwardInfo); };
+  const validateForwards = async () => {
+    try {
+      const result = await call("validate_k8s_forwards") as { removed: number };
+      if (result.removed > 0) showToast(`已清理 ${result.removed} 个无效转发`);
+    } catch { /* Kuboard 未登录时忽略 */ }
+  };
 
-  useEffect(() => { loadStatus(); loadForwards(); }, []);
+  useEffect(() => {
+    const init = async () => {
+      try {
+        const cfg = await call("get_config") as Record<string, unknown>;
+        const kb = cfg.kuboard as Record<string, unknown> | undefined;
+        if (kb) {
+          setLoginForm({
+            url: (kb.url as string) || "http://10.73.64.28:8087",
+            username: (kb.username as string) || "",
+            password: (kb.password as string) || "",
+          });
+        }
+      } catch { /* ignore */ }
+      const results = await Promise.allSettled([loadStatus(), loadForwards()]);
+      results.forEach((r, i) => { if (r.status === "rejected") console.warn(`init call ${i} failed:`, r.reason); });
+    };
+    init();
+  }, []);
 
   const handleLogin = async () => {
     try {
       const r = await call("kuboard_login", loginForm) as LoginResult;
       if (r.mfa_required) { setMfaRequired(true); showToast("请输入 MFA 验证码"); }
-      else if (r.success) { showToast("登录成功"); loadStatus(); }
+      else if (r.success) {
+        showToast("登录成功");
+        await Promise.allSettled([loadStatus(), loadClusters()]);
+        await validateForwards();
+        loadForwards();
+      }
       else { showToast(r.message || "登录失败", true); }
     } catch (e: unknown) { showToast(`登录失败: ${e}`, true); }
   };
@@ -46,7 +74,9 @@ export default function TabK8sForward() {
       await call("kuboard_mfa", { passcode });
       setMfaRequired(false); setPasscode("");
       showToast("登录成功");
-      loadStatus();
+      await Promise.allSettled([loadStatus(), loadClusters()]);
+      await validateForwards();
+      loadForwards();
     } catch (e: unknown) { showToast(`MFA 验证失败: ${e}`, true); }
   };
 
@@ -95,17 +125,30 @@ export default function TabK8sForward() {
     } catch (e: unknown) { showToast(`取消失败: ${e}`, true); }
   };
 
-  const handleUpdateDomain = async () => {
-    if (!editingDomain) return;
+  const handleUpdateForward = async () => {
+    if (!editingForward) return;
     try {
-      await call("update_proxy_mapping", editingDomain);
-      showToast("域名已更新");
-      setEditingDomain(null);
+      await call("update_proxy_mapping", { rule_id: editingForward.rule_id, domain: editingForward.domain });
+      await call("update_forward_rule", {
+        id: editingForward.rule_id,
+        name: editingForward.pod_name,
+        local_host: editingForward.local_host,
+        local_port: editingForward.local_port,
+        remote_host: editingForward.remote_host,
+        remote_port: editingForward.remote_port,
+        rule_type: "K8s",
+        pod_name: editingForward.pod_name,
+        container_name: "",
+        cluster: "",
+        namespace: "",
+      });
+      showToast("已更新");
+      setEditingForward(null);
       loadForwards();
     } catch (e: unknown) { showToast(`更新失败: ${e}`, true); }
   };
 
-  const filteredPods = pods.filter(p => p.name.toLowerCase().includes(search.toLowerCase()));
+  const filteredPods = pods.filter(p => p.status === "Running" && p.name.toLowerCase().includes(search.toLowerCase()));
 
   const isForwarded = (podName: string, containerName: string, port: number) =>
     forwards.rules.some(r => r.pod_name === podName && r.container_name === containerName && r.remote_port === port);
@@ -113,7 +156,7 @@ export default function TabK8sForward() {
   const getForwardMapping = (podName: string, containerName: string, port: number) => {
     const rule = forwards.rules.find(r => r.pod_name === podName && r.container_name === containerName && r.remote_port === port);
     if (!rule) return null;
-    const mapping = forwards.mappings.find(m => m.rule_id === rule.id);
+    const mapping = forwards.mappings.find(m => m.rule_id === rule.id && m.editable);
     return { rule, mapping };
   };
 
@@ -175,7 +218,7 @@ export default function TabK8sForward() {
           <div className="card">
             <div className="card-header" style={{display:"flex",justifyContent:"space-between"}}>
               <span>Pod 列表 ({filteredPods.length})</span>
-              <input placeholder="搜索 Pod..." value={search} onChange={e => setSearch(e.target.value)} style={{padding:"4px 8px",border:"1px solid #3a3a5a",borderRadius:4,background:"#12122a",color:"#e0e0e0",fontSize:12,width:200}} />
+              <input placeholder="搜索 Pod..." value={search} onChange={e => setSearch(e.target.value)} style={{padding:"4px 8px",border:"1px solid #e5e5e5",borderRadius:4,background:"#fafafa",color:"#1a1a1a",fontSize:12,width:200}} />
             </div>
             <div style={{maxHeight:400,overflow:"auto"}}>
               <table>
@@ -214,18 +257,18 @@ export default function TabK8sForward() {
             <div className="card">
               <div className="card-header">已转发列表</div>
               <table>
-                <thead><tr><th>域名</th><th>本地端口</th><th>目标</th><th>操作</th></tr></thead>
+                <thead><tr><th>Pod名称</th><th>Pod地址</th><th>本地端口</th><th>目标</th><th>操作</th></tr></thead>
                 <tbody>
                   {forwards.rules.map(r => {
-                    const m = forwards.mappings.find(m => m.rule_id === r.id);
+                    const m = forwards.mappings.find(m => m.rule_id === r.id && m.editable);
                     return (
                       <tr key={r.id}>
-                        <td>{m?.domain || "-"}</td>
+                        <td>{r.pod_name || "-"}</td>
+                        <td>{m?.domain || `${r.remote_host}:${r.remote_port}`}</td>
                         <td>{r.local_port}</td>
                         <td>{r.remote_host}:{r.remote_port}</td>
                         <td>
-                          <button className="btn btn-default btn-sm" style={{marginRight:4}} onClick={() => navigator.clipboard.writeText(m?.domain || "")}>复制域名</button>
-                          <button className="btn btn-default btn-sm" style={{marginRight:4}} onClick={() => setEditingDomain({ rule_id: r.id, domain: m?.domain || "" })}>编辑</button>
+                          <button className="btn btn-default btn-sm" style={{marginRight:4}} onClick={() => setEditingForward({ rule_id: r.id, domain: m?.domain || `${r.remote_host}:${r.remote_port}`, local_port: r.local_port, pod_name: r.pod_name || "", remote_host: r.remote_host, remote_port: r.remote_port, local_host: r.local_host })}>编辑</button>
                           <button className="btn btn-danger btn-sm" onClick={() => handleUnforward(r.id)}>取消</button>
                         </td>
                       </tr>
@@ -238,14 +281,17 @@ export default function TabK8sForward() {
         </>
       )}
 
-      {editingDomain && (
-        <div className="modal-overlay" onClick={() => setEditingDomain(null)}>
+      {editingForward && (
+        <div className="modal-overlay" onClick={() => setEditingForward(null)}>
           <div className="modal" onClick={e => e.stopPropagation()}>
-            <h3>编辑域名</h3>
-            <div className="form-group"><label>域名</label><input value={editingDomain.domain} onChange={e => setEditingDomain({...editingDomain, domain: e.target.value})} style={{width:"100%"}} /></div>
+            <h3>编辑转发</h3>
+            <div className="form-row">
+              <div className="form-group"><label>Pod地址</label><input value={editingForward.domain} onChange={e => setEditingForward({...editingForward, domain: e.target.value})} /></div>
+              <div className="form-group"><label>本地端口</label><input type="number" value={editingForward.local_port} onChange={e => setEditingForward({...editingForward, local_port: +e.target.value})} /></div>
+            </div>
             <div className="modal-actions">
-              <button className="btn btn-default" onClick={() => setEditingDomain(null)}>取消</button>
-              <button className="btn btn-primary" onClick={handleUpdateDomain}>保存</button>
+              <button className="btn btn-default" onClick={() => setEditingForward(null)}>取消</button>
+              <button className="btn btn-primary" onClick={handleUpdateForward}>保存</button>
             </div>
           </div>
         </div>

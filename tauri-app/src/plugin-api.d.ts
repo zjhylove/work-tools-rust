@@ -38,6 +38,12 @@ interface PluginAPI {
    * @param url - 要打开的 URL
    */
   open_url: (url: string) => Promise<void>;
+
+  /**
+   * 打开文件夹选择对话框
+   * @param title - 对话框标题
+   */
+  open_folder_dialog: (title?: string) => Promise<string | null>;
 }
 
 /**

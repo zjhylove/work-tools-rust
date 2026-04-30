@@ -17,9 +17,11 @@ export default function App() {
           </button>
         ))}
       </div>
-      {activeTab === 0 && <TabSshForward />}
-      {activeTab === 1 && <TabK8sForward />}
-      {activeTab === 2 && <TabHttpProxy />}
+      <div className="tab-content">
+        <div style={{ display: activeTab === 0 ? "block" : "none" }}><TabSshForward /></div>
+        <div style={{ display: activeTab === 1 ? "block" : "none" }}><TabK8sForward /></div>
+        <div style={{ display: activeTab === 2 ? "block" : "none" }}><TabHttpProxy /></div>
+      </div>
     </div>
   );
 }

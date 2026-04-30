@@ -3,11 +3,18 @@ import type { ProxyStatus, ProxyMapping } from "../types";
 
 const PLUGIN_ID = "k8s-forward";
 
+interface MappingGroup {
+  name: string;
+  addr: string;
+  target: string;
+  rule_id: string;
+}
+
 export default function TabHttpProxy() {
   const [status, setStatus] = useState<ProxyStatus>({ running: false, port: 80, mapping_count: 0 });
   const [mappings, setMappings] = useState<ProxyMapping[]>([]);
   const [port, setPort] = useState(80);
-  const [editing, setEditing] = useState<ProxyMapping | null>(null);
+  const [editing, setEditing] = useState<{ rule_id: string; domain: string; target: string } | null>(null);
   const [toast, setToast] = useState<string | null>(null);
 
   const call = useCallback(async (method: string, params?: unknown) => {
@@ -28,7 +35,7 @@ export default function TabHttpProxy() {
     }
   };
 
-  useEffect(() => { refresh(); }, []);
+  useEffect(() => { try { refresh(); } catch { /* ignore */ } }, []);
 
   const handleStart = async () => {
     try {
@@ -48,13 +55,24 @@ export default function TabHttpProxy() {
     if (!editing) return;
     try {
       await call("update_proxy_mapping", { rule_id: editing.rule_id, domain: editing.domain });
-      showToast("域名已更新");
+      showToast("Pod地址已更新");
       setEditing(null);
       refresh();
     } catch (e: unknown) { showToast(`更新失败: ${e}`, true); }
   };
 
-  const hostsHint = mappings.map(m => m.domain).join("  ");
+  // 按 rule_id 分组：每个转发有一条 pod 名（别名）和一条 pod 地址
+  const groups = mappings.reduce<Record<string, MappingGroup>>((acc, m) => {
+    if (!acc[m.rule_id]) {
+      acc[m.rule_id] = { name: "", addr: "", target: m.target, rule_id: m.rule_id };
+    }
+    if (m.editable) {
+      acc[m.rule_id].addr = m.domain;
+    } else {
+      acc[m.rule_id].name = m.domain;
+    }
+    return acc;
+  }, {});
 
   return (
     <div>
@@ -80,38 +98,31 @@ export default function TabHttpProxy() {
 
       {status.running && (
         <div className="card">
-          <div className="card-header">域名路由映射表</div>
+          <div className="card-header">代理映射表</div>
           <table>
-            <thead><tr><th>域名</th><th>目标地址</th><th>状态</th><th>操作</th></tr></thead>
+            <thead><tr><th>Pod名称</th><th>Pod地址</th><th>目标地址</th><th>操作</th></tr></thead>
             <tbody>
-              {mappings.map(m => (
-                <tr key={m.rule_id}>
-                  <td><code>{m.domain}</code></td>
-                  <td>{m.target}</td>
-                  <td><span className="badge badge-success">活跃</span></td>
+              {Object.values(groups).map(g => (
+                <tr key={g.rule_id}>
+                  <td><code>{g.name}</code></td>
+                  <td><code>{g.addr}</code></td>
+                  <td>{g.target}</td>
                   <td>
-                    {m.editable && <button className="btn btn-default btn-sm" onClick={() => setEditing(m)}>编辑</button>}
+                    <button className="btn btn-default btn-sm" onClick={() => setEditing({ rule_id: g.rule_id, domain: g.addr, target: g.target })}>编辑</button>
                   </td>
                 </tr>
               ))}
-              {mappings.length === 0 && <tr><td colSpan={4} style={{textAlign:"center",color:"#666",padding:20}}>暂无映射</td></tr>}
+              {Object.keys(groups).length === 0 && <tr><td colSpan={4} style={{textAlign:"center",color:"#666",padding:20}}>暂无映射</td></tr>}
             </tbody>
           </table>
-
-          {hostsHint && (
-            <div style={{marginTop:12,padding:10,background:"#12122a",borderRadius:4,fontSize:11,fontFamily:"monospace"}}>
-              <div style={{color:"#888",marginBottom:4}}>系统 hosts 提示（可选）:</div>
-              127.0.0.1  {hostsHint}
-            </div>
-          )}
         </div>
       )}
 
       {editing && (
         <div className="modal-overlay" onClick={() => setEditing(null)}>
           <div className="modal" onClick={e => e.stopPropagation()}>
-            <h3>编辑域名映射</h3>
-            <div className="form-group"><label>域名</label><input value={editing.domain} onChange={e => setEditing({...editing, domain: e.target.value})} style={{width:"100%"}} /></div>
+            <h3>编辑 Pod 地址</h3>
+            <div className="form-group"><label>Pod地址</label><input value={editing.domain} onChange={e => setEditing({...editing, domain: e.target.value})} style={{width:"100%"}} /></div>
             <div style={{marginTop:8,fontSize:11,color:"#888"}}>目标: {editing.target}</div>
             <div className="modal-actions">
               <button className="btn btn-default" onClick={() => setEditing(null)}>取消</button>

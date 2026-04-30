@@ -62,9 +62,10 @@ impl HttpProxySvc {
         self.mapping_list.lock().unwrap().clone()
     }
 
+    /// 更新可编辑(editable)的映射项（即 pod 地址，而非别名）
     pub fn update_mapping(&self, rule_id: &str, new_domain: &str) -> Result<ProxyMapping> {
         let mut list = self.mapping_list.lock().unwrap();
-        if let Some(m) = list.iter_mut().find(|m| m.rule_id == rule_id) {
+        if let Some(m) = list.iter_mut().find(|m| m.rule_id == rule_id && m.editable) {
             let old_domain = m.domain.clone();
             let target = m.target.clone();
             let editable = m.editable;
@@ -139,27 +140,44 @@ async fn proxy_request(
         .get("host")
         .and_then(|v| v.to_str().ok())
         .unwrap_or("");
+    let host_without_port = host.split(':').next().unwrap_or(host);
+    let uri_addr = req.uri().host().map(|h| {
+        let port = req.uri().port_u16().unwrap_or(80);
+        format!("{}:{}", h, port)
+    });
 
     let target = {
         let map = mappings.lock().unwrap();
         map.get(host).cloned()
+            .or_else(|| map.get(host_without_port).cloned())
+            .or_else(|| uri_addr.as_ref().and_then(|a| map.get(a).cloned()))
     };
 
-    if let Some(target) = target {
-        match forward_request(req, &target).await {
-            Ok(resp) => Ok(resp),
-            Err(_) => {
-                let mut resp = Response::new(Full::new(Bytes::from("转发目标不可达")));
-                *resp.status_mut() = StatusCode::BAD_GATEWAY;
-                Ok(resp)
-            }
-        }
+    if let Some(ref t) = target {
+        forward_or_502(req, t).await
+    } else if let Some(ref t) = uri_addr {
+        forward_or_502(req, t).await
     } else {
-        let mut resp = Response::new(Full::new(Bytes::from(
-            format!("未找到域名 {} 对应的转发规则", host)
-        )));
+        let mut resp = Response::new(Full::new(Bytes::from("未找到目标地址")));
         *resp.status_mut() = StatusCode::NOT_FOUND;
         Ok(resp)
+    }
+}
+
+async fn forward_or_502(
+    req: Request<Incoming>,
+    target: &str,
+) -> Result<Response<Full<Bytes>>, hyper::Error> {
+    match forward_request(req, target).await {
+        Ok(resp) => Ok(resp),
+        Err(e) => {
+            eprintln!("[proxy] ✗ 转发失败: {} — {}", target, e);
+            let mut resp = Response::new(Full::new(Bytes::from(
+                format!("转发目标不可达: {}", target)
+            )));
+            *resp.status_mut() = StatusCode::BAD_GATEWAY;
+            Ok(resp)
+        }
     }
 }
 

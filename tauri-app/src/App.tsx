@@ -23,6 +23,7 @@ export default function App() {
   const [plugins, setPlugins] = useState<PluginInfo[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedPlugin, setSelectedPlugin] = useState<string | null>(null);
+  const [visitedPlugins, setVisitedPlugins] = useState<string[]>([]);
   const [showLogs, setShowLogs] = useState(false);
   const [showPluginMarket, setShowPluginMarket] = useState(false);
 
@@ -99,23 +100,20 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // 当默认选中第一个插件时，将其加入 visitedPlugins
+  useEffect(() => {
+    if (selectedPlugin && visitedPlugins.length === 0) {
+      setVisitedPlugins([selectedPlugin]);
+    }
+  }, [selectedPlugin, visitedPlugins.length]);
+
   const openPlugin = async (pluginId: string) => {
     devLog("打开插件:", pluginId);
     setSelectedPlugin(pluginId);
-  };
-
-  // 所有插件统一使用 PluginPlaceholder 加载
-  const renderPlugin = () => {
-    if (!selectedPlugin) return null;
-
-    return (
-      <ErrorBoundary>
-        <PluginPlaceholder
-          pluginId={selectedPlugin}
-          setSelectedPlugin={setSelectedPlugin}
-        />
-      </ErrorBoundary>
-    );
+    setVisitedPlugins(prev => {
+      if (prev.includes(pluginId)) return prev;
+      return [...prev, pluginId];
+    });
   };
 
   return (
@@ -294,7 +292,25 @@ export default function App() {
           flexDirection: "column",
         }}
       >
-        {renderPlugin()}
+        {/* 渲染所有已访问过的插件 iframe，仅选中插件可见，保持状态不丢失 */}
+        {visitedPlugins.map((pluginId) => (
+          <div
+            key={pluginId}
+            style={{
+              display: pluginId === selectedPlugin ? "flex" : "none",
+              flex: 1,
+              flexDirection: "column",
+              overflow: "hidden",
+            }}
+          >
+            <ErrorBoundary>
+              <PluginPlaceholder
+                pluginId={pluginId}
+                setSelectedPlugin={setSelectedPlugin}
+              />
+            </ErrorBoundary>
+          </div>
+        ))}
 
         {!selectedPlugin && (
           <div

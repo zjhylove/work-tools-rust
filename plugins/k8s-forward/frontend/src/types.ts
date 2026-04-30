@@ -13,7 +13,7 @@ export interface ForwardRule {
   local_port: number;
   remote_host: string;
   remote_port: number;
-  rule_type: "manual" | "k8s";
+  rule_type: "Manual" | "K8s";
   cluster?: string;
   namespace?: string;
   pod_name?: string;

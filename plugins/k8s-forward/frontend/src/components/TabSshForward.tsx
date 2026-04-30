@@ -8,6 +8,7 @@ export default function TabSshForward() {
   const [rules, setRules] = useState<ForwardRule[]>([]);
   const [form, setForm] = useState({ host: "", port: 22, username: "", password: "" });
   const [editing, setEditing] = useState<ForwardRule | null>(null);
+  const [isNewRule, setIsNewRule] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
 
   const call = useCallback(async (method: string, params?: unknown) => {
@@ -26,10 +27,28 @@ export default function TabSshForward() {
 
   const loadRules = async () => {
     const r = await call("list_forward_rules") as ForwardRule[];
-    setRules(r.filter(r => r.rule_type === "manual"));
+    setRules(r.filter(r => r.rule_type === "Manual"));
   };
 
-  useEffect(() => { loadStatus(); loadRules(); }, []);
+  useEffect(() => {
+    const init = async () => {
+      try {
+        const cfg = await call("get_config") as Record<string, unknown>;
+        const ssh = cfg.ssh as Record<string, unknown> | undefined;
+        if (ssh) {
+          setForm({
+            host: (ssh.host as string) || "",
+            port: (ssh.port as number) || 22,
+            username: (ssh.username as string) || "",
+            password: (ssh.password as string) || "",
+          });
+        }
+      } catch { /* ignore */ }
+      const results = await Promise.allSettled([loadStatus(), loadRules()]);
+      results.forEach((r, i) => { if (r.status === "rejected") console.warn(`init call ${i} failed:`, r.reason); });
+    };
+    init();
+  }, []);
 
   const handleConnect = async () => {
     try {
@@ -45,30 +64,31 @@ export default function TabSshForward() {
     showToast("已断开");
   };
 
-  const handleAdd = async () => {
-    try {
-      const rule = {
-        id: window.crypto.randomUUID(),
-        name: `rule-${Date.now()}`,
-        local_host: "127.0.0.1",
-        local_port: 0,
-        remote_host: "",
-        remote_port: 0,
-        rule_type: "manual" as const,
-      };
-      await call("add_forward_rule", rule);
-      showToast("规则已添加");
-      loadRules();
-      setEditing(rule);
-    } catch (e: unknown) { showToast(`添加失败: ${e}`, true); }
+  const handleAdd = () => {
+    const rule: ForwardRule = {
+      id: window.crypto.randomUUID(),
+      name: `rule-${Date.now()}`,
+      local_host: "127.0.0.1",
+      local_port: 0,
+      remote_host: "",
+      remote_port: 0,
+      rule_type: "Manual" as const,
+    };
+    setEditing(rule);
+    setIsNewRule(true);
   };
 
   const handleSave = async () => {
     if (!editing) return;
     try {
-      await call("update_forward_rule", editing);
-      showToast("已保存");
+      if (isNewRule) {
+        await call("add_forward_rule", editing);
+      } else {
+        await call("update_forward_rule", editing);
+      }
+      showToast(isNewRule ? "规则已添加" : "已保存");
       setEditing(null);
+      setIsNewRule(false);
       loadRules();
     } catch (e: unknown) { showToast(`保存失败: ${e}`, true); }
   };
@@ -102,7 +122,7 @@ export default function TabSshForward() {
 
   const handleExport = async () => {
     const data = await call("export_rules") as ForwardRule[];
-    const json = JSON.stringify(data.filter(r => r.rule_type === "manual"), null, 2);
+    const json = JSON.stringify(data.filter(r => r.rule_type === "Manual"), null, 2);
     const blob = new Blob([json], { type: "application/json" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -153,7 +173,7 @@ export default function TabSshForward() {
                 <td>{r.remote_host}</td>
                 <td>{r.remote_port}</td>
                 <td>
-                  <button className="btn btn-default btn-sm" onClick={() => setEditing(r)} style={{marginRight:4}}>编辑</button>
+                  <button className="btn btn-default btn-sm" onClick={() => { setEditing(r); setIsNewRule(false); }} style={{marginRight:4}}>编辑</button>
                   <button className="btn btn-danger btn-sm" onClick={() => handleDelete(r.id)}>删除</button>
                 </td>
               </tr>
@@ -175,7 +195,7 @@ export default function TabSshForward() {
               <div className="form-group"><label>远程端口</label><input type="number" value={editing.remote_port} onChange={e => setEditing({...editing, remote_port: +e.target.value})} /></div>
             </div>
             <div className="modal-actions">
-              <button className="btn btn-default" onClick={() => setEditing(null)}>取消</button>
+              <button className="btn btn-default" onClick={() => { setEditing(null); setIsNewRule(false); }}>取消</button>
               <button className="btn btn-primary" onClick={handleSave}>保存</button>
             </div>
           </div>

@@ -1,14 +1,14 @@
 use anyhow::{Result, anyhow};
 use ssh2::Session;
-use std::net::TcpStream;
+use std::io::{Read, Write};
+use std::net::{TcpStream, TcpListener};
 use std::sync::{Arc, Mutex};
 use std::thread;
-use std::net::TcpListener;
+use std::time::Duration;
 use crate::models::{ForwardRule, RuleType};
 
 pub struct SshService {
-    session: Option<Session>,
-    tcp_stream: Option<TcpStream>,
+    session: Option<Arc<Mutex<Session>>>,
     forwards: Vec<ForwardEntry>,
     next_port: u16,
     threads: Vec<thread::JoinHandle<()>>,
@@ -24,7 +24,6 @@ impl SshService {
     pub fn new() -> Self {
         Self {
             session: None,
-            tcp_stream: None,
             forwards: vec![],
             next_port: 10000,
             threads: vec![],
@@ -33,89 +32,100 @@ impl SshService {
     }
 
     pub fn is_connected(&self) -> bool {
-        self.session.as_ref().map(|s| s.authenticated()).unwrap_or(false)
+        self.session.as_ref().map(|s| s.lock().unwrap().authenticated()).unwrap_or(false)
     }
 
     pub fn connect(&mut self, host: &str, port: u16, username: &str, password: &str) -> Result<()> {
         let addr = format!("{}:{}", host, port);
         let tcp = TcpStream::connect(&addr)?;
-        tcp.set_read_timeout(Some(std::time::Duration::from_secs(30)))?;
         let mut session = Session::new()?;
-        session.set_tcp_stream(tcp.try_clone()?);
+        session.set_tcp_stream(tcp);
         session.handshake()?;
         session.userauth_password(username, password)?;
         if !session.authenticated() {
             return Err(anyhow!("SSH 认证失败"));
         }
-        self.session = Some(session);
-        self.tcp_stream = Some(tcp);
+        self.session = Some(Arc::new(Mutex::new(session)));
         Ok(())
     }
 
     pub fn disconnect(&mut self) {
-        for flag in &self.stop_flags {
-            *flag.lock().unwrap() = true;
-        }
-        for handle in self.threads.drain(..) {
-            let _ = handle.join();
-        }
+        for flag in &self.stop_flags { *flag.lock().unwrap() = true; }
+        for handle in self.threads.drain(..) { let _ = handle.join(); }
         self.stop_flags.clear();
         self.forwards.clear();
         self.session = None;
-        self.tcp_stream = None;
     }
 
-    pub fn add_forward(&mut self, local_host: &str, remote_host: &str, remote_port: u16) -> Result<u16> {
-        let local_port = self.allocate_port();
+    pub fn add_forward(&mut self, local_host: &str, remote_host: &str, remote_port: u16, local_port: u16) -> Result<u16> {
+        let session = self.session.clone().ok_or_else(|| anyhow!("SSH 未连接"))?;
+        let local_port = if local_port > 0 { local_port } else { self.allocate_port() };
         let bind_addr = format!("{}:{}", local_host, local_port);
+        let remote_host = remote_host.to_string();
 
+        let rh_for_thread = remote_host.clone();
+        let rh_for_rule = remote_host;
         let stop_flag = Arc::new(Mutex::new(false));
         let stop = stop_flag.clone();
         let stop_for_entry = stop_flag.clone();
-        let remote = format!("{}:{}", remote_host, remote_port);
 
         let handle = thread::spawn(move || {
             let listener = match TcpListener::bind(&bind_addr) {
                 Ok(l) => l,
-                Err(e) => {
-                    eprintln!("无法绑定 {}: {}", bind_addr, e);
-                    return;
-                }
+                Err(_) => return,
             };
             listener.set_nonblocking(true).ok();
 
             loop {
-                if *stop.lock().unwrap() { break; }
-                match listener.accept() {
-                    Ok((local_stream, _)) => {
-                        let remote_clone = remote.clone();
-                        thread::spawn(move || {
-                            if let Ok(mut remote_stream) = TcpStream::connect(&remote_clone) {
-                                let mut local_clone = local_stream.try_clone().unwrap();
-                                let _ = std::io::copy(&mut local_clone, &mut remote_stream);
-                            }
-                        });
-                    }
+                if *stop.lock().unwrap() { return; }
+                let stream = match listener.accept() {
+                    Ok((s, _)) => s,
                     Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock => {
-                        thread::sleep(std::time::Duration::from_millis(100));
+                        thread::sleep(Duration::from_millis(100)); continue;
                     }
-                    Err(_) => break,
+                    Err(_) => return,
+                };
+
+                stream.set_nonblocking(true).ok();
+                let mut loc_read = match stream.try_clone() { Ok(r) => r, Err(_) => continue };
+                let mut loc_write = stream;
+
+                let s = session.lock().unwrap();
+                let mut channel = match s.channel_direct_tcpip(&rh_for_thread, remote_port, None) {
+                    Ok(c) => c,
+                    Err(_) => continue,
+                };
+                s.set_blocking(false);
+
+                let stop_for_io = stop.clone();
+                let mut buf = [0u8; 8192];
+                loop {
+                    if *stop_for_io.lock().unwrap() { break; }
+                    match loc_read.read(&mut buf) {
+                        Ok(0) => break,
+                        Ok(n) => { let _ = channel.write_all(&buf[..n]); }
+                        Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock => {}
+                        Err(_) => break,
+                    }
+                    match channel.read(&mut buf) {
+                        Ok(0) => break,
+                        Ok(n) => { let _ = loc_write.write_all(&buf[..n]); }
+                        Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock => {}
+                        Err(_) => break,
+                    }
+                    thread::sleep(Duration::from_millis(10));
                 }
+                s.set_blocking(true);
             }
         });
 
         let rule = ForwardRule {
             id: uuid::Uuid::new_v4().to_string(),
             name: format!("forward-{}", local_port),
-            local_host: local_host.to_string(),
-            local_port,
-            remote_host: remote_host.to_string(),
-            remote_port,
+            local_host: local_host.to_string(), local_port,
+            remote_host: rh_for_rule, remote_port,
             rule_type: RuleType::Manual,
-            cluster: None,
-            namespace: None,
-            pod_name: None,
-            container_name: None,
+            cluster: None, namespace: None, pod_name: None, container_name: None,
         };
 
         self.threads.push(handle);
@@ -138,21 +148,15 @@ impl SshService {
         self.forwards.iter().map(|f| f.rule.clone()).collect()
     }
 
-    pub fn forward_count(&self) -> usize {
-        self.forwards.len()
-    }
+    pub fn forward_count(&self) -> usize { self.forwards.len() }
 
     fn allocate_port(&mut self) -> u16 {
         let used_ports: Vec<u16> = self.forwards.iter().map(|f| f.rule.local_port).collect();
         loop {
             let port = self.next_port;
             self.next_port += 1;
-            if self.next_port > 60000 {
-                self.next_port = 10000;
-            }
-            if !used_ports.contains(&port) && port_is_available(port) {
-                return port;
-            }
+            if self.next_port > 60000 { self.next_port = 10000; }
+            if !used_ports.contains(&port) && port_is_available(port) { return port; }
         }
     }
 }
