@@ -113,8 +113,8 @@ function Build-Plugin {
 
     Copy-Item $libPath .
 
-    # 打包
-    zip -r $packageName manifest.json $libName assets/ | Out-Null
+    # 打包 (使用 PowerShell 原生 Compress-Archive)
+    Compress-Archive -Path manifest.json, $libName, assets -DestinationPath $packageName -Force
 
     # 清理临时文件
     Remove-Item -Force $libName
@@ -144,7 +144,6 @@ function Main {
     Write-Host "[1/4] 检查构建环境..." -ForegroundColor Yellow
     try {
         $null = Get-Command cargo -ErrorAction Stop
-        $null = Get-Command zip -ErrorAction Stop
         Write-Host "✓ 构建环境检查通过" -ForegroundColor Green
     } catch {
         Write-Host "✗ 错误: 未找到必要的命令" -ForegroundColor Red

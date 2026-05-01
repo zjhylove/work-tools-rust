@@ -12,13 +12,7 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # macOS - Intel only
-          - platform: 'macos-13'
-            os: 'macos-intel'
-            target: 'x86_64-apple-darwin'
-            ext: 'dmg'
-
-          # macOS - Apple Silicon only
+          # macOS - Apple Silicon
           - platform: 'macos-latest'
             os: 'macos-arm'
             target: 'aarch64-apple-darwin'
@@ -81,9 +75,15 @@ jobs:
       - name: Build Rust workspace (plugins + tauri)
         run: cargo build --release
 
-      - name: Package plugins
+      - name: Package plugins (macOS/Linux)
+        if: matrix.os != 'windows'
         run: bash scripts/build-plugins.sh
         shell: bash
+
+      - name: Package plugins (Windows)
+        if: matrix.os == 'windows'
+        run: pwsh scripts/build-plugins.ps1
+        shell: pwsh
 
       - name: Build Tauri app
         uses: tauri-apps/tauri-action@v0
@@ -129,7 +129,6 @@ jobs:
             artifacts/**/*.exe
             artifacts/**/*.deb
             artifacts/**/*.AppImage
-            artifacts/work-tools-macos-intel-*/**/*.wtplugin.zip
             artifacts/work-tools-macos-arm-*/**/*.wtplugin.zip
             artifacts/work-tools-windows-*/**/*.wtplugin.zip
             artifacts/work-tools-linux-*/**/*.wtplugin.zip
