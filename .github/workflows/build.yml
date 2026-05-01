@@ -79,11 +79,15 @@ jobs:
         if: matrix.os != 'windows'
         run: bash scripts/build-plugins.sh
         shell: bash
+        env:
+          PKG_PLATFORM: ${{ matrix.os }}
 
       - name: Package plugins (Windows)
         if: matrix.os == 'windows'
         run: pwsh scripts/build-plugins.ps1
         shell: pwsh
+        env:
+          PKG_PLATFORM: ${{ matrix.os }}
 
       - name: Build Tauri app
         uses: tauri-apps/tauri-action@v0
@@ -98,7 +102,7 @@ jobs:
         with:
           name: work-tools-${{ matrix.os }}-${{ matrix.target }}
           path: |
-            tauri-app/src-tauri/target/release/bundle/*/
+            target/release/bundle/*/
             plugins/**/*.wtplugin.zip
           retention-days: 14
 
@@ -129,9 +133,7 @@ jobs:
             artifacts/**/*.exe
             artifacts/**/*.deb
             artifacts/**/*.AppImage
-            artifacts/work-tools-macos-arm-*/**/*.wtplugin.zip
-            artifacts/work-tools-windows-*/**/*.wtplugin.zip
-            artifacts/work-tools-linux-*/**/*.wtplugin.zip
+            artifacts/**/*.wtplugin.zip
           draft: false
           prerelease: false
           generate_release_notes: true

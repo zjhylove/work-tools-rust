@@ -36,7 +36,7 @@ detect_platform() {
     esac
 }
 
-PLATFORM=$(detect_platform)
+PLATFORM="${PKG_PLATFORM:-$(detect_platform)}"
 
 # 获取动态库文件名
 get_lib_name() {
@@ -68,7 +68,7 @@ build_plugin() {
 
     # 读取插件信息
     local plugin_id=$(grep -o '"id"[[:space:]]*:[[:space:]]*"[^"]*"' "$manifest_file" | sed 's/.*: *"\([^"]*\)".*/\1/')
-    local package_name="${plugin_id}.wtplugin.zip"
+    local package_name="${plugin_id}-${PLATFORM}.wtplugin.zip"
 
     echo -e "${CYAN}→ 构建插件: ${plugin_name} (${plugin_id})${NC}"
 
@@ -208,7 +208,7 @@ main() {
     echo -e "${YELLOW}插件包位置:${NC}"
     for plugin_dir in "${PLUGINS_DIR}"/*; do
         if [ -d "$plugin_dir" ]; then
-            local package_name="$(basename "$plugin_dir").wtplugin.zip"
+            local package_name="$(basename "$plugin_dir")-${PLATFORM}.wtplugin.zip"
             local package_path="${plugin_dir}/${package_name}"
             if [ -f "$package_path" ]; then
                 echo -e "${GREEN}✓${NC} ${package_path}"
