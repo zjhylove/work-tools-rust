@@ -183,13 +183,13 @@ main() {
             continue
         fi
 
-        ((total_count++))
+        (( ++total_count ))
 
         # 构建插件
         if build_plugin "$plugin_dir"; then
-            ((success_count++))
+            (( ++success_count ))
         else
-            ((failed_count++))
+            (( ++failed_count ))
         fi
     done
 

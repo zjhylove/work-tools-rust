@@ -17,12 +17,6 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # macOS - Universal Binary (Intel + Apple Silicon)
-          - platform: 'macos-latest'
-            os: 'macos'
-            target: 'universal-apple-darwin'
-            ext: 'dmg'
-
           # macOS - Intel only
           - platform: 'macos-13'
             os: 'macos-intel'
@@ -144,7 +138,8 @@ jobs:
             artifacts/**/*.exe
             artifacts/**/*.deb
             artifacts/**/*.AppImage
-            artifacts/work-tools-macos-universal-*/**/*.wtplugin.zip
+            artifacts/work-tools-macos-intel-*/**/*.wtplugin.zip
+            artifacts/work-tools-macos-arm-*/**/*.wtplugin.zip
             artifacts/work-tools-windows-*/**/*.wtplugin.zip
             artifacts/work-tools-linux-*/**/*.wtplugin.zip
           draft: false
