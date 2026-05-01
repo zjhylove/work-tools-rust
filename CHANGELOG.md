@@ -11,28 +11,45 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **[2026-03-03]** 全新的项目主 README.md
-- **[2026-03-03]** 代码清理优化指南 (docs/CLEANUP_OPTIMIZATION_GUIDE.md)
-- **[2026-03-03]** 清理总结文档 (docs/fixes/2026-03-03-cleanup-summary.md)
+- **对象存储插件** — 支持阿里云 OSS 和腾讯云 COS，文件浏览/上传/下载/搜索/删除
+- **K8s IP转发插件** — Kuboard DEX SSO 发现 Pod，SSH 隧道 + HTTP 代理转发，24 个 handle_call 方法，3 Tab 前端
+- **数据库路由插件** — Rhai 脚本引擎解析数据库和表路由，丰富内置函数，双栏前端布局
+- **数据库文档插件** — MySQL/PostgreSQL 表结构提取，Markdown/Word 导出，步骤导航，Toast 通知
+- **文本比对插件** — Monaco Editor 并排比对，字符级差异高亮与统计
+- **JSON 工具插件** — JSON 格式化/压缩/转义，树形可视化编辑
+- **系统托盘功能** — 最小化到托盘、首次使用提示、双击窗口切换
+- **系统日志** — tracing 三层架构，文件持久化按天滚动，前端实时查看，8 插件全覆盖
+- **文件夹对话框 API** — 插件前端可调用 `open_folder_dialog()`
+- **CI 插件构建** — GitHub Actions 自动编译插件并发布 `.wtplugin.zip`
 
 ### Changed
 
-- **[2026-03-03]** 增强 .gitignore 规则
-- **[2026-03-03]** 清理冗余文件和过时文档
-
-### Removed
-
-- **[2026-03-03]** 删除 Solid.js 迁移备份文件
-- **[2026-03-03]** 删除过时的测试脚本 (旧架构)
-- **[2026-03-03]** 删除过时的文档
+- **界面设计系统全面升级** — 统一 8 个插件的视觉风格
+- **日志代码简化** — 优化性能，新增清理功能
+- **托盘模块简化**
+- **db-doc 重构** — 提取公共模式，统一导出流程
+- **平台库查找逻辑** — 消除脆弱模式
 
 ### Fixed
 
-- **[2026-03-03]** 密码管理器 UI/UX 改进
-- **[2026-03-03]** 导入/导出功能优化
-- **[2026-03-03]** DOM 移除错误修复
-- **[2026-03-03]** Toast 通知优化
-- **[2026-03-03]** 注册 open_url 命令
+- 修复应用图标、路径重复、托盘退出报错
+- 修复代码质量审查发现的问题
+- 修复插件图标冲突、auth 列表样式互换
+- 修复 Windows 上插件卸载前删除目录的问题
+- 修复 db-doc MySQL/PostgreSQL 连接超时（添加 3 秒超时）
+- 修复 db-router 前端与后端 API 不匹配
+
+### Removed
+
+- db-doc PDF 导出（CJK 字体限制）
+- db-doc Enterprise 模板变体
+- 过时文档和计划文件
+
+### Documentation
+
+- 全部 Rust 源码添加中文学习注释
+- CLAUDE.md 多次更新（命令、架构、插件数量）
+- 多个插件设计和实现计划文档
 
 ---
 

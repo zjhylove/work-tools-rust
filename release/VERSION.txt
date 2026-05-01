@@ -1,7 +1,7 @@
 Work Tools Platform - 版本信息
 =================================
 
-生成时间: 2026-03-03 21:43
+生成时间: 2026-05-01
 
 主应用
 ------
@@ -13,30 +13,54 @@ Work Tools Platform - 版本信息
 
 插件列表
 --------
-1. 密码管理器 (Password Manager)
-   - 版本: 1.0.0
-   - 文件: password-manager.wtplugin.zip
-   - 大小: 362 KB
-   - 动态库: libpassword_manager.dylib (711 KB)
-   - 功能: 安全存储和管理密码
+1. 密码管理器 (password-manager)
+   - 版本: 1.0.0  | 功能: AES-256-GCM 加密存储密码
+   - 权限: filesystem, clipboard
 
-2. 双因素验证 (Auth Plugin / TOTP)
-   - 版本: 1.0.0
-   - 文件: auth.wtplugin.zip
-   - 大小: 358 KB
-   - 动态库: libauth_plugin.dylib (709 KB)
-   - 功能: TOTP 双因素验证码生成
+2. 双因素验证 (auth)
+   - 版本: 1.0.0  | 功能: TOTP 动态验证码生成
+   - 权限: clipboard
+
+3. JSON 工具 (json-tools)
+   - 版本: 1.0.0  | 功能: JSON 格式化/压缩/转义/树形编辑
+
+4. 文本比对 (text-diff)
+   - 版本: 1.0.0  | 功能: Monaco Editor 并排文本比对
+   - 权限: filesystem, clipboard
+
+5. 数据库文档 (db-doc)
+   - 版本: 1.0.0  | 功能: MySQL/PostgreSQL 表结构文档生成
+   - 权限: filesystem, network
+
+6. K8s IP转发 (k8s-forward)
+   - 版本: 1.0.0  | 功能: Kuboard 发现 Pod，SSH 隧道 + HTTP 代理
+   - 权限: filesystem, network
+
+7. 数据库路由 (db-router)
+   - 版本: 1.0.0  | 功能: Rhai 脚本解析数据库和表路由
+   - 权限: filesystem
+
+8. 对象存储 (object-storage)
+   - 版本: 1.0.0  | 功能: 阿里云 OSS + 腾讯云 COS 管理
+   - 权限: network, filesystem
 
 系统要求
 --------
-- macOS 11.0+ (Big Sur 或更高版本)
-- Apple Silicon (M1/M2/M3)
+- macOS 11.0+ (Apple Silicon)  / Windows 10+ / Linux
 - 至少 4 GB RAM
-- 至少 50 MB 磁盘空间
+- 至少 100 MB 磁盘空间
 
 技术栈
------
+------
 - 后端: Rust + Tauri 2.x
-- 前端: Solid.js + TypeScript + Tailwind CSS
-- 插件架构: 动态库加载 (libloading)
+- 前端: React 19 + TypeScript + Vite 6 + Tailwind CSS
+- 插件架构: 动态库加载 (libloading)，iframe srcdoc 渲染
 - 插件包格式: ZIP (.wtplugin.zip)
+- 日志系统: tracing 三层架构 (控制台 + 文件滚动 + 内存环形缓冲)
+
+构建方式
+--------
+- macOS: cd tauri-app && npm run tauri build
+- Windows: cd tauri-app; npm run tauri build
+- Linux: cd tauri-app && npm run tauri build (需 webkit2gtk 依赖)
+- 插件: bash scripts/build-plugins.sh

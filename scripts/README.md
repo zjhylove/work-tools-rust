@@ -1,162 +1,107 @@
 # Work Tools 构建脚本
 
-这个目录包含了 Work Tools 项目的各种构建脚本。
-
 ## 脚本列表
 
 ### 1. check-env.sh / check-env.ps1
-**用途**: 检查开发环境是否配置正确
 
-**检查项目**:
+检查开发环境是否配置正确:
 - Rust 工具链 (rustc, cargo)
 - Node.js 和 npm
 - Tauri CLI
 - 平台特定的依赖 (macOS, Windows, Linux)
 
-**使用方法**:
 ```bash
-# macOS/Linux
-./scripts/check-env.sh
-
-# Windows PowerShell
-.\scripts\check-env.ps1
+bash scripts/check-env.sh    # macOS/Linux
+.\scripts\check-env.ps1      # Windows PowerShell
 ```
 
 ### 2. build-plugins.sh / build-plugins.ps1
-**用途**: 构建并打包所有插件为 .wtplugin.zip 文件
 
-**构建流程**:
-1. 检查构建环境
-2. 编译 Rust 动态库
-3. 构建密码管理器前端
-4. 打包密码管理器插件
-5. 构建双因素验证前端
-6. 打包双因素验证插件
+**自动发现模式** — 扫描 `plugins/` 目录，自动构建和打包所有插件为 `.wtplugin.zip`。
 
-**使用方法**:
+构建流程:
+1. 检查构建环境 (cargo, zip)
+2. 编译所有 Rust 动态库 (`cargo build --release`)
+3. 扫描 plugins 目录，对每个插件:
+   - 构建前端 (如存在)
+   - 提取动态库文件名
+   - 打包 manifest.json + 动态库 + assets/ → .wtplugin.zip
+4. 显示构建统计
+
 ```bash
-# macOS/Linux
-./scripts/build-plugins.sh
-
-# Windows PowerShell
-.\scripts\build-plugins.ps1
+bash scripts/build-plugins.sh    # macOS/Linux
+.\scripts\build-plugins.ps1      # Windows PowerShell
 ```
 
-**输出**:
+输出产物:
 - `plugins/password-manager/password-manager.wtplugin.zip`
 - `plugins/auth-plugin/auth.wtplugin.zip`
+- `plugins/json-tools/json-tools.wtplugin.zip`
+- `plugins/text-diff/text-diff.wtplugin.zip`
+- `plugins/db-doc/db-doc.wtplugin.zip`
+- `plugins/k8s-forward/k8s-forward.wtplugin.zip`
+- `plugins/db-router/db-router.wtplugin.zip`
+- `plugins/object-storage/object-storage.wtplugin.zip`
 
-## 安装插件
-
-打包完成后,可以通过以下方式安装:
-
-1. 启动 Work Tools 应用
-2. 点击左侧底部的插件市场按钮 (🧩)
-3. 点击"导入插件"
-4. 选择对应的 `.wtplugin.zip` 文件
+---
 
 ## 手动构建单个插件
 
-如果只需要构建某个插件,可以手动执行以下步骤:
-
-### 密码管理器
-
 ```bash
-# 1. 编译动态库
-cd /path/to/work-tools-rust
-cargo build --release
+# 编译动态库
+cargo build --release -p <plugin-name>
 
-# 2. 构建前端
-cd plugins/password-manager/frontend
-npm run build
+# 进入插件目录，构建前端 (如有)
+cd plugins/<plugin-name>/frontend && npm install && npm run build
 
-# 3. 打包
-cd ..
-cp ../../target/release/libpassword_manager.dylib .
-zip -r password-manager.wtplugin.zip manifest.json libpassword_manager.dylib assets/
-rm libpassword_manager.dylib
+# 打包 (以 macOS 为例)
+cd .. && cp ../../target/release/lib<name>.dylib .
+zip -r <plugin-id>.wtplugin.zip manifest.json lib<name>.dylib assets/
+rm lib<name>.dylib
 ```
 
-### 双因素验证
-
-```bash
-# 1. 编译动态库
-cd /path/to/work-tools-rust
-cargo build --release
-
-# 2. 构建前端
-cd plugins/auth-plugin/frontend
-npm run build
-
-# 3. 打包
-cd ..
-cp ../../target/release/libauth_plugin.dylib .
-zip -r auth.wtplugin.zip manifest.json libauth_plugin.dylib assets/
-rm libauth_plugin.dylib
-```
+---
 
 ## 跨平台构建
 
-### macOS
+| 平台 | 动态库扩展 | 示例 |
+|------|-----------|------|
+| macOS | `.dylib` | `libpassword_manager.dylib` |
+| Linux | `.so` | `libpassword_manager.so` |
+| Windows | `.dll` | `password_manager.dll` |
 
-macOS 插件使用 `.dylib` 动态库:
-- `libpassword_manager.dylib`
-- `libauth_plugin.dylib`
-
-### Linux
-
-Linux 插件使用 `.so` 动态库:
-- `libpassword_manager.so`
-- `libauth_plugin.so`
-
-### Windows
-
-Windows 插件使用 `.dll` 动态库:
-- `password_manager.dll`
-- `auth_plugin.dll`
+---
 
 ## 故障排除
 
 ### 1. cargo build 失败
-
-确保已安装 Rust 工具链:
 ```bash
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 ```
 
 ### 2. npm run build 失败
-
-确保已安装 Node.js 依赖:
 ```bash
-cd plugins/password-manager/frontend
-npm install
+cd plugins/<plugin-name>/frontend && npm install
 ```
 
 ### 3. zip 命令未找到
-
-**macOS**:
 ```bash
+# macOS
 brew install zip
-```
-
-**Linux** (Ubuntu/Debian):
-```bash
+# Linux
 sudo apt-get install zip
 ```
 
-**Windows**:
-下载并安装 [ZIP for Windows](https://sourceforge.net/projects/gnuwin32/files/zip/3.0/zip-3.0-setup.exe/)
+---
 
 ## 插件包结构
 
-一个正确的 `.wtplugin.zip` 文件应该包含:
-
 ```
-my-plugin.wtplugin.zip
+<plugin-id>.wtplugin.zip
 ├── manifest.json          # 插件元数据
-├── libmy_plugin.dylib     # 动态库 (macOS)
-├── libmy_plugin.so        # 动态库 (Linux)
-├── my_plugin.dll          # 动态库 (Windows)
+├── lib<name>.dylib        # 动态库 (macOS)
+├── lib<name>.so           # 动态库 (Linux)
+├── <name>.dll             # 动态库 (Windows)
 └── assets/                # 前端资源
     ├── index.html
     ├── main.js
@@ -165,16 +110,6 @@ my-plugin.wtplugin.zip
 
 ## 验证插件包
 
-可以使用 unzip 命令验证插件包内容:
-
 ```bash
-unzip -l password-manager.wtplugin.zip
+unzip -l <plugin-id>.wtplugin.zip
 ```
-
-应该看到:
-- `manifest.json`
-- 动态库文件 (.dylib/.so/.dll)
-- `assets/` 目录
-- `assets/index.html`
-- `assets/main.js`
-- `assets/styles.css`
