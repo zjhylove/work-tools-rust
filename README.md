@@ -133,7 +133,7 @@ work-tools-rust/
 │   ├── types/             # 共享数据类型
 │   └── plugin-api/        # Plugin trait + storage/error/tracing
 ├── scripts/               # 构建脚本
-├── release/               # 发布产物
+├── release/               # 发布说明和版本信息
 └── Cargo.toml             # Workspace 配置
 ```
 

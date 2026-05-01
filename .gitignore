@@ -4,6 +4,8 @@ target/*
 dist/
 *.wtplugin.zip
 plugins/**/*.wtplugin.zip
+release/*.dmg
+release/*.wtplugin.zip
 
 # Dependencies
 node_modules/*
