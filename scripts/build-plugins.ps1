@@ -21,7 +21,8 @@ function Get-Platform {
     }
 }
 
-$PLATFORM = if ($env:PKG_PLATFORM) { $env:PKG_PLATFORM } else { Get-Platform }
+$PLATFORM = Get-Platform
+$PKG_SUFFIX = if ($env:PKG_PLATFORM) { $env:PKG_PLATFORM } else { $PLATFORM }
 
 # 获取动态库文件名
 function Get-LibName {
@@ -66,7 +67,7 @@ function Build-Plugin {
     # 读取插件信息
     $manifest = Get-Content $manifestFile -Raw | ConvertFrom-Json
     $pluginId = $manifest.id
-    $packageName = "$pluginId-$PLATFORM.wtplugin.zip"
+    $packageName = "$pluginId-$PKG_SUFFIX.wtplugin.zip"
 
     Write-Host "→ 构建插件: $pluginName ($pluginId)" -ForegroundColor Cyan
 
@@ -198,7 +199,7 @@ function Main {
         $manifestFile = Join-Path $pluginDir.FullName "manifest.json"
         if (Test-Path $manifestFile) {
             $manifest = Get-Content $manifestFile -Raw | ConvertFrom-Json
-            $packageName = "$($manifest.id)-$PLATFORM.wtplugin.zip"
+            $packageName = "$($manifest.id)-$PKG_SUFFIX.wtplugin.zip"
             $packagePath = Join-Path $pluginDir.FullName $packageName
 
             if (Test-Path $packagePath) {
