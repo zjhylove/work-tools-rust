@@ -10,6 +10,9 @@ members = [
     "plugins/db-router",
     "plugins/k8s-forward",
     "plugins/object-storage",
+    "plugins/timestamp-converter",
+    "plugins/cron-tools",
+    "plugins/redis-client",
     "tauri-app/src-tauri",
 ]
 resolver = "2"

@@ -1,0 +1,17 @@
+{
+  "id": "timestamp-converter",
+  "name": "时间戳转换",
+  "description": "Unix时间戳与日期时间互相转换，支持多时区、批量处理",
+  "version": "1.0.0",
+  "icon": "⏰",
+  "author": "Work Tools Team",
+  "files": {
+    "macos": "libtimestamp_converter.dylib",
+    "linux": "libtimestamp_converter.so",
+    "windows": "timestamp_converter.dll"
+  },
+  "assets": {
+    "entry": "index.html"
+  },
+  "permissions": []
+}

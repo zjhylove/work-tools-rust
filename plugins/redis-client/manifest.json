@@ -1,0 +1,17 @@
+{
+  "id": "redis-client",
+  "name": "Redis 客户端",
+  "description": "Redis数据库管理工具，支持Key浏览、String/Hash/List/Set/ZSet操作",
+  "version": "1.0.0",
+  "icon": "🔴",
+  "author": "Work Tools Team",
+  "files": {
+    "macos": "libredis_client.dylib",
+    "linux": "libredis_client.so",
+    "windows": "redis_client.dll"
+  },
+  "assets": {
+    "entry": "index.html"
+  },
+  "permissions": ["network"]
+}
