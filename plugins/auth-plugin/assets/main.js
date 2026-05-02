@@ -7044,6 +7044,7 @@ function App() {
   const [entries, setEntries] = reactExports.useState([]);
   const entriesRef = reactExports.useRef([]);
   const isMountedRef = reactExports.useRef(true);
+  const errorTimeoutRef = reactExports.useRef(null);
   const [loading, setLoading] = reactExports.useState(true);
   const [viewMode, setViewMode] = reactExports.useState("list");
   const [selectedEntry, setSelectedEntry] = reactExports.useState(null);
@@ -7063,6 +7064,9 @@ function App() {
     isMountedRef.current = true;
     return () => {
       isMountedRef.current = false;
+      if (errorTimeoutRef.current !== null) {
+        clearTimeout(errorTimeoutRef.current);
+      }
     };
   }, []);
   reactExports.useEffect(() => {
@@ -7152,7 +7156,9 @@ function App() {
         }));
         if (forceRefresh && isMountedRef.current) {
           setError("✓ 验证码已刷新");
-          setTimeout(() => {
+          if (errorTimeoutRef.current !== null) clearTimeout(errorTimeoutRef.current);
+          errorTimeoutRef.current = setTimeout(() => {
+            errorTimeoutRef.current = null;
             if (isMountedRef.current) setError("");
           }, 1500);
         }
@@ -7166,22 +7172,25 @@ function App() {
     []
   );
   reactExports.useEffect(() => {
-    let cancelled = false;
     let timeoutId = null;
     const loadInitialData = () => __async(this, null, function* () {
-      if (cancelled) return;
+      if (!isMountedRef.current) return;
       yield loadEntries();
-      if (cancelled) return;
-      setTimeout(() => {
-        if (cancelled) return;
+      if (!isMountedRef.current) return;
+      timeoutId = setTimeout(() => {
+        if (!isMountedRef.current) return;
         entriesRef.current.forEach((entry) => generateTotp(entry));
       }, 100);
       const tick = () => {
-        if (cancelled) return;
+        if (!isMountedRef.current) return;
         const currentEntries = entriesRef.current;
+        if (currentEntries.length === 0) {
+          timeoutId = setTimeout(tick, 1e3);
+          return;
+        }
         setTotpMap((prev) => {
           const updatedMap = {};
-          let needsRefresh = [];
+          const needsRefresh = [];
           currentEntries.forEach((entry) => {
             const current = prev[entry.id];
             if (current) {
@@ -7202,38 +7211,38 @@ function App() {
               }
             }
           });
-          if (needsRefresh.length > 0 && !cancelled) {
+          if (needsRefresh.length > 0) {
             queueMicrotask(() => {
-              if (cancelled) return;
+              if (!isMountedRef.current) return;
               needsRefresh.forEach((id2) => {
                 const entry = currentEntries.find((e) => e.id === id2);
-                if (entry) {
-                  generateTotp(entry);
-                }
+                if (entry) generateTotp(entry);
               });
             });
           }
-          return __spreadValues(__spreadValues({}, prev), updatedMap);
+          if (Object.keys(updatedMap).length === 0) return prev;
+          return updatedMap;
         });
-        if (!cancelled) {
-          timeoutId = setTimeout(tick, 1e3);
-        }
+        timeoutId = setTimeout(tick, 1e3);
       };
       timeoutId = setTimeout(tick, 1e3);
     });
     loadInitialData();
     return () => {
-      cancelled = true;
-      if (timeoutId !== null) {
-        clearTimeout(timeoutId);
-      }
+      isMountedRef.current = false;
+      if (timeoutId !== null) clearTimeout(timeoutId);
+      if (errorTimeoutRef.current !== null) clearTimeout(errorTimeoutRef.current);
     };
   }, []);
   const copyCode = (code) => __async(this, null, function* () {
     try {
       yield navigator.clipboard.writeText(code);
       setError("✓ 验证码已复制");
-      setTimeout(() => setError(""), 1500);
+      if (errorTimeoutRef.current !== null) clearTimeout(errorTimeoutRef.current);
+      errorTimeoutRef.current = setTimeout(() => {
+        errorTimeoutRef.current = null;
+        if (isMountedRef.current) setError("");
+      }, 1500);
     } catch (err) {
       setError("复制失败");
     }
@@ -7335,9 +7344,69 @@ function App() {
     }
   });
   return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "auth-plugin", children: [
-    viewMode === "list" && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "auth-plugin-header", children: [
-      /* @__PURE__ */ jsxRuntimeExports.jsx("h2", { children: "双因素认证" }),
-      /* @__PURE__ */ jsxRuntimeExports.jsx("button", { className: "btn-primary", onClick: addNew, children: "+ 添加" })
+    viewMode === "list" && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "auth-list-container", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "auth-plugin-header", children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx("h2", { children: "双因素认证" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("button", { className: "btn-primary", onClick: addNew, children: "+ 添加" })
+      ] }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "auth-list", children: !loading && entries.length > 0 ? entries.map((entry) => /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "auth-item", children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "auth-item-info", children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "auth-item-name", children: entry.name }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "auth-item-issuer", children: entry.issuer })
+        ] }),
+        totpMap[entry.id] && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "auth-item-totp", children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "totp-code", children: totpMap[entry.id].code }),
+          /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "totp-timer", children: [
+            "剩余 ",
+            totpMap[entry.id].remaining_seconds,
+            " 秒"
+          ] })
+        ] }),
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "auth-item-actions", children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx(
+            "button",
+            {
+              className: "btn-icon",
+              onClick: () => {
+                var _a;
+                return copyCode(((_a = totpMap[entry.id]) == null ? void 0 : _a.code) || "");
+              },
+              title: "复制验证码",
+              children: "📋"
+            }
+          ),
+          /* @__PURE__ */ jsxRuntimeExports.jsx(
+            "button",
+            {
+              className: "btn-icon",
+              onClick: () => generateTotp(entry, true),
+              title: "刷新验证码",
+              children: "🔄"
+            }
+          ),
+          /* @__PURE__ */ jsxRuntimeExports.jsx(
+            "button",
+            {
+              className: "btn-icon",
+              onClick: () => editEntry(entry),
+              title: "编辑",
+              children: "✏️"
+            }
+          ),
+          /* @__PURE__ */ jsxRuntimeExports.jsx(
+            "button",
+            {
+              className: "btn-icon btn-danger",
+              onClick: () => {
+                setSelectedEntry(entry);
+                setShowDeleteConfirm(true);
+              },
+              title: "删除",
+              children: "🗑️"
+            }
+          )
+        ] })
+      ] }, entry.id)) : /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "empty-state", children: "暂无认证条目" }) })
     ] }),
     error && /* @__PURE__ */ jsxRuntimeExports.jsx(
       "div",
@@ -7346,64 +7415,6 @@ function App() {
         children: String(error)
       }
     ),
-    viewMode === "list" && /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "auth-list", children: !loading && entries.length > 0 ? entries.map((entry) => /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "auth-item", children: [
-      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "auth-item-info", children: [
-        /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "auth-item-name", children: entry.name }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "auth-item-issuer", children: entry.issuer })
-      ] }),
-      totpMap[entry.id] && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "auth-item-totp", children: [
-        /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "totp-code", children: totpMap[entry.id].code }),
-        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "totp-timer", children: [
-          "剩余 ",
-          totpMap[entry.id].remaining_seconds,
-          " 秒"
-        ] })
-      ] }),
-      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "auth-item-actions", children: [
-        /* @__PURE__ */ jsxRuntimeExports.jsx(
-          "button",
-          {
-            className: "btn-icon",
-            onClick: () => {
-              var _a;
-              return copyCode(((_a = totpMap[entry.id]) == null ? void 0 : _a.code) || "");
-            },
-            title: "复制验证码",
-            children: "📋"
-          }
-        ),
-        /* @__PURE__ */ jsxRuntimeExports.jsx(
-          "button",
-          {
-            className: "btn-icon",
-            onClick: () => generateTotp(entry, true),
-            title: "刷新验证码",
-            children: "🔄"
-          }
-        ),
-        /* @__PURE__ */ jsxRuntimeExports.jsx(
-          "button",
-          {
-            className: "btn-icon",
-            onClick: () => editEntry(entry),
-            title: "编辑",
-            children: "✏️"
-          }
-        ),
-        /* @__PURE__ */ jsxRuntimeExports.jsx(
-          "button",
-          {
-            className: "btn-icon btn-danger",
-            onClick: () => {
-              setSelectedEntry(entry);
-              setShowDeleteConfirm(true);
-            },
-            title: "删除",
-            children: "🗑️"
-          }
-        )
-      ] })
-    ] }, entry.id)) : /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "empty-state", children: "暂无认证条目" }) }),
     (viewMode === "add" || viewMode === "edit") && /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "auth-form-container", children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "auth-form-content", children: [
       /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "auth-form-header", children: [
         /* @__PURE__ */ jsxRuntimeExports.jsx("h2", { children: viewMode === "add" ? "添加认证" : "编辑认证" }),

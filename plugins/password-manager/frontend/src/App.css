@@ -12,56 +12,6 @@ body {
   flex-direction: column;
 }
 
-/* Toast 提示消息 */
-.error-message {
-  position: fixed;
-  top: 20px;
-  left: 50%;
-  transform: translateX(-50%);
-  padding: 10px 16px;
-  background: var(--error-light);
-  border: 1px solid var(--error-border);
-  border-radius: 8px;
-  color: var(--error);
-  font-size: 13px;
-  font-weight: 500;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-  z-index: 1000;
-  animation: slideDown 0.3s ease;
-}
-
-/* 成功提示样式 */
-.error-message.success {
-  background: var(--success-light);
-  border-color: var(--success-border);
-  color: var(--success-text);
-}
-
-/* 警告提示样式 */
-.error-message.warning {
-  background: var(--warning-light);
-  border-color: var(--warning-border);
-  color: var(--warning-text);
-}
-
-/* 信息提示样式 */
-.error-message.info {
-  background: var(--accent-light);
-  border-color: var(--accent);
-  color: var(--accent);
-}
-
-@keyframes slideDown {
-  from {
-    opacity: 0;
-    transform: translateX(-50%) translateY(-20px);
-  }
-  to {
-    opacity: 1;
-    transform: translateX(-50%) translateY(0);
-  }
-}
-
 /* 列表容器 */
 .password-list-container {
   flex: 1;
@@ -69,7 +19,7 @@ body {
   flex-direction: column;
   background: var(--bg-primary);
   border-radius: 12px;
-  overflow: hidden;
+  overflow-y: auto;
   box-shadow: var(--shadow-sm);
   border: 1px solid var(--border-color);
 }
@@ -79,6 +29,9 @@ body {
   padding: 16px 20px;
   background: var(--bg-secondary);
   border-bottom: 1px solid var(--border-color);
+  position: sticky;
+  top: 0;
+  z-index: 10;
 }
 
 .toolbar-actions {
@@ -109,7 +62,6 @@ body {
 /* 密码列表 */
 .password-list {
   flex: 1;
-  overflow: auto;
   padding: 12px;
 }
 
@@ -180,6 +132,9 @@ body {
   font-size: 12px;
   color: var(--text-secondary);
   font-weight: 500;
+  position: sticky;
+  bottom: 0;
+  z-index: 10;
 }
 
 /* 表单容器 */
@@ -203,6 +158,9 @@ body {
   margin-bottom: 16px;
   border-bottom: 2px solid var(--accent);
   background: var(--bg-primary);
+  position: sticky;
+  top: 0;
+  z-index: 10;
 }
 
 .form-header h2 {

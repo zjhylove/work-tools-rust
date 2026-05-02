@@ -62,6 +62,9 @@ const INJECTED_TOKENS = `
     --transition-base: 0.2s ease;
     --transition-slow: 0.3s ease;
   }
+  html, body, #app {
+    height: 100%;
+  }
   * {
     box-sizing: border-box;
   }
@@ -78,6 +81,43 @@ const INJECTED_TOKENS = `
   ::-webkit-scrollbar-track { background: transparent; }
   ::-webkit-scrollbar-thumb { background: var(--border-color); border-radius: 3px; }
   ::-webkit-scrollbar-thumb:hover { background: var(--text-tertiary); }
+
+  @keyframes slideDown {
+    from { opacity: 0; transform: translateX(-50%) translateY(-20px); }
+    to { opacity: 1; transform: translateX(-50%) translateY(0); }
+  }
+
+  .error-message {
+    position: fixed;
+    top: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    padding: 10px 16px;
+    background: var(--error-light);
+    border: 1px solid var(--error-border);
+    border-radius: 8px;
+    color: var(--error);
+    font-size: 13px;
+    font-weight: 500;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    z-index: 1000;
+    animation: slideDown 0.3s ease;
+  }
+  .error-message.success {
+    background: var(--success-light);
+    border-color: var(--success-border);
+    color: var(--success-text);
+  }
+  .error-message.warning {
+    background: var(--warning-light);
+    border-color: var(--warning-border);
+    color: var(--warning-text);
+  }
+  .error-message.info {
+    background: var(--accent-light);
+    border-color: var(--accent);
+    color: var(--accent);
+  }
 `;
 
 export default function PluginPlaceholder({

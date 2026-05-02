@@ -29,8 +29,9 @@ const devError = (...args: unknown[]) => {
 
 function App() {
   const [entries, setEntries] = useState<AuthEntry[]>([]);
-  const entriesRef = useRef<AuthEntry[]>([]); // 用于在 setInterval 中访问最新的 entries
-  const isMountedRef = useRef(true); // 用于跟踪组件是否已挂载
+  const entriesRef = useRef<AuthEntry[]>([]);
+  const isMountedRef = useRef(true);
+  const errorTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [loading, setLoading] = useState(true);
   const [viewMode, setViewMode] = useState<"list" | "add" | "edit">("list");
   const [selectedEntry, setSelectedEntry] = useState<AuthEntry | null>(null);
@@ -47,11 +48,13 @@ function App() {
   const [error, setError] = useState("");
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
-  // 组件卸载时标记
   useEffect(() => {
     isMountedRef.current = true;
     return () => {
       isMountedRef.current = false;
+      if (errorTimeoutRef.current !== null) {
+        clearTimeout(errorTimeoutRef.current);
+      }
     };
   }, []);
 
@@ -179,7 +182,9 @@ function App() {
         // 如果是强制刷新，显示反馈
         if (forceRefresh && isMountedRef.current) {
           setError("✓ 验证码已刷新");
-          setTimeout(() => {
+          if (errorTimeoutRef.current !== null) clearTimeout(errorTimeoutRef.current);
+          errorTimeoutRef.current = setTimeout(() => {
+            errorTimeoutRef.current = null;
             if (isMountedRef.current) setError("");
           }, 1500);
         }
@@ -193,39 +198,37 @@ function App() {
     [],
   ); // 空依赖数组,因为不依赖任何外部变量
 
-  // 自动刷新验证码 - 简化版本,只递归调用 setTimeout
   useEffect(() => {
-    let cancelled = false;
     let timeoutId: ReturnType<typeof setTimeout> | null = null;
 
-    // 加载初始数据
     const loadInitialData = async () => {
-      if (cancelled) return;
+      if (!isMountedRef.current) return;
       await loadEntries();
 
-      if (cancelled) return;
-      // 加载完条目后,立即生成所有验证码
-      setTimeout(() => {
-        if (cancelled) return;
+      if (!isMountedRef.current) return;
+      timeoutId = setTimeout(() => {
+        if (!isMountedRef.current) return;
         entriesRef.current.forEach((entry) => generateTotp(entry));
       }, 100);
 
-      // 递归的定时器 - 每次 tick 只更新倒计时,不触发异步操作
       const tick = () => {
-        if (cancelled) return;
+        if (!isMountedRef.current) return;
 
         const currentEntries = entriesRef.current;
+        if (currentEntries.length === 0) {
+          timeoutId = setTimeout(tick, 1000);
+          return;
+        }
 
         setTotpMap((prev) => {
           const updatedMap: Record<string, TotpInfo> = {};
-          let needsRefresh: string[] = [];
+          const needsRefresh: string[] = [];
 
           currentEntries.forEach((entry) => {
             const current = prev[entry.id];
             if (current) {
               const newRemaining = current.remaining_seconds - 1;
               if (newRemaining <= 0) {
-                // 需要刷新验证码 - 计算正确的剩余时间
                 const now = Math.floor(Date.now() / 1000);
                 const remaining = entry.period - (now % entry.period);
                 needsRefresh.push(entry.id);
@@ -242,50 +245,46 @@ function App() {
             }
           });
 
-          // 在状态更新完成后,异步刷新需要更新的验证码
-          if (needsRefresh.length > 0 && !cancelled) {
-            // 使用 queueMicrotask 确保在状态更新后执行
+          if (needsRefresh.length > 0) {
             queueMicrotask(() => {
-              if (cancelled) return;
+              if (!isMountedRef.current) return;
               needsRefresh.forEach((id) => {
                 const entry = currentEntries.find((e) => e.id === id);
-                if (entry) {
-                  generateTotp(entry);
-                }
+                if (entry) generateTotp(entry);
               });
             });
           }
 
-          return { ...prev, ...updatedMap };
+          if (Object.keys(updatedMap).length === 0) return prev;
+          return updatedMap;
         });
 
-        // 继续下一次 tick
-        if (!cancelled) {
-          timeoutId = setTimeout(tick, 1000);
-        }
+        timeoutId = setTimeout(tick, 1000);
       };
 
-      // 启动定时器
       timeoutId = setTimeout(tick, 1000);
     };
 
     loadInitialData();
 
     return () => {
-      cancelled = true;
-      if (timeoutId !== null) {
-        clearTimeout(timeoutId);
-      }
+      isMountedRef.current = false;
+      if (timeoutId !== null) clearTimeout(timeoutId);
+      if (errorTimeoutRef.current !== null) clearTimeout(errorTimeoutRef.current);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // 空依赖数组，只在组件挂载时运行一次
+  }, []);
 
   // 复制验证码
   const copyCode = async (code: string) => {
     try {
       await navigator.clipboard.writeText(code);
       setError("✓ 验证码已复制");
-      setTimeout(() => setError(""), 1500);
+      if (errorTimeoutRef.current !== null) clearTimeout(errorTimeoutRef.current);
+      errorTimeoutRef.current = setTimeout(() => {
+        errorTimeoutRef.current = null;
+        if (isMountedRef.current) setError("");
+      }, 1500);
     } catch (err) {
       devError("复制失败:", err);
       setError("复制失败");
@@ -415,11 +414,71 @@ function App() {
   return (
     <div className="auth-plugin">
       {viewMode === "list" && (
-        <div className="auth-plugin-header">
-          <h2>双因素认证</h2>
-          <button className="btn-primary" onClick={addNew}>
-            + 添加
-          </button>
+        <div className="auth-list-container">
+          <div className="auth-plugin-header">
+            <h2>双因素认证</h2>
+            <button className="btn-primary" onClick={addNew}>
+              + 添加
+            </button>
+          </div>
+
+          <div className="auth-list">
+            {!loading && entries.length > 0 ? (
+              entries.map((entry) => (
+                <div key={entry.id} className="auth-item">
+                  <div className="auth-item-info">
+                    <div className="auth-item-name">{entry.name}</div>
+                    <div className="auth-item-issuer">{entry.issuer}</div>
+                  </div>
+
+                  {totpMap[entry.id] && (
+                    <div className="auth-item-totp">
+                      <div className="totp-code">{totpMap[entry.id].code}</div>
+                      <div className="totp-timer">
+                        剩余 {totpMap[entry.id].remaining_seconds} 秒
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="auth-item-actions">
+                    <button
+                      className="btn-icon"
+                      onClick={() => copyCode(totpMap[entry.id]?.code || "")}
+                      title="复制验证码"
+                    >
+                      📋
+                    </button>
+                    <button
+                      className="btn-icon"
+                      onClick={() => generateTotp(entry, true)}
+                      title="刷新验证码"
+                    >
+                      🔄
+                    </button>
+                    <button
+                      className="btn-icon"
+                      onClick={() => editEntry(entry)}
+                      title="编辑"
+                    >
+                      ✏️
+                    </button>
+                    <button
+                      className="btn-icon btn-danger"
+                      onClick={() => {
+                        setSelectedEntry(entry);
+                        setShowDeleteConfirm(true);
+                      }}
+                      title="删除"
+                    >
+                      🗑️
+                    </button>
+                  </div>
+                </div>
+              ))
+            ) : (
+              <div className="empty-state">暂无认证条目</div>
+            )}
+          </div>
         </div>
       )}
 
@@ -435,67 +494,6 @@ function App() {
           }`}
         >
           {String(error)}
-        </div>
-      )}
-
-      {/* 列表视图 */}
-      {viewMode === "list" && (
-        <div className="auth-list">
-          {!loading && entries.length > 0 ? (
-            entries.map((entry) => (
-              <div key={entry.id} className="auth-item">
-                <div className="auth-item-info">
-                  <div className="auth-item-name">{entry.name}</div>
-                  <div className="auth-item-issuer">{entry.issuer}</div>
-                </div>
-
-                {totpMap[entry.id] && (
-                  <div className="auth-item-totp">
-                    <div className="totp-code">{totpMap[entry.id].code}</div>
-                    <div className="totp-timer">
-                      剩余 {totpMap[entry.id].remaining_seconds} 秒
-                    </div>
-                  </div>
-                )}
-
-                <div className="auth-item-actions">
-                  <button
-                    className="btn-icon"
-                    onClick={() => copyCode(totpMap[entry.id]?.code || "")}
-                    title="复制验证码"
-                  >
-                    📋
-                  </button>
-                  <button
-                    className="btn-icon"
-                    onClick={() => generateTotp(entry, true)}
-                    title="刷新验证码"
-                  >
-                    🔄
-                  </button>
-                  <button
-                    className="btn-icon"
-                    onClick={() => editEntry(entry)}
-                    title="编辑"
-                  >
-                    ✏️
-                  </button>
-                  <button
-                    className="btn-icon btn-danger"
-                    onClick={() => {
-                      setSelectedEntry(entry);
-                      setShowDeleteConfirm(true);
-                    }}
-                    title="删除"
-                  >
-                    🗑️
-                  </button>
-                </div>
-              </div>
-            ))
-          ) : (
-            <div className="empty-state">暂无认证条目</div>
-          )}
         </div>
       )}
 
