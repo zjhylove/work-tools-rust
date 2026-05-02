@@ -263,6 +263,123 @@ body {
   line-height: 1.6;
 }
 
+/* ── App Loading State ──────────────── */
+
+.app-loading {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 20px;
+  padding: 40px;
+  animation: fadeIn 0.2s ease;
+}
+
+.app-loading-logo {
+  width: 72px;
+  height: 72px;
+  border-radius: var(--radius-xl);
+  background: var(--bg-tertiary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: logoPulse 2s ease-in-out infinite;
+}
+
+.app-loading-logo svg {
+  width: 36px;
+  height: 36px;
+  color: var(--accent);
+  opacity: 0.7;
+}
+
+@keyframes logoPulse {
+  0%, 100% { box-shadow: 0 0 0 0 var(--accent-ring); transform: scale(1); }
+  50% { box-shadow: 0 0 0 24px transparent; transform: scale(1.05); }
+}
+
+.app-loading-bar-track {
+  width: 160px;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--bg-tertiary);
+  overflow: hidden;
+}
+
+.app-loading-bar {
+  width: 40%;
+  height: 100%;
+  border-radius: 2px;
+  background: var(--accent);
+  animation: loadingBar 1.4s ease-in-out infinite;
+}
+
+@keyframes loadingBar {
+  0% { transform: translateX(-100%); }
+  50% { transform: translateX(250%); }
+  100% { transform: translateX(-100%); }
+}
+
+/* ── Sidebar Skeletons ──────────────── */
+
+.sidebar-skeleton {
+  pointer-events: none;
+  cursor: default;
+}
+
+.sidebar-skeleton .sidebar-item-icon {
+  background: var(--bg-tertiary);
+}
+
+.skeleton-shimmer {
+  background: linear-gradient(
+    90deg,
+    var(--bg-tertiary) 25%,
+    var(--hover-bg) 50%,
+    var(--bg-tertiary) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.5s ease-in-out infinite;
+}
+
+@keyframes shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+.skeleton-line {
+  display: block;
+  border-radius: 3px;
+  background: var(--bg-tertiary);
+}
+
+.skeleton-line--name {
+  width: 60%;
+  height: 13px;
+}
+
+.skeleton-line--desc {
+  width: 85%;
+  height: 10px;
+  margin-top: 4px;
+}
+
+/* ── Sidebar Staggered Reveal ───────── */
+
+.sidebar-item--reveal {
+  opacity: 0;
+  transform: translateX(-8px);
+  animation: sidebarItemReveal 0.3s var(--ease-out) forwards;
+}
+
+@keyframes sidebarItemReveal {
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
 /* ── Plugin Spinner ──────────────────── */
 @keyframes spin {
   to { transform: rotate(360deg); }

@@ -15,7 +15,8 @@
         "label": "main",
         "title": "Work Tools",
         "width": 1200,
-        "height": 800
+        "height": 800,
+        "visible": false
       }
     ],
     "withGlobalTauri": true,

@@ -29,7 +29,7 @@ mod tray;
 use anyhow::Result;
 use plugin_manager::PluginManager;
 use std::sync::Arc;
-use tauri::Manager;
+use tauri::{Emitter, Manager};
 
 /// 初始化日志系统
 /// 将初始化逻辑单独封装，便于错误处理
@@ -72,14 +72,25 @@ pub fn run() {
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
-        // `setup` 闭包在应用启动时执行
         .setup(|app| {
-            // Tauri 的 setup 不能是 async，所以用 spawn 启动异步任务
             let manager = plugin_manager.clone();
+            let handle = app.handle().clone();
             tauri::async_runtime::spawn(async move {
                 if let Err(e) = manager.init().await {
                     tracing::error!("插件管理器初始化失败: {}", e);
+                    return;
                 }
+                // Let the frontend render the skeleton loading state briefly
+                // before showing the window — avoids a white flash on startup.
+                const SHOW_WINDOW_DELAY_MS: u64 = 300;
+                // Must match const in App.tsx: EVENT_PLUGINS_READY
+                const EVENT_PLUGINS_READY: &str = "plugins-ready";
+                let _ = handle.emit(EVENT_PLUGINS_READY, ());
+                tokio::time::sleep(std::time::Duration::from_millis(SHOW_WINDOW_DELAY_MS)).await;
+                if let Some(w) = handle.get_webview_window("main") {
+                    let _ = w.show();
+                }
+                tracing::info!("plugins-ready 事件已发射，窗口已显示");
             });
 
             // `app.manage()` 将数据注入 Tauri 的状态管理系统

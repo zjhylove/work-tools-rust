@@ -6,12 +6,47 @@
     <meta name="theme-color" content="#000000" />
     <link rel="icon" type="image/svg+xml" href="/src/assets/logo.svg" />
     <title>Work Tools - React Version</title>
+    <style>
+      @keyframes preBar {
+        0% { transform: translateX(-100%); }
+        50% { transform: translateX(250%); }
+        100% { transform: translateX(-100%); }
+      }
+    </style>
   </head>
 
-  <body>
+  <body style="margin:0; background:#ffffff">
     <noscript>You need to enable JavaScript to run this app.</noscript>
     <div id="root"></div>
 
+    <!-- Pre-React loading overlay, removed on React mount -->
+    <div id="preload" style="
+      position: fixed; inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans SC', sans-serif;
+      color: #9ca3af;
+      background: #ffffff;
+      gap: 16px;
+      z-index: 2000;
+    ">
+      <div style="
+        width: 72px; height: 72px;
+        border-radius: 16px;
+        background: #f1f3f5;
+        display: flex; align-items: center; justify-content: center;
+      ">
+        <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#0066ff" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="opacity:0.7">
+          <polyline points="16 18 22 12 16 6"></polyline>
+          <polyline points="8 6 2 12 8 18"></polyline>
+        </svg>
+      </div>
+      <div style="width:160px;height:3px;border-radius:2px;background:#f1f3f5;overflow:hidden">
+        <div style="width:40%;height:100%;border-radius:2px;background:#0066ff;animation:preBar 1.4s ease-in-out infinite"></div>
+      </div>
+    </div>
     <script src="/src/main-react.tsx" type="module"></script>
   </body>
 </html>
