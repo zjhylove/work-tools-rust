@@ -52,3 +52,12 @@ localStorage("theme") → App init → set <html data-theme="light|dark">
 ### Persistence
 - localStorage key: `"theme"`, values: `"light"` | `"dark"`
 - Fallback: `"light"` if unset or invalid
+
+## Implementation Notes
+
+Actual implementation differed from design in these ways:
+
+- **CSS injection order** — `styles.css` injected before `INJECTED_TOKENS` so tokens always win over plugin `:root` blocks
+- **Title bar** — Frontend SDK `getCurrentWindow().setTheme()` / `app.setTheme()` failed; instead added Rust command `set_window_theme` that directly calls `WebviewWindow::set_theme()`
+- **text-diff plugin** — Required full CSS rewrite: removed `:root` blocks from `index.css`, replaced 20+ hardcoded hex colors with CSS variables across 6 files, rebuilt assets
+- **db-doc plugin** — Added `color`/`background` to input/select/search/prefix-input elements (previously relied on browser defaults) + removed `:root` block

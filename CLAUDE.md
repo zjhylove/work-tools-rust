@@ -45,7 +45,7 @@ work-tools-rust/
 │   ├── src/               # React 前端
 │   └── src-tauri/src/     # Rust 后端
 │       ├── lib.rs              # 应用初始化、Tauri builder
-│       ├── commands.rs         # 16 个 Tauri 命令
+│       ├── commands.rs         # 17 个 Tauri 命令
 │       ├── plugin_manager.rs   # 动态库加载、插件生命周期
 │       ├── plugin_package.rs   # .wtplugin.zip 解析安装
 │       ├── plugin_registry.rs  # 插件注册表管理
@@ -72,6 +72,18 @@ work-tools-rust/
 1. `PluginPlaceholder` 读取已安装插件的 `index.html`、`main.js`、`styles.css`
 2. 内联到 HTML 字符串注入 iframe 的 srcdoc
 3. iframe 加载后注入 `window.pluginAPI` 对象，提供 `call()`、`get_plugin_config()`、`set_plugin_config()`、`open_url()`、`open_folder_dialog()`
+
+### 主题系统
+
+支持浅色/暗色双主题，通过 CSS 变量 + `data-theme` 属性驱动：
+
+- `tauri-app/src/styles/tokens.css` — 完整的设计令牌 (`:root` 浅色 + `[data-theme="dark"]` 暗色)
+- `App.tsx` 管理 `theme` state，持久化到 localStorage，设置 `<html data-theme>`
+- 侧边栏底部 moon/sun 图标按钮切换主题
+- Rust 命令 `set_window_theme` 同步原生窗口标题栏主题 (Windows 10 1809+)
+- 插件 iframe 通过 `INJECTED_TOKENS` 接收令牌（含 `[data-theme="dark"]` 块），先注入插件 styles.css 再注入令牌确保令牌优先级最高
+- 切换时 `postMessage({ type: "theme", theme })` 通知所有已打开的 iframe 实时更新
+- 插件 CSS **必须使用** `var(--xxx)` 令牌，禁止硬编码颜色值（否则暗色主题失效）
 
 ### 数据流
 
@@ -141,7 +153,7 @@ work-tools-rust/
 
 ### 前端插件开发
 
-每个插件有独立的 `frontend/` 目录 (React + Vite)，构建后输出到 `assets/`。插件前端通过 `window.pluginAPI` 与后端通信。
+每个插件有独立的 `frontend/` 目录 (React + Vite)，构建后输出到 `assets/`。插件前端通过 `window.pluginAPI` 与后端通信。**CSS 必须使用 `var(--xxx)` 设计令牌**（如 `var(--bg-primary)`、`var(--text-primary)`），禁止硬编码颜色，以兼容浅色/暗色双主题。
 
 ## CI/CD
 
