@@ -36,8 +36,12 @@ pub trait ObjectStoreProvider {
     /// 列出存储桶中的对象（支持前缀过滤、分隔符、最大数量限制）
     /// 返回 (对象列表, 公共前缀列表)
     fn list_objects(
-        &self, bucket: &str, region: &str,
-        prefix: &str, delimiter: Option<&str>, max_keys: Option<u32>
+        &self,
+        bucket: &str,
+        region: &str,
+        prefix: &str,
+        delimiter: Option<&str>,
+        max_keys: Option<u32>,
     ) -> Result<(Vec<ObjectInfo>, Vec<String>)>;
 
     /// 下载对象内容（返回字节数组）
@@ -47,7 +51,14 @@ pub trait ObjectStoreProvider {
     fn head_object(&self, bucket: &str, region: &str, key: &str) -> Result<ObjectInfo>;
 
     /// 上传对象
-    fn put_object(&self, bucket: &str, region: &str, key: &str, data: &[u8], content_type: &str) -> Result<()>;
+    fn put_object(
+        &self,
+        bucket: &str,
+        region: &str,
+        key: &str,
+        data: &[u8],
+        content_type: &str,
+    ) -> Result<()>;
 
     /// 删除对象
     fn delete_object(&self, bucket: &str, region: &str, key: &str) -> Result<()>;

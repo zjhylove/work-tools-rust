@@ -206,27 +206,27 @@ pub fn init_logging() -> Result<()> {
         // ── 层1: 控制台输出 ──
         .with(
             tracing_subscriber::fmt::layer()
-                .with_writer(std::io::stdout)   // 输出到标准输出
-                .with_target(false)              // 不显示模块路径（减少噪音）
-                .with_level(true)                // 显示日志级别
-                .with_ansi(true),                // ANSI 颜色（终端支持时）
+                .with_writer(std::io::stdout) // 输出到标准输出
+                .with_target(false) // 不显示模块路径（减少噪音）
+                .with_level(true) // 显示日志级别
+                .with_ansi(true), // ANSI 颜色（终端支持时）
         )
         // ── 层2: 文件输出 ──
         .with(
             tracing_subscriber::fmt::layer()
-                .with_writer(non_blocking_file)  // 输出到文件
-                .with_ansi(false)                // 文件中不需要颜色
-                .with_target(true)               // 显示模块路径（便于排查）
-                .with_level(true),               // 显示日志级别
+                .with_writer(non_blocking_file) // 输出到文件
+                .with_ansi(false) // 文件中不需要颜色
+                .with_target(true) // 显示模块路径（便于排查）
+                .with_level(true), // 显示日志级别
         )
         // ── 层3: 环形缓冲区 ──
         .with(LogRingLayer)
         // ── 过滤器 ──
         .with(
             tracing_subscriber::filter::Targets::new()
-                .with_default(tracing::Level::DEBUG)         // 默认级别: DEBUG
+                .with_default(tracing::Level::DEBUG) // 默认级别: DEBUG
                 .with_target("winit", tracing::Level::ERROR) // winit 太吵，只显示错误
-                .with_target("tao", tracing::Level::ERROR),  // tao 同理
+                .with_target("tao", tracing::Level::ERROR), // tao 同理
         )
         .init(); // 设置全局订阅者
 

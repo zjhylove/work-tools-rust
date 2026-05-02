@@ -53,7 +53,9 @@ impl DbRouterPlugin {
     fn handle_save_rule(&self, params: &Value) -> Result<Value> {
         // 从前端传来的 JSON 中反序列化出 RouteRule
         let mut rule: RouteRule = serde_json::from_value(
-            params.get("rule").cloned()
+            params
+                .get("rule")
+                .cloned()
                 .ok_or_else(|| anyhow::anyhow!("缺少 rule 参数"))?,
         )?;
 
@@ -66,7 +68,10 @@ impl DbRouterPlugin {
             tracing::info!(name = %rule.name, id = %rule.id, "新建路由规则");
         } else {
             // 有 ID = 更新（原地替换）
-            let idx = data.rules.iter().position(|r| r.id == rule.id)
+            let idx = data
+                .rules
+                .iter()
+                .position(|r| r.id == rule.id)
                 .ok_or_else(|| anyhow::anyhow!("规则不存在"))?;
             data.rules[idx] = rule.clone();
             tracing::info!(name = %rule.name, id = %rule.id, "更新路由规则");
@@ -77,7 +82,9 @@ impl DbRouterPlugin {
     }
 
     fn handle_delete_rule(&self, params: &Value) -> Result<Value> {
-        let id = params.get("id").and_then(|v| v.as_str())
+        let id = params
+            .get("id")
+            .and_then(|v| v.as_str())
             .ok_or_else(|| anyhow::anyhow!("缺少 id 参数"))?;
 
         let mut data = Self::load_data()?;
@@ -92,14 +99,22 @@ impl DbRouterPlugin {
     // ── 路由解析 ──
 
     fn handle_parse_route(&self, params: &Value) -> Result<Value> {
-        let code = params.get("code").and_then(|v| v.as_str())
+        let code = params
+            .get("code")
+            .and_then(|v| v.as_str())
             .ok_or_else(|| anyhow::anyhow!("缺少 code 参数"))?;
-        let rule_id = params.get("rule_id").and_then(|v| v.as_str())
+        let rule_id = params
+            .get("rule_id")
+            .and_then(|v| v.as_str())
             .ok_or_else(|| anyhow::anyhow!("缺少 rule_id 参数"))?;
 
         let data = Self::load_data()?;
-        let rule = data.rules.iter().find(|r| r.id == rule_id)
-            .ok_or_else(|| anyhow::anyhow!("规则不存在"))?.clone();
+        let rule = data
+            .rules
+            .iter()
+            .find(|r| r.id == rule_id)
+            .ok_or_else(|| anyhow::anyhow!("规则不存在"))?
+            .clone();
 
         // 执行 Rhai 脚本解析路由
         let (database, table_suffix) = engine::execute_script(code, &rule)?;
@@ -110,7 +125,10 @@ impl DbRouterPlugin {
         let tables: Vec<String> = if rule.tables.is_empty() {
             vec![format!("table{table_suffix}")]
         } else {
-            rule.tables.iter().map(|t| format!("{t}{table_suffix}")).collect()
+            rule.tables
+                .iter()
+                .map(|t| format!("{t}{table_suffix}"))
+                .collect()
         };
 
         let result = RouteResult {
@@ -125,21 +143,23 @@ impl DbRouterPlugin {
     }
 
     fn handle_match_rules(&self, params: &Value) -> Result<Value> {
-        let code = params.get("code").and_then(|v| v.as_str())
+        let code = params
+            .get("code")
+            .and_then(|v| v.as_str())
             .ok_or_else(|| anyhow::anyhow!("缺少 code 参数"))?;
 
         let data = Self::load_data()?;
         // 筛选匹配的规则（按长度和前缀）
-        let matched: Vec<&RouteRule> = data.rules.iter()
-            .filter(|r| match_rule(code, r))
-            .collect();
+        let matched: Vec<&RouteRule> = data.rules.iter().filter(|r| match_rule(code, r)).collect();
 
         Ok(serde_json::to_value(matched)?)
     }
 
     fn handle_import_rules(&self, params: &Value) -> Result<Value> {
         let imported_rules: Vec<RouteRule> = serde_json::from_value(
-            params.get("rules").cloned()
+            params
+                .get("rules")
+                .cloned()
                 .ok_or_else(|| anyhow::anyhow!("缺少 rules 参数"))?,
         )?;
 
@@ -184,14 +204,30 @@ fn match_rule(code: &str, rule: &RouteRule) -> bool {
 }
 
 impl Plugin for DbRouterPlugin {
-    fn id(&self) -> &str { "db-router" }
-    fn name(&self) -> &str { "数据库路由" }
-    fn description(&self) -> &str { "根据编号解析数据库和表路由规则，支持多表关联" }
-    fn version(&self) -> &str { "1.0.0" }
-    fn icon(&self) -> &str { "🗄️" }
-    fn get_view(&self) -> String { "<div>插件前端资源加载中...</div>".to_string() }
+    fn id(&self) -> &str {
+        "db-router"
+    }
+    fn name(&self) -> &str {
+        "数据库路由"
+    }
+    fn description(&self) -> &str {
+        "根据编号解析数据库和表路由规则，支持多表关联"
+    }
+    fn version(&self) -> &str {
+        "1.0.0"
+    }
+    fn icon(&self) -> &str {
+        "🗄️"
+    }
+    fn get_view(&self) -> String {
+        "<div>插件前端资源加载中...</div>".to_string()
+    }
 
-    fn handle_call(&mut self, method: &str, params: Value) -> Result<Value, Box<dyn std::error::Error + Send + Sync>> {
+    fn handle_call(
+        &mut self,
+        method: &str,
+        params: Value,
+    ) -> Result<Value, Box<dyn std::error::Error + Send + Sync>> {
         let result = match method {
             "list_rules" => self.handle_list_rules(),
             "save_rule" => self.handle_save_rule(&params),

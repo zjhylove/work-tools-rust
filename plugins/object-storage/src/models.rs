@@ -12,14 +12,14 @@ use serde::{Deserialize, Serialize};
 /// 云服务连接配置
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ConnectionConfig {
-    pub id: String,               // UUID
-    pub provider: String,         // "aliyun" 或 "tencent"
-    pub name: String,             // 连接显示名称
-    pub access_key: String,       // 加密后的 Access Key
-    pub secret_key: String,       // 加密后的 Secret Key
-    pub region: String,           // 区域（如 oss-cn-hangzhou）
-    #[serde(default)]             // 允许空字符串作为默认值
-    pub bucket: String,           // 默认存储桶名称
+    pub id: String,         // UUID
+    pub provider: String,   // "aliyun" 或 "tencent"
+    pub name: String,       // 连接显示名称
+    pub access_key: String, // 加密后的 Access Key
+    pub secret_key: String, // 加密后的 Secret Key
+    pub region: String,     // 区域（如 oss-cn-hangzhou）
+    #[serde(default)] // 允许空字符串作为默认值
+    pub bucket: String, // 默认存储桶名称
     pub endpoint: Option<String>, // 自定义 endpoint（用于私有云/专有云）
 }
 
@@ -34,9 +34,9 @@ pub struct BucketInfo {
 /// 对象（文件）信息
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ObjectInfo {
-    pub key: String,              // 对象在存储桶中的路径
-    pub size: u64,                // 文件大小（字节）
-    pub last_modified: String,    // 最后修改时间
-    pub etag: String,             // ETag（用于校验和比较）
-    pub is_dir: bool,             // 是否目录（以 / 结尾）
+    pub key: String,           // 对象在存储桶中的路径
+    pub size: u64,             // 文件大小（字节）
+    pub last_modified: String, // 最后修改时间
+    pub etag: String,          // ETag（用于校验和比较）
+    pub is_dir: bool,          // 是否目录（以 / 结尾）
 }

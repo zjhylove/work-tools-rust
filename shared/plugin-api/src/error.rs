@@ -177,7 +177,10 @@ mod tests {
             method: "test_method".to_string(),
             message: "test error".to_string(),
         };
-        assert_eq!(format!("{}", err), "插件方法调用失败 [test_method]: test error");
+        assert_eq!(
+            format!("{}", err),
+            "插件方法调用失败 [test_method]: test error"
+        );
     }
 
     #[test]

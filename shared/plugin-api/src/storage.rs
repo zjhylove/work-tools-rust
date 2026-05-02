@@ -53,8 +53,8 @@ impl PluginStorage {
         // Windows: C:\Users\<用户名>\
         // macOS: /Users/<用户名>/
         // Linux: /home/<用户名>/
-        let user_dirs = directories::UserDirs::new()
-            .ok_or_else(|| anyhow::anyhow!("无法找到用户主目录"))?;
+        let user_dirs =
+            directories::UserDirs::new().ok_or_else(|| anyhow::anyhow!("无法找到用户主目录"))?;
         // `?` 操作符：如果返回 None，立即将错误向上传播
 
         let mut data_dir = user_dirs.home_dir().join(".worktools/history/plugins");
@@ -76,8 +76,8 @@ impl PluginStorage {
     /// macOS: /Users/<用户>/Library/Application Support/worktools/data/
     /// Linux: /home/<用户>/.local/share/worktools/data/
     pub fn get_alternative_data_path(&self) -> Result<PathBuf> {
-        let mut data_dir = dirs::data_local_dir()
-            .ok_or_else(|| anyhow::anyhow!("无法获取数据目录"))?;
+        let mut data_dir =
+            dirs::data_local_dir().ok_or_else(|| anyhow::anyhow!("无法获取数据目录"))?;
         data_dir.push("worktools");
         data_dir.push("data");
 
@@ -107,11 +107,9 @@ impl PluginStorage {
             return Ok(T::default());
         }
 
-        let file = File::open(&data_path)
-            .context("打开数据文件失败")?;
+        let file = File::open(&data_path).context("打开数据文件失败")?;
         // `serde_json::from_reader` 直接从文件句柄解析 JSON，不需要先读到字符串
-        let data: T = serde_json::from_reader(file)
-            .context("解析数据文件失败")?;
+        let data: T = serde_json::from_reader(file).context("解析数据文件失败")?;
         Ok(data)
     }
 
@@ -145,15 +143,12 @@ impl PluginStorage {
             .context("创建临时文件失败")?;
 
         // `to_writer_pretty` 格式化输出 JSON（带缩进），方便人工查看
-        serde_json::to_writer_pretty(&file, data)
-            .context("序列化数据失败")?;
+        serde_json::to_writer_pretty(&file, data).context("序列化数据失败")?;
         // `sync_all()` 确保操作系统将缓冲区数据写入磁盘
-        file.sync_all()
-            .context("同步文件失败")?;
+        file.sync_all().context("同步文件失败")?;
 
         // `rename` 是 POSIX 保证的原子操作：要么是新文件，要么是旧文件，不存在中间状态
-        std::fs::rename(&temp_path, &data_path)
-            .context("替换数据文件失败")?;
+        std::fs::rename(&temp_path, &data_path).context("替换数据文件失败")?;
 
         // `tracing::debug!` 是结构化日志，`plugin_id` 以字段形式记录
         tracing::debug!("插件 {} 数据已保存到: {:?}", self.plugin_id, data_path);
@@ -174,11 +169,7 @@ impl PluginStorage {
     /// ## Rust 知识点: 闭包链式调用
     /// `.and_then(|f| ...)` 只在 `Some` 时执行，`None` 直接穿透。
     /// 这是 Option 类型的一种常见操作模式。
-    pub fn save_json_preserving<T>(
-        &self,
-        data: &T,
-        preserve_fields: &[&str],
-    ) -> Result<()>
+    pub fn save_json_preserving<T>(&self, data: &T, preserve_fields: &[&str]) -> Result<()>
     where
         T: serde::Serialize,
     {
@@ -215,13 +206,10 @@ impl PluginStorage {
             }
         }
 
-        serde_json::to_writer_pretty(&file, &output)
-            .context("序列化数据失败")?;
-        file.sync_all()
-            .context("同步文件失败")?;
+        serde_json::to_writer_pretty(&file, &output).context("序列化数据失败")?;
+        file.sync_all().context("同步文件失败")?;
 
-        std::fs::rename(&temp_path, &data_path)
-            .context("替换数据文件失败")?;
+        std::fs::rename(&temp_path, &data_path).context("替换数据文件失败")?;
 
         tracing::debug!("插件 {} 数据已保存到: {:?}", self.plugin_id, data_path);
         Ok(())

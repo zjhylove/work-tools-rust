@@ -1,11 +1,11 @@
-use std::time::Duration;
-use async_trait::async_trait;
-use anyhow::Result;
-use sqlx::postgres::{PgPoolOptions, PgRow};
-use sqlx::{Row, Pool, Postgres};
-use std::collections::{HashMap, HashSet};
-use crate::models::{ConnectionConfig, TableInfo, ColumnInfo, IndexInfo};
 use super::DatabaseExtractor;
+use crate::models::{ColumnInfo, ConnectionConfig, IndexInfo, TableInfo};
+use anyhow::Result;
+use async_trait::async_trait;
+use sqlx::postgres::{PgPoolOptions, PgRow};
+use sqlx::{Pool, Postgres, Row};
+use std::collections::{HashMap, HashSet};
+use std::time::Duration;
 
 /// PostgreSQL 元数据提取器
 pub struct PostgresExtractor;
@@ -32,7 +32,9 @@ impl PostgresExtractor {
         let row: PgRow = sqlx::query("SELECT current_schema()")
             .fetch_one(pool)
             .await?;
-        Ok(row.try_get::<String, _>(0).unwrap_or_else(|_| "public".to_string()))
+        Ok(row
+            .try_get::<String, _>(0)
+            .unwrap_or_else(|_| "public".to_string()))
     }
 
     /// 查询表注释 (PostgreSQL 用 pg_catalog.obj_description)
@@ -55,7 +57,11 @@ impl PostgresExtractor {
             .fetch_optional(pool)
             .await?;
 
-        Ok(row.and_then(|r| r.try_get::<Option<String>, _>("table_comment").ok().flatten()))
+        Ok(row.and_then(|r| {
+            r.try_get::<Option<String>, _>("table_comment")
+                .ok()
+                .flatten()
+        }))
     }
 
     /// 查询列信息
@@ -97,11 +103,17 @@ impl PostgresExtractor {
                 ColumnInfo {
                     name: row.try_get("column_name").unwrap_or_default(),
                     data_type: row.try_get("data_type").unwrap_or_default(),
-                    max_length: row.try_get::<i32, _>("character_maximum_length").ok().map(|v| v as u64),
+                    max_length: row
+                        .try_get::<i32, _>("character_maximum_length")
+                        .ok()
+                        .map(|v| v as u64),
                     is_nullable: nullable == "YES",
                     is_primary_key: false,
                     default_value: row.try_get("column_default").ok(),
-                    comment: row.try_get::<Option<String>, _>("column_comment").ok().flatten(),
+                    comment: row
+                        .try_get::<Option<String>, _>("column_comment")
+                        .ok()
+                        .flatten(),
                     position: row.try_get::<i32, _>("ordinal_position").unwrap_or(0) as u32,
                 }
             })
@@ -188,10 +200,7 @@ impl DatabaseExtractor for PostgresExtractor {
             ORDER BY table_name
         "#;
 
-        let rows = sqlx::query(sql)
-            .bind(&schema)
-            .fetch_all(&pool)
-            .await?;
+        let rows = sqlx::query(sql).bind(&schema).fetch_all(&pool).await?;
 
         let tables = rows
             .into_iter()

@@ -1,9 +1,9 @@
 mod column;
-mod table;
 mod connection;
+mod table;
 
 pub use column::ColumnInfo;
-pub use table::{TableInfo, IndexInfo};
 pub use connection::{
-    DatabaseType, ConnectionConfig, ExportFormat, TemplateStyle, ExportConfig, ExportHistory
+    ConnectionConfig, DatabaseType, ExportConfig, ExportFormat, ExportHistory, TemplateStyle,
 };
+pub use table::{IndexInfo, TableInfo};

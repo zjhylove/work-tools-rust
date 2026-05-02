@@ -127,7 +127,11 @@ impl TextDiff {
         additions -= modifications;
         deletions -= modifications;
 
-        DiffStats { additions, deletions, modifications }
+        DiffStats {
+            additions,
+            deletions,
+            modifications,
+        }
     }
 
     /// 导出 Unified Diff 格式
@@ -174,9 +178,12 @@ impl TextDiff {
                         writeln!(
                             &mut output,
                             "@@ -{},{} +{},{} @@",
-                            line_num_old - changes.len(), changes.len(),
-                            line_num_new - changes.len(), changes.len()
-                        ).ok();
+                            line_num_old - changes.len(),
+                            changes.len(),
+                            line_num_new - changes.len(),
+                            changes.len()
+                        )
+                        .ok();
 
                         for (tag, line) in &changes {
                             writeln!(&mut output, "{} {}", tag, line).ok();
@@ -194,9 +201,12 @@ impl TextDiff {
             writeln!(
                 &mut output,
                 "@@ -{},{} +{},{} @@",
-                line_num_old - changes.len(), changes.len(),
-                line_num_new - changes.len(), changes.len()
-            ).ok();
+                line_num_old - changes.len(),
+                changes.len(),
+                line_num_new - changes.len(),
+                changes.len()
+            )
+            .ok();
 
             for (tag, line) in &changes {
                 writeln!(&mut output, "{} {}", tag, line).ok();
@@ -210,17 +220,34 @@ impl TextDiff {
 }
 
 impl Plugin for TextDiff {
-    fn id(&self) -> &str { "text-diff" }
-    fn name(&self) -> &str { "文本比对" }
-    fn description(&self) -> &str { "实时文本比对工具，支持差异高亮、文件导入导出、差异导航" }
-    fn version(&self) -> &str { "1.0.0" }
-    fn icon(&self) -> &str { "📝" }
-    fn get_view(&self) -> String { "<div>插件前端资源加载中...</div>".to_string() }
+    fn id(&self) -> &str {
+        "text-diff"
+    }
+    fn name(&self) -> &str {
+        "文本比对"
+    }
+    fn description(&self) -> &str {
+        "实时文本比对工具，支持差异高亮、文件导入导出、差异导航"
+    }
+    fn version(&self) -> &str {
+        "1.0.0"
+    }
+    fn icon(&self) -> &str {
+        "📝"
+    }
+    fn get_view(&self) -> String {
+        "<div>插件前端资源加载中...</div>".to_string()
+    }
 
-    fn handle_call(&mut self, method: &str, params: Value) -> Result<Value, Box<dyn std::error::Error + Send + Sync>> {
+    fn handle_call(
+        &mut self,
+        method: &str,
+        params: Value,
+    ) -> Result<Value, Box<dyn std::error::Error + Send + Sync>> {
         match method {
             "load_text_file" => {
-                let file_path = params.get("file_path")
+                let file_path = params
+                    .get("file_path")
                     .and_then(|v| v.as_str())
                     .ok_or_else(|| anyhow::anyhow!("缺少 file_path 参数"))?;
                 let result = Self::load_text_file_impl(file_path)?;
@@ -228,10 +255,12 @@ impl Plugin for TextDiff {
             }
 
             "save_text_file" => {
-                let file_path = params.get("file_path")
+                let file_path = params
+                    .get("file_path")
                     .and_then(|v| v.as_str())
                     .ok_or_else(|| anyhow::anyhow!("缺少 file_path 参数"))?;
-                let content = params.get("content")
+                let content = params
+                    .get("content")
                     .and_then(|v| v.as_str())
                     .ok_or_else(|| anyhow::anyhow!("缺少 content 参数"))?;
                 Self::save_text_file_impl(file_path, content)?;
@@ -239,25 +268,35 @@ impl Plugin for TextDiff {
             }
 
             "preprocess_text" => {
-                let text = params.get("text")
+                let text = params
+                    .get("text")
                     .and_then(|v| v.as_str())
                     .ok_or_else(|| anyhow::anyhow!("缺少 text 参数"))?;
                 // `unwrap_or(false)` 提供默认值
-                let ignore_whitespace = params.get("ignore_whitespace")
-                    .and_then(|v| v.as_bool()).unwrap_or(false);
-                let ignore_case = params.get("ignore_case")
-                    .and_then(|v| v.as_bool()).unwrap_or(false);
+                let ignore_whitespace = params
+                    .get("ignore_whitespace")
+                    .and_then(|v| v.as_bool())
+                    .unwrap_or(false);
+                let ignore_case = params
+                    .get("ignore_case")
+                    .and_then(|v| v.as_bool())
+                    .unwrap_or(false);
 
-                let options = ProcessOptions { ignore_whitespace, ignore_case };
+                let options = ProcessOptions {
+                    ignore_whitespace,
+                    ignore_case,
+                };
                 let processed = Self::preprocess_text_impl(text, &options);
                 Ok(serde_json::json!({ "original": text, "processed": processed }))
             }
 
             "count_diff" => {
-                let original = params.get("original")
+                let original = params
+                    .get("original")
                     .and_then(|v| v.as_str())
                     .ok_or_else(|| anyhow::anyhow!("缺少 original 参数"))?;
-                let modified = params.get("modified")
+                let modified = params
+                    .get("modified")
                     .and_then(|v| v.as_str())
                     .ok_or_else(|| anyhow::anyhow!("缺少 modified 参数"))?;
                 let stats = Self::count_diff_lines(original, modified);
@@ -265,14 +304,18 @@ impl Plugin for TextDiff {
             }
 
             "export_diff" => {
-                let original = params.get("original")
+                let original = params
+                    .get("original")
                     .and_then(|v| v.as_str())
                     .ok_or_else(|| anyhow::anyhow!("缺少 original 参数"))?;
-                let modified = params.get("modified")
+                let modified = params
+                    .get("modified")
                     .and_then(|v| v.as_str())
                     .ok_or_else(|| anyhow::anyhow!("缺少 modified 参数"))?;
-                let filename = params.get("filename")
-                    .and_then(|v| v.as_str()).unwrap_or("changes.diff");
+                let filename = params
+                    .get("filename")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("changes.diff");
                 let diff = Self::export_unified_diff(original, modified, filename);
                 Ok(serde_json::json!({ "diff": diff }))
             }

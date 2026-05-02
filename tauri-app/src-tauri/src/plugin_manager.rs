@@ -114,8 +114,7 @@ impl PluginManager {
         let plugin_dir = crate::paths::plugins_dir()?;
 
         // 确保插件目录存在
-        std::fs::create_dir_all(&plugin_dir)
-            .context("创建插件目录失败")?;
+        std::fs::create_dir_all(&plugin_dir).context("创建插件目录失败")?;
 
         Ok(Self {
             plugins: RwLock::new(HashMap::new()),
@@ -138,8 +137,7 @@ impl PluginManager {
         self.plugins.write().await.clear();
 
         // 扫描插件目录
-        let entries = std::fs::read_dir(&self.plugin_dir)
-            .context("读取插件目录失败")?;
+        let entries = std::fs::read_dir(&self.plugin_dir).context("读取插件目录失败")?;
 
         for entry in entries {
             let entry = entry.context("读取目录项失败")?;
@@ -153,9 +151,7 @@ impl PluginManager {
                     // 新版方式：从 manifest.json 获取动态库名
                     std::fs::read_to_string(&manifest_path)
                         .ok()
-                        .and_then(|content| {
-                            serde_json::from_str::<PluginManifest>(&content).ok()
-                        })
+                        .and_then(|content| serde_json::from_str::<PluginManifest>(&content).ok())
                         .and_then(|manifest| Self::get_library_from_manifest(&manifest))
                         .map(|name| path.join(name))
                 } else {
@@ -211,8 +207,7 @@ impl PluginManager {
             // ── 步骤1: 加载动态库 ──
             // `Library::new()` 调用操作系统的动态库加载函数
             // 返回的 Library 对象会在 drop 时自动调用 dlclose/FreeLibrary
-            let library = Library::new(lib_path)
-                .context("加载动态库失败")?;
+            let library = Library::new(lib_path).context("加载动态库失败")?;
 
             // ── 步骤2: 获取 plugin_create 函数指针 ──
             // `library.get(b"plugin_create")` 在动态库中查找名为 "plugin_create" 的符号
@@ -271,11 +266,11 @@ impl PluginManager {
     /// 只返回 PluginInfo（不包含实例），前端展示用
     pub async fn get_installed_plugins(&self) -> Vec<PluginInfo> {
         self.plugins
-            .read()           // 获取读锁
-            .await            // 异步等待
-            .values()         // 获取所有值（HashMap 的迭代器）
+            .read() // 获取读锁
+            .await // 异步等待
+            .values() // 获取所有值（HashMap 的迭代器）
             .map(|p| p.info.clone()) // 克隆 PluginInfo
-            .collect()        // 收集到 Vec
+            .collect() // 收集到 Vec
     }
 
     /// 根据 ID 获取单个插件信息
@@ -283,7 +278,7 @@ impl PluginManager {
         self.plugins
             .read()
             .await
-            .get(plugin_id)   // HashMap::get 返回 Option<&V>
+            .get(plugin_id) // HashMap::get 返回 Option<&V>
             .map(|p| p.info.clone())
     }
 

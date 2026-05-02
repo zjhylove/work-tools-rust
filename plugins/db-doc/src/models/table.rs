@@ -1,5 +1,5 @@
-use serde::{Deserialize, Serialize};
 use super::ColumnInfo;
+use serde::{Deserialize, Serialize};
 
 /// 索引信息
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -53,9 +53,6 @@ impl TableInfo {
 
     /// 获取主键列
     pub fn primary_key_columns(&self) -> Vec<&ColumnInfo> {
-        self.columns
-            .iter()
-            .filter(|c| c.is_primary_key)
-            .collect()
+        self.columns.iter().filter(|c| c.is_primary_key).collect()
     }
 }

@@ -18,16 +18,18 @@
 //! - `oneshot::channel`: 一次性通知通道（用于优雅关闭）
 //! - `Arc<Mutex<HashMap>>`: 多任务共享的域名映射表
 
+use crate::models::ProxyMapping;
 use anyhow::Result;
-use hyper::{body::Incoming, server::conn::http1, service::service_fn, Request, Response, StatusCode};
-use hyper_util::rt::TokioIo;
-use http_body_util::{Full, BodyExt};
+use http_body_util::{BodyExt, Full};
 use hyper::body::Bytes;
-use tokio::net::TcpListener;
-use tokio::sync::oneshot;
+use hyper::{
+    body::Incoming, server::conn::http1, service::service_fn, Request, Response, StatusCode,
+};
+use hyper_util::rt::TokioIo;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
-use crate::models::ProxyMapping;
+use tokio::net::TcpListener;
+use tokio::sync::oneshot;
 
 /// HTTP 反向代理服务
 ///
@@ -55,32 +57,51 @@ impl HttpProxySvc {
         }
     }
 
-    pub fn is_running(&self) -> bool { self.running }
-    pub fn port(&self) -> u16 { self.port }
+    pub fn is_running(&self) -> bool {
+        self.running
+    }
+    pub fn port(&self) -> u16 {
+        self.port
+    }
 
     /// 注册域名映射
     /// `editable` 参数: Pod 地址映射为 true（允许用户修改域名），别名为 false
     pub fn register(&self, domain: &str, target: &str, rule_id: &str, editable: bool) {
-        self.mappings.lock().unwrap().insert(domain.to_string(), target.to_string());
+        self.mappings
+            .lock()
+            .unwrap()
+            .insert(domain.to_string(), target.to_string());
         self.mapping_list.lock().unwrap().push(ProxyMapping {
-            domain: domain.to_string(), target: target.to_string(),
-            rule_id: rule_id.to_string(), editable,
+            domain: domain.to_string(),
+            target: target.to_string(),
+            rule_id: rule_id.to_string(),
+            editable,
         });
     }
 
     /// 注销单个域名映射
     pub fn unregister(&self, domain: &str) {
         self.mappings.lock().unwrap().remove(domain);
-        self.mapping_list.lock().unwrap().retain(|m| m.domain != domain);
+        self.mapping_list
+            .lock()
+            .unwrap()
+            .retain(|m| m.domain != domain);
     }
 
     /// 按规则 ID 注销所有相关映射
     pub fn unregister_by_rule_id(&self, rule_id: &str) {
         // 先收集要删除的域名（避免迭代中修改）
-        let domains: Vec<String> = self.mapping_list.lock().unwrap()
-            .iter().filter(|m| m.rule_id == rule_id)
-            .map(|m| m.domain.clone()).collect();
-        for d in domains { self.unregister(&d); }
+        let domains: Vec<String> = self
+            .mapping_list
+            .lock()
+            .unwrap()
+            .iter()
+            .filter(|m| m.rule_id == rule_id)
+            .map(|m| m.domain.clone())
+            .collect();
+        for d in domains {
+            self.unregister(&d);
+        }
     }
 
     pub fn list_mappings(&self) -> Vec<ProxyMapping> {
@@ -94,10 +115,15 @@ impl HttpProxySvc {
             let old_domain = m.domain.clone();
             self.mappings.lock().unwrap().remove(&old_domain);
             m.domain = new_domain.to_string();
-            self.mappings.lock().unwrap().insert(new_domain.to_string(), m.target.clone());
+            self.mappings
+                .lock()
+                .unwrap()
+                .insert(new_domain.to_string(), m.target.clone());
             return Ok(ProxyMapping {
-                domain: new_domain.to_string(), target: m.target.clone(),
-                rule_id: rule_id.to_string(), editable: m.editable,
+                domain: new_domain.to_string(),
+                target: m.target.clone(),
+                rule_id: rule_id.to_string(),
+                editable: m.editable,
             });
         }
         Err(anyhow::anyhow!("未找到 rule_id 对应的映射"))
@@ -179,7 +205,9 @@ async fn proxy_request(
     mappings: Arc<Mutex<HashMap<String, String>>>,
 ) -> Result<Response<Full<Bytes>>, hyper::Error> {
     // 提取多个可能的 host 来源
-    let host = req.headers().get("host")
+    let host = req
+        .headers()
+        .get("host")
         .and_then(|v| v.to_str().ok())
         .unwrap_or("");
     let host_without_port = host.split(':').next().unwrap_or(host);
@@ -192,7 +220,8 @@ async fn proxy_request(
     // 按优先级查找映射
     let target = {
         let map = mappings.lock().unwrap();
-        map.get(host).cloned()
+        map.get(host)
+            .cloned()
             .or_else(|| map.get(host_without_port).cloned())
             .or_else(|| uri_addr.as_ref().and_then(|a| map.get(a).cloned()))
     };
@@ -217,9 +246,10 @@ async fn forward_or_502(
         Ok(resp) => Ok(resp),
         Err(e) => {
             tracing::error!("[proxy] 转发失败: {} - {}", target, e);
-            let mut resp = Response::new(Full::new(Bytes::from(
-                format!("转发目标不可达: {}", target)
-            )));
+            let mut resp = Response::new(Full::new(Bytes::from(format!(
+                "转发目标不可达: {}",
+                target
+            ))));
             *resp.status_mut() = StatusCode::BAD_GATEWAY;
             Ok(resp)
         }
@@ -235,24 +265,24 @@ async fn forward_request(
     target: &str,
 ) -> Result<Response<Full<Bytes>>, Box<dyn std::error::Error + Send + Sync>> {
     // 创建 HTTP 客户端
-    let client = hyper_util::client::legacy::Client::builder(
-        hyper_util::rt::TokioExecutor::new()
-    ).build_http();
+    let client = hyper_util::client::legacy::Client::builder(hyper_util::rt::TokioExecutor::new())
+        .build_http();
 
     // 分解请求
     let (parts, body) = req.into_parts();
     let body_bytes = body.collect().await?.to_bytes();
 
     // 构建目标 URI
-    let path = parts.uri.path_and_query()
-        .map(|pq| pq.as_str()).unwrap_or("/");
+    let path = parts
+        .uri
+        .path_and_query()
+        .map(|pq| pq.as_str())
+        .unwrap_or("/");
     let uri = format!("http://{}{}", target, path);
     let uri: hyper::Uri = uri.parse()?;
 
     // 构建转发请求（复制 method + headers + body）
-    let mut builder = Request::builder()
-        .method(parts.method)
-        .uri(&uri);
+    let mut builder = Request::builder().method(parts.method).uri(&uri);
 
     for (key, value) in parts.headers.iter() {
         if key.as_str().to_lowercase() != "host" {

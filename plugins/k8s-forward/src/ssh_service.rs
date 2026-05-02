@@ -23,14 +23,14 @@
 //! - `JoinHandle`: 线程句柄，用于等待线程结束
 //! - `set_nonblocking`: 设置非阻塞模式（避免读/写阻塞整个线程）
 
-use anyhow::{Result, anyhow};
+use crate::models::{ForwardRule, RuleType};
+use anyhow::{anyhow, Result};
 use ssh2::Session;
 use std::io::{Read, Write};
-use std::net::{TcpStream, TcpListener};
+use std::net::{TcpListener, TcpStream};
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
-use crate::models::{ForwardRule, RuleType};
 
 /// SSH 转发服务
 ///
@@ -67,7 +67,8 @@ impl SshService {
 
     /// 检查 SSH 是否已连接且已认证
     pub fn is_connected(&self) -> bool {
-        self.session.as_ref()
+        self.session
+            .as_ref()
             .map(|s| s.lock().unwrap().authenticated())
             .unwrap_or(false)
     }
@@ -83,7 +84,7 @@ impl SshService {
         let tcp = TcpStream::connect(&addr)?;
         let mut session = Session::new()?;
         session.set_tcp_stream(tcp);
-        session.handshake()?;                      // SSH 握手
+        session.handshake()?; // SSH 握手
         session.userauth_password(username, password)?; // 密码认证
         if !session.authenticated() {
             return Err(anyhow!("SSH 认证失败"));
@@ -121,12 +122,21 @@ impl SshService {
     ///
     /// ## 返回值
     /// 实际使用的本地端口号
-    pub fn add_forward(&mut self, local_host: &str, remote_host: &str, remote_port: u16, local_port: u16) -> Result<u16> {
-        let session = self.session.clone()
-            .ok_or_else(|| anyhow!("SSH 未连接"))?;
+    pub fn add_forward(
+        &mut self,
+        local_host: &str,
+        remote_host: &str,
+        remote_port: u16,
+        local_port: u16,
+    ) -> Result<u16> {
+        let session = self.session.clone().ok_or_else(|| anyhow!("SSH 未连接"))?;
 
         // 自动分配或使用指定端口
-        let local_port = if local_port > 0 { local_port } else { self.allocate_port() };
+        let local_port = if local_port > 0 {
+            local_port
+        } else {
+            self.allocate_port()
+        };
         let bind_addr = format!("{}:{}", local_host, local_port);
 
         let rh_for_thread = remote_host.to_string();
@@ -147,7 +157,9 @@ impl SshService {
 
             loop {
                 // 检查停止信号
-                if *stop.lock().unwrap() { return; }
+                if *stop.lock().unwrap() {
+                    return;
+                }
 
                 // 非阻塞 accept
                 let stream = match listener.accept() {
@@ -160,7 +172,10 @@ impl SshService {
                 };
 
                 stream.set_nonblocking(true).ok();
-                let mut loc_read = match stream.try_clone() { Ok(r) => r, Err(_) => continue };
+                let mut loc_read = match stream.try_clone() {
+                    Ok(r) => r,
+                    Err(_) => continue,
+                };
                 let mut loc_write = stream;
 
                 // 创建 SSH direct-tcpip 通道（相当于 ssh -L 的效果）
@@ -175,18 +190,24 @@ impl SshService {
                 let stop_for_io = stop.clone();
                 let mut buf = [0u8; 8192]; // 8KB 缓冲区
                 loop {
-                    if *stop_for_io.lock().unwrap() { break; }
+                    if *stop_for_io.lock().unwrap() {
+                        break;
+                    }
                     // 本地 → 远程
                     match loc_read.read(&mut buf) {
-                        Ok(0) => break,       // 连接关闭
-                        Ok(n) => { let _ = channel.write_all(&buf[..n]); }
+                        Ok(0) => break, // 连接关闭
+                        Ok(n) => {
+                            let _ = channel.write_all(&buf[..n]);
+                        }
                         Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock => {}
                         Err(_) => break,
                     }
                     // 远程 → 本地
                     match channel.read(&mut buf) {
                         Ok(0) => break,
-                        Ok(n) => { let _ = loc_write.write_all(&buf[..n]); }
+                        Ok(n) => {
+                            let _ = loc_write.write_all(&buf[..n]);
+                        }
                         Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock => {}
                         Err(_) => break,
                     }
@@ -201,22 +222,34 @@ impl SshService {
         let rule = ForwardRule {
             id: uuid::Uuid::new_v4().to_string(),
             name: format!("forward-{}", local_port),
-            local_host: local_host.to_string(), local_port,
-            remote_host: rh_for_rule, remote_port,
+            local_host: local_host.to_string(),
+            local_port,
+            remote_host: rh_for_rule,
+            remote_port,
             rule_type: RuleType::Manual,
-            cluster: None, namespace: None, pod_name: None, container_name: None,
+            cluster: None,
+            namespace: None,
+            pod_name: None,
+            container_name: None,
         };
 
         self.threads.push(handle);
         self.stop_flags.push(stop_flag);
-        self.forwards.push(ForwardEntry { rule: rule.clone(), stop_flag: stop_for_entry });
+        self.forwards.push(ForwardEntry {
+            rule: rule.clone(),
+            stop_flag: stop_for_entry,
+        });
 
         Ok(local_port)
     }
 
     /// 移除端口转发
     pub fn remove_forward(&mut self, local_port: u16) -> Result<()> {
-        if let Some(pos) = self.forwards.iter().position(|f| f.rule.local_port == local_port) {
+        if let Some(pos) = self
+            .forwards
+            .iter()
+            .position(|f| f.rule.local_port == local_port)
+        {
             let entry = self.forwards.remove(pos);
             *entry.stop_flag.lock().unwrap() = true; // 通知线程停止
             self.stop_flags.remove(pos);
@@ -228,7 +261,9 @@ impl SshService {
         self.forwards.iter().map(|f| f.rule.clone()).collect()
     }
 
-    pub fn forward_count(&self) -> usize { self.forwards.len() }
+    pub fn forward_count(&self) -> usize {
+        self.forwards.len()
+    }
 
     /// 自动分配一个可用的本地端口（10000-60000 范围内）
     fn allocate_port(&mut self) -> u16 {
@@ -236,8 +271,10 @@ impl SshService {
         loop {
             let port = self.next_port;
             self.next_port += 1;
-            if self.next_port > 60000 { self.next_port = 10000; } // 回绕
-            // 端口未被占用且 OS 层面可用
+            if self.next_port > 60000 {
+                self.next_port = 10000;
+            } // 回绕
+              // 端口未被占用且 OS 层面可用
             if !used_ports.contains(&port) && port_is_available(port) {
                 return port;
             }

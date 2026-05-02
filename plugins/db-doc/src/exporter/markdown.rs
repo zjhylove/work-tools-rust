@@ -1,6 +1,6 @@
+use crate::models::{ExportConfig, TableInfo, TemplateStyle};
 use anyhow::Result;
 use std::path::Path;
-use crate::models::{TableInfo, TemplateStyle, ExportConfig};
 
 /// Markdown 文档导出器
 pub struct MarkdownExporter {
@@ -23,12 +23,19 @@ impl MarkdownExporter {
     pub fn export_tables(&self, tables: &[TableInfo], output_path: &Path) -> Result<()> {
         let mut content = String::new();
         content.push_str("# 数据库文档\n\n");
-        content.push_str(&format!("> 生成时间: {}\n\n", chrono::Utc::now().format("%Y-%m-%d %H:%M:%S")));
+        content.push_str(&format!(
+            "> 生成时间: {}\n\n",
+            chrono::Utc::now().format("%Y-%m-%d %H:%M:%S")
+        ));
 
         // 目录
         content.push_str("## 目录\n\n");
         for table in tables {
-            content.push_str(&format!("- [{}](#{})\n", table.name, table.name.to_lowercase()));
+            content.push_str(&format!(
+                "- [{}](#{})\n",
+                table.name,
+                table.name.to_lowercase()
+            ));
         }
         content.push_str("\n---\n\n");
 
@@ -135,7 +142,6 @@ impl MarkdownExporter {
 
         md
     }
-
 }
 
 use super::DocumentExporter;

@@ -3,15 +3,15 @@ use serde_json::Value;
 use tokio::runtime::Runtime;
 use worktools_plugin_api::Plugin;
 
-pub mod models;
+pub mod crypto;
 pub mod database;
 pub mod exporter;
+pub mod models;
 pub mod storage;
-pub mod crypto;
 
+use database::{DatabaseExtractor, MySqlExtractor, PostgresExtractor};
 use models::*;
 use storage::DbDocStorage;
-use database::{DatabaseExtractor, MySqlExtractor, PostgresExtractor};
 
 /// 数据库文档生成插件
 pub struct DbDocPlugin {
@@ -60,7 +60,9 @@ impl DbDocPlugin {
 
         // 验证 ID 存在
         let id = config.id.clone();
-        let existing = self.storage.list_connections()?
+        let existing = self
+            .storage
+            .list_connections()?
             .into_iter()
             .find(|c| c.id == id)
             .ok_or_else(|| anyhow::anyhow!("连接配置不存在"))?;
@@ -153,7 +155,8 @@ impl DbDocPlugin {
             .find(|c| c.id == connection_id)
             .ok_or_else(|| anyhow::anyhow!("连接配置不存在"))?;
 
-        let table_info = with_extractor!(self, config, extractor.get_table_info(&config, table_name))?;
+        let table_info =
+            with_extractor!(self, config, extractor.get_table_info(&config, table_name))?;
 
         Ok(serde_json::to_value(table_info)?)
     }
@@ -171,7 +174,8 @@ impl DbDocPlugin {
 
         // 获取表信息
         let tables_info = with_extractor!(
-            self, conn_config,
+            self,
+            conn_config,
             extractor.get_tables_info(&conn_config, &config.tables)
         )?;
 

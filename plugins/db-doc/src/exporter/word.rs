@@ -74,7 +74,7 @@ impl WordExporter {
     <w:rPr><w:b/><w:sz w:val="28"/><w:szCs w:val="28"/></w:rPr>
   </w:style>
 </w:styles>"#
-        .to_string()
+            .to_string()
     }
 
     // ---- Document body helpers ----
@@ -180,7 +180,10 @@ impl WordExporter {
         body.push_str(&Self::build_paragraph(&table.name, Some("Heading2")));
 
         // Schema info
-        body.push_str(&Self::build_bold_paragraph(&format!("所属库: {}", table.schema)));
+        body.push_str(&Self::build_bold_paragraph(&format!(
+            "所属库: {}",
+            table.schema
+        )));
         if let Some(ref comment) = table.comment {
             if !comment.is_empty() {
                 body.push_str(&Self::build_bold_paragraph(&format!("表注释: {}", comment)));
@@ -236,11 +239,7 @@ impl WordExporter {
 
             for idx in &table.indexes {
                 let unique = if idx.is_unique { "是" } else { "否" };
-                let idx_type = if idx.is_primary {
-                    "主键"
-                } else {
-                    "普通"
-                };
+                let idx_type = if idx.is_primary { "主键" } else { "普通" };
                 let columns = idx.columns.join(", ");
 
                 let cells = vec![

@@ -71,12 +71,16 @@ impl ObjectStoragePlugin {
 
     /// 从 JSON params 中提取字符串参数
     fn get_connection_param<'a>(params: &'a Value, key: &str) -> anyhow::Result<&'a str> {
-        params.get(key)
+        params
+            .get(key)
             .and_then(|v| v.as_str())
             .ok_or_else(|| anyhow::anyhow!("缺少 {} 参数", key))
     }
 
-    fn find_connection_by_id(connections: &[ConnectionConfig], id: &str) -> Option<ConnectionConfig> {
+    fn find_connection_by_id(
+        connections: &[ConnectionConfig],
+        id: &str,
+    ) -> Option<ConnectionConfig> {
         connections.iter().find(|c| c.id == id).cloned()
     }
 
@@ -91,8 +95,12 @@ impl ObjectStoragePlugin {
 
     /// 验证连接配置的完整性
     fn validate_connection(conn: &ConnectionConfig) -> anyhow::Result<()> {
-        if conn.region.is_empty() { anyhow::bail!("连接配置中 region 不能为空"); }
-        if conn.bucket.is_empty() { anyhow::bail!("连接配置中 bucket 不能为空"); }
+        if conn.region.is_empty() {
+            anyhow::bail!("连接配置中 region 不能为空");
+        }
+        if conn.bucket.is_empty() {
+            anyhow::bail!("连接配置中 bucket 不能为空");
+        }
         Ok(())
     }
 
@@ -123,23 +131,42 @@ impl ObjectStoragePlugin {
 }
 
 impl Plugin for ObjectStoragePlugin {
-    fn id(&self) -> &str { "object-storage" }
-    fn name(&self) -> &str { "对象存储" }
-    fn description(&self) -> &str { "管理阿里云OSS和腾讯云COS，支持文件浏览/上传/下载/搜索/删除" }
-    fn version(&self) -> &str { "1.0.0" }
-    fn icon(&self) -> &str { "\u{1F4E6}" }
+    fn id(&self) -> &str {
+        "object-storage"
+    }
+    fn name(&self) -> &str {
+        "对象存储"
+    }
+    fn description(&self) -> &str {
+        "管理阿里云OSS和腾讯云COS，支持文件浏览/上传/下载/搜索/删除"
+    }
+    fn version(&self) -> &str {
+        "1.0.0"
+    }
+    fn icon(&self) -> &str {
+        "\u{1F4E6}"
+    }
 
-    fn get_view(&self) -> String { "<div>插件前端资源加载中...</div>".to_string() }
+    fn get_view(&self) -> String {
+        "<div>插件前端资源加载中...</div>".to_string()
+    }
 
     /// 初始化时从文件加载持久化数据
     fn init(&mut self) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         let data = Self::load_data().unwrap_or_default();
         *self.data.lock().unwrap() = data;
-        tracing::info!(connections = self.data.lock().unwrap().connections.len(), "对象存储插件初始化完成");
+        tracing::info!(
+            connections = self.data.lock().unwrap().connections.len(),
+            "对象存储插件初始化完成"
+        );
         Ok(())
     }
 
-    fn handle_call(&mut self, method: &str, params: Value) -> Result<Value, Box<dyn std::error::Error + Send + Sync>> {
+    fn handle_call(
+        &mut self,
+        method: &str,
+        params: Value,
+    ) -> Result<Value, Box<dyn std::error::Error + Send + Sync>> {
         match method {
             // ── 连接管理 CRUD ──
             "add_connection" | "update_connection" => {
@@ -149,7 +176,9 @@ impl Plugin for ObjectStoragePlugin {
                 let secret_key = Self::get_connection_param(&params, "secret_key")?.to_string();
                 let region = Self::get_connection_param(&params, "region")?.to_string();
                 let bucket = Self::get_connection_param(&params, "bucket")?.to_string();
-                let endpoint = params.get("endpoint").and_then(|v| v.as_str())
+                let endpoint = params
+                    .get("endpoint")
+                    .and_then(|v| v.as_str())
                     .filter(|s| !s.trim().is_empty())
                     .map(|s| Some(Self::clean_endpoint(s)))
                     .unwrap_or(None);
@@ -160,10 +189,13 @@ impl Plugin for ObjectStoragePlugin {
                     "add_connection" => {
                         let conn = ConnectionConfig {
                             id: uuid::Uuid::new_v4().to_string(),
-                            provider, name,
+                            provider,
+                            name,
                             access_key: crypto::encrypt(&access_key),
                             secret_key: crypto::encrypt(&secret_key),
-                            region, bucket, endpoint,
+                            region,
+                            bucket,
+                            endpoint,
                         };
                         let conn_id = conn.id.clone();
                         data.connections.push(conn);
@@ -172,13 +204,20 @@ impl Plugin for ObjectStoragePlugin {
                     }
                     "update_connection" => {
                         let id = Self::get_connection_param(&params, "id")?.to_string();
-                        let pos = data.connections.iter().position(|c| c.id == id)
+                        let pos = data
+                            .connections
+                            .iter()
+                            .position(|c| c.id == id)
                             .ok_or_else(|| anyhow::anyhow!("连接不存在"))?;
                         data.connections[pos] = ConnectionConfig {
-                            id, provider, name,
+                            id,
+                            provider,
+                            name,
                             access_key: crypto::encrypt(&access_key),
                             secret_key: crypto::encrypt(&secret_key),
-                            region, bucket, endpoint,
+                            region,
+                            bucket,
+                            endpoint,
                         };
                         Self::save_data(&data)?;
                         Ok(serde_json::json!({ "success": true }))
@@ -190,12 +229,16 @@ impl Plugin for ObjectStoragePlugin {
             "list_connections" => {
                 let data = Self::load_data()?;
                 // 返回时脱敏：不返回 access_key 和 secret_key
-                let connections: Vec<Value> = data.connections.iter().map(|c| {
-                    serde_json::json!({
-                        "id": c.id, "provider": c.provider, "name": c.name,
-                        "region": c.region, "bucket": c.bucket, "endpoint": c.endpoint,
+                let connections: Vec<Value> = data
+                    .connections
+                    .iter()
+                    .map(|c| {
+                        serde_json::json!({
+                            "id": c.id, "provider": c.provider, "name": c.name,
+                            "region": c.region, "bucket": c.bucket, "endpoint": c.endpoint,
+                        })
                     })
-                }).collect();
+                    .collect();
                 Ok(serde_json::to_value(connections)?)
             }
 
@@ -224,8 +267,8 @@ impl Plugin for ObjectStoragePlugin {
             // ── 对象操作 ──
             // 以下方法通过 build_provider 创建云服务商客户端，
             // 然后调用对应的方法完成操作。
-            "list_buckets" | "list_objects" | "get_object_info"
-            | "download_object" | "upload_object" | "delete_object" => {
+            "list_buckets" | "list_objects" | "get_object_info" | "download_object"
+            | "upload_object" | "delete_object" => {
                 let conn_id = Self::get_connection_param(&params, "connection_id")?;
                 let data = Self::load_data()?;
                 let conn = Self::find_connection_by_id(&data.connections, conn_id)
@@ -242,8 +285,17 @@ impl Plugin for ObjectStoragePlugin {
                         let bucket = Self::get_connection_param(&params, "bucket")?;
                         let prefix = params.get("prefix").and_then(|v| v.as_str()).unwrap_or("");
                         let delimiter = params.get("delimiter").and_then(|v| v.as_str());
-                        let max_keys = params.get("max_keys").and_then(|v| v.as_u64()).map(|v| v as u32);
-                        let (objects, prefixes) = provider.list_objects(bucket, &conn.region, prefix, delimiter, max_keys)?;
+                        let max_keys = params
+                            .get("max_keys")
+                            .and_then(|v| v.as_u64())
+                            .map(|v| v as u32);
+                        let (objects, prefixes) = provider.list_objects(
+                            bucket,
+                            &conn.region,
+                            prefix,
+                            delimiter,
+                            max_keys,
+                        )?;
                         Ok(serde_json::json!({ "objects": objects, "prefixes": prefixes }))
                     }
                     "get_object_info" => {

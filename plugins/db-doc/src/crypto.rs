@@ -1,7 +1,7 @@
+use aes::cipher::{generic_array::GenericArray, BlockDecrypt, BlockEncrypt, KeyInit};
 use aes::Aes256;
-use aes::cipher::{KeyInit, BlockEncrypt, BlockDecrypt, generic_array::GenericArray};
-use sha2::{Sha256, Digest};
 use anyhow::Result;
+use sha2::{Digest, Sha256};
 
 /// 密码加密器 (AES-256 ECB + PKCS7)
 pub struct PasswordEncryptor {
@@ -50,7 +50,8 @@ impl PasswordEncryptor {
         for chunk in padded_data.chunks(16) {
             let mut block = [0u8; 16];
             block.copy_from_slice(chunk);
-            self.cipher.encrypt_block(GenericArray::from_mut_slice(&mut block));
+            self.cipher
+                .encrypt_block(GenericArray::from_mut_slice(&mut block));
             encrypted_data.extend_from_slice(&block);
         }
 
@@ -69,7 +70,8 @@ impl PasswordEncryptor {
         for chunk in encrypted_data.chunks(16) {
             let mut block = [0u8; 16];
             block.copy_from_slice(chunk);
-            self.cipher.decrypt_block(GenericArray::from_mut_slice(&mut block));
+            self.cipher
+                .decrypt_block(GenericArray::from_mut_slice(&mut block));
             decrypted_data.extend_from_slice(&block);
         }
 
@@ -91,8 +93,7 @@ impl PasswordEncryptor {
         }
 
         decrypted_data.truncate(decrypted_data.len() - padding_len);
-        String::from_utf8(decrypted_data)
-            .map_err(|e| anyhow::anyhow!("UTF-8 解码失败: {}", e))
+        String::from_utf8(decrypted_data).map_err(|e| anyhow::anyhow!("UTF-8 解码失败: {}", e))
     }
 }
 

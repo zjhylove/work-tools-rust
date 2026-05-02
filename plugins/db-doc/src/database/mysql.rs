@@ -1,10 +1,10 @@
-use std::time::Duration;
-use async_trait::async_trait;
-use anyhow::Result;
-use sqlx::mysql::{MySqlPoolOptions, MySqlRow};
-use sqlx::{Row, Pool, MySql};
-use crate::models::{ConnectionConfig, TableInfo, ColumnInfo, IndexInfo};
 use super::DatabaseExtractor;
+use crate::models::{ColumnInfo, ConnectionConfig, IndexInfo, TableInfo};
+use anyhow::Result;
+use async_trait::async_trait;
+use sqlx::mysql::{MySqlPoolOptions, MySqlRow};
+use sqlx::{MySql, Pool, Row};
+use std::time::Duration;
 
 /// MySQL 元数据提取器
 pub struct MySqlExtractor;

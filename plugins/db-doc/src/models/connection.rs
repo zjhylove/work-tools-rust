@@ -168,8 +168,8 @@ impl ExportFormat {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum TemplateStyle {
-    Simple,      // 简洁版
-    Detailed,    // 详细版
+    Simple,   // 简洁版
+    Detailed, // 详细版
 }
 
 impl Default for TemplateStyle {

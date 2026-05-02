@@ -40,22 +40,22 @@ pub struct PluginPackage {
 /// - `#[serde(rename_all = "camelCase")]`: 支持 camelCase JSON 字段名
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PluginManifest {
-    pub id: String,               // 唯一标识，如 "password-manager"
-    pub name: String,             // 显示名称
-    pub description: String,     // 功能描述
-    pub version: String,          // 版本号
+    pub id: String,          // 唯一标识，如 "password-manager"
+    pub name: String,        // 显示名称
+    pub description: String, // 功能描述
+    pub version: String,     // 版本号
     #[serde(default)]
-    pub icon: Option<String>,     // 图标
+    pub icon: Option<String>, // 图标
     #[serde(default)]
-    pub author: Option<String>,   // 作者
+    pub author: Option<String>, // 作者
     #[serde(default)]
     pub homepage: Option<String>, // 项目主页
     #[serde(default)]
     pub min_app_version: Option<String>, // 最低应用版本要求
     #[serde(default)]
-    pub license: Option<String>,  // 许可证
-    pub files: PlatformFiles,     // 各平台的动态库文件配置
-    pub assets: AssetsConfig,     // 前端资源配置
+    pub license: Option<String>, // 许可证
+    pub files: PlatformFiles, // 各平台的动态库文件配置
+    pub assets: AssetsConfig, // 前端资源配置
     #[serde(default)]
     pub permissions: Vec<String>, // 权限列表
     #[serde(default)]
@@ -106,8 +106,7 @@ pub struct AssetsConfig {
 impl PluginPackage {
     /// 从 ZIP 文件路径加载插件包
     pub fn from_zip(zip_path: &Path) -> Result<Self> {
-        let zip_data = std::fs::read(zip_path)
-            .context("读取插件包文件失败")?;
+        let zip_data = std::fs::read(zip_path).context("读取插件包文件失败")?;
         Self::from_zip_bytes(&zip_data)
     }
 
@@ -119,8 +118,7 @@ impl PluginPackage {
     pub fn from_zip_bytes(data: &[u8]) -> Result<Self> {
         // `Cursor` 允许在内存中的字节数组上进行文件操作
         let cursor = Cursor::new(data);
-        let mut archive = ZipArchive::new(cursor)
-            .context("解析 ZIP 文件失败")?;
+        let mut archive = ZipArchive::new(cursor).context("解析 ZIP 文件失败")?;
 
         // 从 ZIP 中读取 manifest.json
         // `by_name` 在 ZIP 条目中按文件名查找
@@ -129,8 +127,8 @@ impl PluginPackage {
             .context("插件包中未找到 manifest.json")?;
 
         // `from_reader` 直接从 ZIP 条目流中反序列化 JSON
-        let manifest: PluginManifest = serde_json::from_reader(manifest_file)
-            .context("解析 manifest.json 失败")?;
+        let manifest: PluginManifest =
+            serde_json::from_reader(manifest_file).context("解析 manifest.json 失败")?;
 
         Ok(Self {
             manifest,
@@ -151,13 +149,10 @@ impl PluginPackage {
         let mut archive = ZipArchive::new(cursor)?;
 
         // 确保目标目录存在
-        std::fs::create_dir_all(plugin_dir)
-            .context("创建插件目录失败")?;
+        std::fs::create_dir_all(plugin_dir).context("创建插件目录失败")?;
 
         // `extract` 递归解压所有文件到目标目录
-        archive
-            .extract(plugin_dir)
-            .context("解压插件包失败")?;
+        archive.extract(plugin_dir).context("解压插件包失败")?;
 
         tracing::info!("插件 {} 安装成功", self.manifest.id);
         Ok(())

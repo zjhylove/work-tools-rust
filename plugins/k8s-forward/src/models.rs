@@ -25,9 +25,9 @@ pub struct ForwardRule {
     pub name: String,
     #[serde(default = "default_local_host")] // 默认 "127.0.0.1"
     pub local_host: String,
-    pub local_port: u16,                     // 本地监听端口
-    pub remote_host: String,                 // 远程目标主机
-    pub remote_port: u16,                    // 远程目标端口
+    pub local_port: u16,     // 本地监听端口
+    pub remote_host: String, // 远程目标主机
+    pub remote_port: u16,    // 远程目标端口
     pub rule_type: RuleType,
     // 以下字段仅在 K8s 类型时有值
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -40,48 +40,56 @@ pub struct ForwardRule {
     pub container_name: Option<String>,
 }
 
-fn default_local_host() -> String { "127.0.0.1".to_string() }
+fn default_local_host() -> String {
+    "127.0.0.1".to_string()
+}
 
 /// HTTP 代理映射（域名 → 本地端口）
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ProxyMapping {
-    pub domain: String,    // 请求的域名
-    pub target: String,    // 转发目标地址（如 "127.0.0.1:10001"）
-    pub rule_id: String,   // 关联的转发规则 ID
+    pub domain: String,  // 请求的域名
+    pub target: String,  // 转发目标地址（如 "127.0.0.1:10001"）
+    pub rule_id: String, // 关联的转发规则 ID
     #[serde(default = "default_true")]
-    pub editable: bool,    // 是否可编辑（Pod 地址为 true，别名为 false）
+    pub editable: bool, // 是否可编辑（Pod 地址为 true，别名为 false）
 }
 
-fn default_true() -> bool { true }
+fn default_true() -> bool {
+    true
+}
 
 /// SSH 连接配置（加密存储密码）
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SshConfig {
     pub host: String,
     #[serde(default = "default_ssh_port")]
-    pub port: u16,          // 默认为 SSH 标准端口 22
+    pub port: u16, // 默认为 SSH 标准端口 22
     pub username: String,
-    pub password: String,   // 加密后的密码
+    pub password: String, // 加密后的密码
 }
 
-fn default_ssh_port() -> u16 { 22 }
+fn default_ssh_port() -> u16 {
+    22
+}
 
 /// Kuboard 连接配置
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct KuboardConfig {
     pub url: String,
     pub username: String,
-    pub password: String,   // 加密后的密码
+    pub password: String, // 加密后的密码
 }
 
 /// HTTP 代理配置
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ProxyConfig {
     #[serde(default = "default_proxy_port")]
-    pub port: u16,           // 默认为 80
+    pub port: u16, // 默认为 80
 }
 
-fn default_proxy_port() -> u16 { 80 }
+fn default_proxy_port() -> u16 {
+    80
+}
 
 impl Default for ProxyConfig {
     fn default() -> Self {
@@ -125,7 +133,9 @@ pub struct ContainerPort {
     pub protocol: String, // TCP / UDP
 }
 
-fn default_protocol() -> String { "TCP".to_string() }
+fn default_protocol() -> String {
+    "TCP".to_string()
+}
 
 /// 容器信息
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -139,8 +149,8 @@ pub struct ContainerInfo {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PodInfo {
     pub name: String,
-    pub ip: String,      // Pod 的集群内 IP
-    pub status: String,  // Running / Pending / Failed 等
+    pub ip: String,     // Pod 的集群内 IP
+    pub status: String, // Running / Pending / Failed 等
     #[serde(default)]
     pub containers: Vec<ContainerInfo>,
 }
@@ -173,7 +183,7 @@ pub struct ProxyStatus {
 pub struct LoginResult {
     pub success: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub mfa_required: Option<bool>,   // 是否需要 MFA 验证
+    pub mfa_required: Option<bool>, // 是否需要 MFA 验证
     #[serde(skip_serializing_if = "Option::is_none")]
     pub message: Option<String>,
 }

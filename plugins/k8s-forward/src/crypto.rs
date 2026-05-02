@@ -9,10 +9,10 @@
 //! 2. 插件之间不应有代码依赖
 //! 3. 每种实现可以独立演进而互不影响
 
+use aes::cipher::{generic_array::GenericArray, BlockDecrypt, BlockEncrypt, KeyInit};
 use aes::Aes256;
-use aes::cipher::{KeyInit, BlockEncrypt, BlockDecrypt, generic_array::GenericArray};
-use sha2::{Sha256, Digest};
 use anyhow::Result;
+use sha2::{Digest, Sha256};
 
 /// 密码加密器（K8s 转发专用密钥）
 pub struct PasswordEncryptor {
@@ -59,7 +59,8 @@ impl PasswordEncryptor {
         for chunk in padded_data.chunks(16) {
             let mut block = [0u8; 16];
             block.copy_from_slice(chunk);
-            self.cipher.encrypt_block(GenericArray::from_mut_slice(&mut block));
+            self.cipher
+                .encrypt_block(GenericArray::from_mut_slice(&mut block));
             encrypted_data.extend_from_slice(&block);
         }
 
@@ -79,7 +80,8 @@ impl PasswordEncryptor {
         for chunk in encrypted_data.chunks(16) {
             let mut block = [0u8; 16];
             block.copy_from_slice(chunk);
-            self.cipher.decrypt_block(GenericArray::from_mut_slice(&mut block));
+            self.cipher
+                .decrypt_block(GenericArray::from_mut_slice(&mut block));
             decrypted_data.extend_from_slice(&block);
         }
 

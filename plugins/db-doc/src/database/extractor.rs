@@ -1,6 +1,6 @@
-use async_trait::async_trait;
-use anyhow::Result;
 use crate::models::{ConnectionConfig, TableInfo};
+use anyhow::Result;
+use async_trait::async_trait;
 
 /// 数据库元数据提取器
 #[async_trait]

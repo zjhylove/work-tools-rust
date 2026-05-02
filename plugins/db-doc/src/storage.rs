@@ -1,9 +1,9 @@
+use crate::crypto::PasswordEncryptor;
+use crate::models::{ConnectionConfig, ExportHistory};
 use anyhow::Result;
+use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
 use worktools_plugin_api::storage::PluginStorage;
-use crate::models::{ConnectionConfig, ExportHistory};
-use crate::crypto::PasswordEncryptor;
-use once_cell::sync::Lazy;
 
 /// 插件数据存储结构
 #[derive(Debug, Default, Serialize, Deserialize)]

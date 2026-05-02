@@ -87,7 +87,9 @@ fn register_functions(engine: &mut Engine) {
     engine.register_fn("contains", |s: &str, sub: &str| s.contains(sub));
     engine.register_fn("starts_with", |s: &str, prefix: &str| s.starts_with(prefix));
     engine.register_fn("ends_with", |s: &str, suffix: &str| s.ends_with(suffix));
-    engine.register_fn("replace", |s: &str, from: &str, to: &str| s.replace(from, to));
+    engine.register_fn("replace", |s: &str, from: &str, to: &str| {
+        s.replace(from, to)
+    });
 
     // split(): 字符串分割，返回 Vec<String>
     engine.register_fn("split", |s: &str, sep: &str| -> Vec<String> {
@@ -110,7 +112,10 @@ fn register_functions(engine: &mut Engine) {
             s.to_string()
         } else {
             // `std::iter::repeat(fill).take(n)` 生成 n 个填充字符
-            std::iter::repeat(fill).take(width - s.len()).collect::<String>() + s
+            std::iter::repeat(fill)
+                .take(width - s.len())
+                .collect::<String>()
+                + s
         }
     });
     engine.register_fn("pad_right", |s: &str, n: i64, ch: &str| {
@@ -119,7 +124,11 @@ fn register_functions(engine: &mut Engine) {
         if s.len() >= width {
             s.to_string()
         } else {
-            s.to_string() + std::iter::repeat(fill).take(width - s.len()).collect::<String>().as_str()
+            s.to_string()
+                + std::iter::repeat(fill)
+                    .take(width - s.len())
+                    .collect::<String>()
+                    .as_str()
         }
     });
 
@@ -181,7 +190,7 @@ fn register_functions(engine: &mut Engine) {
         let mut i = 0;
         while i < rounded_end {
             // `u32::from_le_bytes` 用 4 字节构建 u32（小端序）
-            let mut k1 = u32::from_le_bytes([bytes[i], bytes[i+1], bytes[i+2], bytes[i+3]]);
+            let mut k1 = u32::from_le_bytes([bytes[i], bytes[i + 1], bytes[i + 2], bytes[i + 3]]);
             k1 = k1.wrapping_mul(c1);
             k1 = k1.rotate_left(15); // 循环左移
             k1 = k1.wrapping_mul(c2);
@@ -194,8 +203,12 @@ fn register_functions(engine: &mut Engine) {
         // 处理尾部不足 4 字节的剩余部分
         let mut k1: u32 = 0;
         let tail = n & 3;
-        if tail >= 3 { k1 ^= (bytes[rounded_end + 2] as u32) << 16; }
-        if tail >= 2 { k1 ^= (bytes[rounded_end + 1] as u32) << 8; }
+        if tail >= 3 {
+            k1 ^= (bytes[rounded_end + 2] as u32) << 16;
+        }
+        if tail >= 2 {
+            k1 ^= (bytes[rounded_end + 1] as u32) << 8;
+        }
         if tail >= 1 {
             k1 ^= bytes[rounded_end] as u32;
             k1 = k1.wrapping_mul(c1);
@@ -236,9 +249,7 @@ fn register_functions(engine: &mut Engine) {
         |replicas: i64, nodes: rhai::Array, key: &str| -> i64 {
             let replicas = replicas as usize;
             // 从 Rhai Array 中提取实际的节点列表
-            let real_nodes: Vec<i64> = nodes.iter()
-                .filter_map(|v| v.as_int().ok())
-                .collect();
+            let real_nodes: Vec<i64> = nodes.iter().filter_map(|v| v.as_int().ok()).collect();
 
             // 构建哈希环: BTreeMap<哈希值, 节点编号>
             // BTreeMap 是有序的，支持 range 查询（找到下一个大于等于哈希值的节点）
@@ -257,8 +268,8 @@ fn register_functions(engine: &mut Engine) {
             // 在哈希环上顺时针查找最近的节点
             let hash = fnv1a_hash(key);
             circle
-                .range(hash..)            // 从 hash 开始找
-                .next()                    // 下一个节点
+                .range(hash..) // 从 hash 开始找
+                .next() // 下一个节点
                 .or_else(|| circle.first_key_value()) // 环末尾回绕到开头
                 .map(|(_, &node)| node)
                 .unwrap_or(-1)
@@ -267,37 +278,34 @@ fn register_functions(engine: &mut Engine) {
 
     // ── 日期时间解析 ──
     // 支持 yyyy-MM-dd 和 yyyy-MM-dd HH:mm:ss 两种格式
-    engine.register_fn(
-        "parse_datetime",
-        |s: &str, pattern: &str| -> rhai::Map {
-            // `chrono::NaiveDateTime` 不带时区的日期时间
-            let naive_dt = if pattern.contains("HH") {
-                chrono::NaiveDateTime::parse_from_str(s, "%Y-%m-%d %H:%M:%S")
-                    .or_else(|_| chrono::NaiveDateTime::parse_from_str(s, "%Y-%m-%d %H:%M"))
-                    .ok()
-            } else {
-                chrono::NaiveDate::parse_from_str(s, "%Y-%m-%d")
-                    .map(|d| d.and_hms_opt(0, 0, 0).unwrap())
-                    .ok()
-            };
+    engine.register_fn("parse_datetime", |s: &str, pattern: &str| -> rhai::Map {
+        // `chrono::NaiveDateTime` 不带时区的日期时间
+        let naive_dt = if pattern.contains("HH") {
+            chrono::NaiveDateTime::parse_from_str(s, "%Y-%m-%d %H:%M:%S")
+                .or_else(|_| chrono::NaiveDateTime::parse_from_str(s, "%Y-%m-%d %H:%M"))
+                .ok()
+        } else {
+            chrono::NaiveDate::parse_from_str(s, "%Y-%m-%d")
+                .map(|d| d.and_hms_opt(0, 0, 0).unwrap())
+                .ok()
+        };
 
-            // 构建返回给脚本的 Map
-            let mut map = rhai::Map::new();
-            if let Some(dt) = naive_dt {
-                // `dt.year()` 等是 chrono 提供的方法
-                // `.into()` 将值转为 Rhai 的 Dynamic 类型
-                map.insert("year".into(), (dt.year() as i64).into());
-                map.insert("month".into(), (dt.month() as i64).into());
-                map.insert("day".into(), (dt.day() as i64).into());
-                map.insert("hour".into(), (dt.hour() as i64).into());
-                map.insert("minute".into(), (dt.minute() as i64).into());
-                map.insert("second".into(), (dt.second() as i64).into());
-                // ISO 周数（周一为起始，与 Java WeekFields.of(MONDAY, 1) 一致）
-                map.insert("week_of_year".into(), (dt.iso_week().week() as i64).into());
-            }
-            map
-        },
-    );
+        // 构建返回给脚本的 Map
+        let mut map = rhai::Map::new();
+        if let Some(dt) = naive_dt {
+            // `dt.year()` 等是 chrono 提供的方法
+            // `.into()` 将值转为 Rhai 的 Dynamic 类型
+            map.insert("year".into(), (dt.year() as i64).into());
+            map.insert("month".into(), (dt.month() as i64).into());
+            map.insert("day".into(), (dt.day() as i64).into());
+            map.insert("hour".into(), (dt.hour() as i64).into());
+            map.insert("minute".into(), (dt.minute() as i64).into());
+            map.insert("second".into(), (dt.second() as i64).into());
+            // ISO 周数（周一为起始，与 Java WeekFields.of(MONDAY, 1) 一致）
+            map.insert("week_of_year".into(), (dt.iso_week().week() as i64).into());
+        }
+        map
+    });
 }
 
 /// 从 Rhai 作用域中提取变量值并转为字符串
@@ -307,10 +315,18 @@ fn register_functions(engine: &mut Engine) {
 /// 用于显式指定泛型参数。
 fn get_scope_value_as_string(scope: &Scope, name: &str, label: &str) -> Result<String> {
     // 尝试按不同 Rust 类型读取，然后转为 String
-    if let Some(v) = scope.get_value::<String>(name) { return Ok(v); }
-    if let Some(v) = scope.get_value::<i64>(name) { return Ok(v.to_string()); }
-    if let Some(v) = scope.get_value::<f64>(name) { return Ok(v.to_string()); }
-    if let Some(v) = scope.get_value::<bool>(name) { return Ok(v.to_string()); }
+    if let Some(v) = scope.get_value::<String>(name) {
+        return Ok(v);
+    }
+    if let Some(v) = scope.get_value::<i64>(name) {
+        return Ok(v.to_string());
+    }
+    if let Some(v) = scope.get_value::<f64>(name) {
+        return Ok(v.to_string());
+    }
+    if let Some(v) = scope.get_value::<bool>(name) {
+        return Ok(v.to_string());
+    }
     Err(anyhow!("脚本未设置 {label} 变量"))
 }
 
@@ -364,7 +380,8 @@ pub fn get_templates() -> Vec<RouteRule> {
             code_length: 0,
             code_prefix: String::new(),
             route_script: r#"let database = "db_order_" + code[3..7];
-let table_suffix = "_" + code[15..18];"#.to_string(),
+let table_suffix = "_" + code[15..18];"#
+                .to_string(),
             tables: vec![],
         },
         RouteRule {
@@ -376,7 +393,8 @@ let table_suffix = "_" + code[15..18];"#.to_string(),
             route_script: r#"let n = code.len();
 let shard = (n % 16).to_string();
 let database = "db_order_" + shard;
-let table_suffix = "_" + shard;"#.to_string(),
+let table_suffix = "_" + shard;"#
+                .to_string(),
             tables: vec![],
         },
         RouteRule {
@@ -388,7 +406,8 @@ let table_suffix = "_" + shard;"#.to_string(),
             route_script: r#"let year = code[3..7];
 let month = code[7..9];
 let database = "db_log";
-let table_suffix = "_" + year + "_" + month;"#.to_string(),
+let table_suffix = "_" + year + "_" + month;"#
+                .to_string(),
             tables: vec![],
         },
         RouteRule {
@@ -400,7 +419,8 @@ let table_suffix = "_" + year + "_" + month;"#.to_string(),
             route_script: r#"let nodes = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
 let sharding = consistent_hash(32, nodes, code);
 let database = "0";
-let table_suffix = "_" + pad_left(sharding.to_string(), 2, "0");"#.to_string(),
+let table_suffix = "_" + pad_left(sharding.to_string(), 2, "0");"#
+                .to_string(),
             tables: vec![],
         },
     ]

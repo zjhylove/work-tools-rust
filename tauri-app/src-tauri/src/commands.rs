@@ -85,9 +85,7 @@ pub async fn call_plugin_method(
 #[tauri::command]
 pub async fn get_plugin_config(plugin_id: String) -> Result<Value, String> {
     load_plugin_config(&plugin_id)
-        .inspect_err(|e| {
-            tracing::error!(plugin_id = %plugin_id, "读取插件配置失败: {}", e)
-        })
+        .inspect_err(|e| tracing::error!(plugin_id = %plugin_id, "读取插件配置失败: {}", e))
         .map_err(|e| e.to_string())
 }
 
@@ -130,16 +128,12 @@ pub async fn import_plugin_package(
 
     // 1. 从 ZIP 文件加载插件包
     let pkg = PluginPackage::from_zip(std::path::Path::new(&file_path))
-        .inspect_err(|e| {
-            tracing::error!(file_path = %file_path, "加载插件包失败: {}", e)
-        })
+        .inspect_err(|e| tracing::error!(file_path = %file_path, "加载插件包失败: {}", e))
         .map_err(|e| format!("加载插件包失败: {}", e))?;
 
     // 2. 验证插件包完整性
     pkg.validate()
-        .inspect_err(|e| {
-            tracing::error!(plugin_id = %pkg.manifest.id, "验证插件包失败: {}", e)
-        })
+        .inspect_err(|e| tracing::error!(plugin_id = %pkg.manifest.id, "验证插件包失败: {}", e))
         .map_err(|e| format!("插件包验证失败: {}", e))?;
 
     // 3. 创建插件目录并解压
@@ -160,8 +154,7 @@ pub async fn import_plugin_package(
     let assets_dir = pkg.get_assets_dir(&plugin_dir);
 
     // 5. 注册到插件注册表（持久化元数据）
-    let mut registry = PluginRegistry::new()
-        .map_err(|e| format!("打开插件注册表失败: {}", e))?;
+    let mut registry = PluginRegistry::new().map_err(|e| format!("打开插件注册表失败: {}", e))?;
 
     let installed_plugin = InstalledPlugin {
         id: pkg.manifest.id.clone(),
@@ -172,16 +165,19 @@ pub async fn import_plugin_package(
         author: pkg.manifest.author.clone(),
         homepage: pkg.manifest.homepage.clone(),
         installed_at: chrono::Utc::now(), // 记录安装时间
-        enabled: true,                     // 默认启用
+        enabled: true,                    // 默认启用
         assets_path: assets_dir.clone(),
         library_path: library_path.clone(),
     };
 
-    registry.register(installed_plugin)
+    registry
+        .register(installed_plugin)
         .map_err(|e| format!("注册插件失败: {}", e))?;
 
     // 6. 重新加载插件管理器，使新插件生效
-    manager.init().await
+    manager
+        .init()
+        .await
         .map_err(|e| format!("重新加载插件管理器失败: {}", e))?;
 
     tracing::info!(plugin_id = %pkg.manifest.id, "插件导入成功");
@@ -193,15 +189,14 @@ pub async fn import_plugin_package(
 /// 扫描插件目录下所有包含 manifest.json 的子目录
 #[tauri::command]
 pub async fn get_available_plugins() -> Result<Vec<PluginManifest>, String> {
-    let plugins_dir = crate::paths::plugins_dir()
-        .map_err(|e| format!("获取插件目录失败: {}", e))?;
+    let plugins_dir =
+        crate::paths::plugins_dir().map_err(|e| format!("获取插件目录失败: {}", e))?;
 
     let mut plugins = Vec::new();
 
     if plugins_dir.exists() {
         // `fs::read_dir` 返回目录条目迭代器
-        let entries = fs::read_dir(&plugins_dir)
-            .map_err(|e| format!("读取插件目录失败: {}", e))?;
+        let entries = fs::read_dir(&plugins_dir).map_err(|e| format!("读取插件目录失败: {}", e))?;
 
         for entry in entries {
             // `entry?` 传播读取单个条目的错误
@@ -232,8 +227,7 @@ pub async fn get_available_plugins() -> Result<Vec<PluginManifest>, String> {
 /// 获取已安装插件列表（从注册表文件中读取）
 #[tauri::command]
 pub async fn get_installed_plugins_from_registry() -> Result<Vec<InstalledPlugin>, String> {
-    let registry = PluginRegistry::new()
-        .map_err(|e| format!("打开插件注册表失败: {}", e))?;
+    let registry = PluginRegistry::new().map_err(|e| format!("打开插件注册表失败: {}", e))?;
 
     Ok(registry.get_installed())
 }
@@ -260,8 +254,8 @@ pub async fn install_plugin(
     let content = fs::read_to_string(&manifest_path)
         .map_err(|e| format!("读取 manifest.json 失败: {}", e))?;
 
-    let manifest: PluginManifest = serde_json::from_str(&content)
-        .map_err(|e| format!("解析 manifest.json 失败: {}", e))?;
+    let manifest: PluginManifest =
+        serde_json::from_str(&content).map_err(|e| format!("解析 manifest.json 失败: {}", e))?;
 
     // 获取当前平台对应的动态库文件名
     let lib_name = manifest
@@ -272,8 +266,7 @@ pub async fn install_plugin(
     let assets_dir = plugin_dir.join("assets");
 
     // 注册到注册表
-    let mut registry = PluginRegistry::new()
-        .map_err(|e| format!("打开插件注册表失败: {}", e))?;
+    let mut registry = PluginRegistry::new().map_err(|e| format!("打开插件注册表失败: {}", e))?;
 
     let installed_plugin = InstalledPlugin {
         id: manifest.id.clone(),
@@ -289,11 +282,14 @@ pub async fn install_plugin(
         library_path,
     };
 
-    registry.register(installed_plugin)
+    registry
+        .register(installed_plugin)
         .map_err(|e| format!("注册插件失败: {}", e))?;
 
     // 重新加载插件管理器
-    manager.init().await
+    manager
+        .init()
+        .await
         .map_err(|e| format!("重新加载插件管理器失败: {}", e))?;
 
     tracing::info!(plugin_id = %manifest.id, "插件安装成功");
@@ -314,11 +310,13 @@ pub async fn uninstall_plugin(
 
     // 1. 先从内存中卸载插件，释放 DLL 文件锁
     //    Windows 上，被加载的 DLL 文件无法删除，必须先释放
-    manager.unload_plugin(&plugin_id).await
+    manager
+        .unload_plugin(&plugin_id)
+        .await
         .map_err(|e| format!("卸载插件失败: {}", e))?;
 
-    let plugins_base_dir = crate::paths::plugins_dir()
-        .map_err(|e| format!("获取插件目录失败: {}", e))?;
+    let plugins_base_dir =
+        crate::paths::plugins_dir().map_err(|e| format!("获取插件目录失败: {}", e))?;
 
     // 2. 删除插件目录（DLL 已释放，可以正常删除）
     let plugin_dir = plugins_base_dir.join(&plugin_id);
@@ -336,8 +334,8 @@ pub async fn uninstall_plugin(
         // 如果标准路径不存在，扫描所有子目录查找匹配的 manifest.json
         // 这是为了兼容不同的目录命名方式
         if plugins_base_dir.exists() {
-            let entries = fs::read_dir(&plugins_base_dir)
-                .map_err(|e| format!("读取插件目录失败: {}", e))?;
+            let entries =
+                fs::read_dir(&plugins_base_dir).map_err(|e| format!("读取插件目录失败: {}", e))?;
 
             for entry in entries {
                 let entry = entry.map_err(|e| format!("读取目录项失败: {}", e))?;
@@ -377,10 +375,10 @@ pub async fn uninstall_plugin(
     }
 
     // 3. 从注册表移除（持久化的元数据）
-    let mut registry = PluginRegistry::new()
-        .map_err(|e| format!("打开插件注册表失败: {}", e))?;
+    let mut registry = PluginRegistry::new().map_err(|e| format!("打开插件注册表失败: {}", e))?;
 
-    registry.unregister(&plugin_id)
+    registry
+        .unregister(&plugin_id)
         .map_err(|e| format!("从注册表移除插件失败: {}", e))?;
 
     tracing::info!(plugin_id = %plugin_id, "插件卸载成功");
@@ -422,8 +420,7 @@ fn remove_dir_with_retry(path: &std::path::Path, max_retries: u32) -> std::io::R
 /// 前端需要动态加载插件的 HTML/JS/CSS
 #[tauri::command]
 pub async fn read_plugin_asset(plugin_id: String, asset_path: String) -> Result<String, String> {
-    let registry = PluginRegistry::new()
-        .map_err(|e| format!("打开插件注册表失败: {}", e))?;
+    let registry = PluginRegistry::new().map_err(|e| format!("打开插件注册表失败: {}", e))?;
 
     let plugin = registry
         .get(&plugin_id)
@@ -433,8 +430,8 @@ pub async fn read_plugin_asset(plugin_id: String, asset_path: String) -> Result<
     let full_path = plugin.assets_path.join(&asset_path);
 
     // 读取文件内容（以 UTF-8 字符串形式返回）
-    let content = std::fs::read_to_string(&full_path)
-        .map_err(|e| format!("读取资源文件失败: {}", e))?;
+    let content =
+        std::fs::read_to_string(&full_path).map_err(|e| format!("读取资源文件失败: {}", e))?;
 
     Ok(content)
 }
@@ -443,8 +440,7 @@ pub async fn read_plugin_asset(plugin_id: String, asset_path: String) -> Result<
 /// 使用 `opener` crate 实现跨平台
 #[tauri::command]
 pub async fn open_url(url: String) -> Result<(), String> {
-    opener::open(&url)
-        .map_err(|e| format!("打开链接失败: {}", e))
+    opener::open(&url).map_err(|e| format!("打开链接失败: {}", e))
 }
 
 /// 写入文本文件到指定路径
@@ -455,8 +451,7 @@ pub async fn open_url(url: String) -> Result<(), String> {
 #[tauri::command]
 pub async fn write_file(path: String, content: String) -> Result<(), String> {
     tracing::info!(path = %path, size = content.len(), "写入文件");
-    fs::write(&path, &content)
-        .map_err(|e| format!("写入文件失败: {}", e))
+    fs::write(&path, &content).map_err(|e| format!("写入文件失败: {}", e))
 }
 
 /// 打开文件夹选择对话框
@@ -536,8 +531,8 @@ pub fn get_logs(query: Option<LogQuery>) -> Result<Vec<LogEntry>, String> {
     let ring = LOG_RING.lock().map_err(|e| format!("Lock error: {}", e))?;
 
     let entries: Vec<LogEntry> = ring
-        .iter()        // 从头到尾迭代（最旧的在前）
-        .rev()         // 反转：最新的在前
+        .iter() // 从头到尾迭代（最旧的在前）
+        .rev() // 反转：最新的在前
         .filter(|e| match &query {
             Some(q) => {
                 // 按日志级别过滤
@@ -567,8 +562,8 @@ pub fn get_logs(query: Option<LogQuery>) -> Result<Vec<LogEntry>, String> {
             None => true, // 没有查询条件，全部通过
         })
         .take(DEFAULT_LIMIT) // 限制返回数量
-        .cloned()             // 从引用克隆出独立的值
-        .collect();           // 收集到 Vec 中
+        .cloned() // 从引用克隆出独立的值
+        .collect(); // 收集到 Vec 中
 
     Ok(entries)
 }
@@ -582,10 +577,7 @@ pub fn clear_logs() -> Result<(), String> {
 }
 
 #[tauri::command]
-pub async fn set_window_theme(
-    theme: String,
-    app: tauri::AppHandle,
-) -> Result<(), String> {
+pub async fn set_window_theme(theme: String, app: tauri::AppHandle) -> Result<(), String> {
     if let Some(w) = app.get_webview_window("main") {
         let t = match theme.as_str() {
             "dark" => Some(tauri::Theme::Dark),

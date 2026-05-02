@@ -18,7 +18,7 @@ use serde::{Deserialize, Serialize};
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
-use tauri::{menu::MenuBuilder, menu::MenuItemBuilder, Runtime, Manager};
+use tauri::{menu::MenuBuilder, menu::MenuItemBuilder, Manager, Runtime};
 
 // ── 常量 ──
 
@@ -193,10 +193,8 @@ fn build_menu<R: Runtime>(
     app_handle: &tauri::AppHandle<R>,
     label: &str,
 ) -> anyhow::Result<tauri::menu::Menu<R>> {
-    let toggle_item = MenuItemBuilder::with_id(MENU_TOGGLE, label)
-        .build(app_handle)?;
-    let quit_item = MenuItemBuilder::with_id(MENU_QUIT, LABEL_QUIT)
-        .build(app_handle)?;
+    let toggle_item = MenuItemBuilder::with_id(MENU_TOGGLE, label).build(app_handle)?;
+    let quit_item = MenuItemBuilder::with_id(MENU_QUIT, LABEL_QUIT).build(app_handle)?;
     Ok(MenuBuilder::new(app_handle)
         .item(&toggle_item)
         .separator() // 分隔线

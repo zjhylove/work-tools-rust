@@ -197,10 +197,8 @@ impl PluginRegistry {
     /// 保存注册表到文件
     /// `to_string_pretty` 输出格式化的 JSON（带缩进），方便人工查看和调试
     fn save(&self) -> Result<()> {
-        let content = serde_json::to_string_pretty(&self.installed)
-            .context("序列化注册表失败")?;
-        fs::write(&self.registry_file, content)
-            .context("写入注册表文件失败")?;
+        let content = serde_json::to_string_pretty(&self.installed).context("序列化注册表失败")?;
+        fs::write(&self.registry_file, content).context("写入注册表文件失败")?;
         Ok(())
     }
 }

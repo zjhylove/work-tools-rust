@@ -18,10 +18,10 @@
 //! - `sha2` crate: SHA-256 哈希算法
 //! - `hex` crate: 二进制 ↔ 十六进制字符串转换
 
+use aes::cipher::{generic_array::GenericArray, BlockDecrypt, BlockEncrypt, KeyInit};
 use aes::Aes256;
-use aes::cipher::{KeyInit, BlockEncrypt, BlockDecrypt, generic_array::GenericArray};
-use sha2::{Sha256, Digest};
 use anyhow::Result;
+use sha2::{Digest, Sha256};
 
 /// 加密配置（简化版本，预留扩展）
 #[derive(Debug, Default, Clone, serde::Serialize, serde::Deserialize)]
@@ -152,8 +152,7 @@ impl PasswordEncryptor {
         decrypted_data.truncate(plaintext_len);
 
         // 将字节转为 UTF-8 字符串
-        String::from_utf8(decrypted_data)
-            .map_err(|e| anyhow::anyhow!("UTF-8 解码失败: {}", e))
+        String::from_utf8(decrypted_data).map_err(|e| anyhow::anyhow!("UTF-8 解码失败: {}", e))
     }
 
     /// 加密密码（公开接口）

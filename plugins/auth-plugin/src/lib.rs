@@ -16,20 +16,20 @@
 //! - `SystemTime::now().duration_since(UNIX_EPOCH)`: 获取 Unix 时间戳
 
 use anyhow::Result;
-use worktools_plugin_api::{Plugin, storage::PluginStorage};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use worktools_plugin_api::{storage::PluginStorage, Plugin};
 
 /// 双因素认证条目
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AuthEntry {
-    pub id: String,            // UUID
-    pub name: String,          // 显示名称（如 "GitHub"）
-    pub issuer: String,        // 发行方（如 "github.com"）
-    pub secret: String,        // Base32 编码的密钥
-    pub algorithm: String,     // 算法（SHA1 / SHA256 / SHA512）
-    pub digits: u32,           // 验证码位数（通常是 6）
-    pub period: u64,           // 时间周期（秒，通常是 30）
+    pub id: String,        // UUID
+    pub name: String,      // 显示名称（如 "GitHub"）
+    pub issuer: String,    // 发行方（如 "github.com"）
+    pub secret: String,    // Base32 编码的密钥
+    pub algorithm: String, // 算法（SHA1 / SHA256 / SHA512）
+    pub digits: u32,       // 验证码位数（通常是 6）
+    pub period: u64,       // 时间周期（秒，通常是 30）
     pub created_at: String,
     #[serde(skip_serializing_if = "Option::is_none")] // None 时不序列化此字段
     pub updated_at: Option<String>,
@@ -63,10 +63,10 @@ impl AuthPlugin {
     /// 函数内使用 `use` 导入 — 将依赖范围限制在最小。
     /// 这样做的优势：如果函数被删除，相关的导入也会被清理，减少无用依赖。
     fn generate_totp_internal(secret: &str, digits: u32, period: u64) -> Result<String> {
-        use std::time::{SystemTime, UNIX_EPOCH};
+        use base32::Alphabet;
         use hmac::{Hmac, Mac};
         use sha1::Sha1;
-        use base32::Alphabet;
+        use std::time::{SystemTime, UNIX_EPOCH};
 
         // 类型别名：HMAC-SHA1 的完整类型
         type HmacSha1 = Hmac<Sha1>;
@@ -111,16 +111,30 @@ impl AuthPlugin {
 }
 
 impl Plugin for AuthPlugin {
-    fn id(&self) -> &str { "auth" }
-    fn name(&self) -> &str { "双因素验证" }
-    fn description(&self) -> &str { "TOTP 双因素认证" }
-    fn version(&self) -> &str { "1.0.0" }
-    fn icon(&self) -> &str { "🔢" }
+    fn id(&self) -> &str {
+        "auth"
+    }
+    fn name(&self) -> &str {
+        "双因素验证"
+    }
+    fn description(&self) -> &str {
+        "TOTP 双因素认证"
+    }
+    fn version(&self) -> &str {
+        "1.0.0"
+    }
+    fn icon(&self) -> &str {
+        "🔢"
+    }
     fn get_view(&self) -> String {
         "<div>插件前端资源加载中...</div>".to_string()
     }
 
-    fn handle_call(&mut self, method: &str, params: Value) -> Result<Value, Box<dyn std::error::Error + Send + Sync>> {
+    fn handle_call(
+        &mut self,
+        method: &str,
+        params: Value,
+    ) -> Result<Value, Box<dyn std::error::Error + Send + Sync>> {
         match method {
             "list_entries" => {
                 let data = Self::load_data()?;
@@ -129,7 +143,8 @@ impl Plugin for AuthPlugin {
 
             "add_entry" | "update_entry" => {
                 // 从 params 中提取完整的 entry 对象
-                let entry_value = params.get("entry")
+                let entry_value = params
+                    .get("entry")
                     .ok_or_else(|| anyhow::anyhow!("缺少 entry 参数"))?;
 
                 let mut entry: AuthEntry = serde_json::from_value(entry_value.clone())
@@ -145,7 +160,9 @@ impl Plugin for AuthPlugin {
                 match method {
                     "add_entry" => data.entries.push(entry.clone()),
                     "update_entry" => {
-                        let index = data.entries.iter()
+                        let index = data
+                            .entries
+                            .iter()
                             .position(|e| e.id == entry.id)
                             .ok_or_else(|| anyhow::anyhow!("条目不存在"))?;
                         data.entries[index] = entry.clone();
@@ -158,12 +175,15 @@ impl Plugin for AuthPlugin {
             }
 
             "delete_entry" => {
-                let id = params.get("id")
+                let id = params
+                    .get("id")
                     .and_then(|v| v.as_str())
                     .ok_or_else(|| anyhow::anyhow!("缺少 id 参数"))?;
 
                 let mut data = Self::load_data()?;
-                let index = data.entries.iter()
+                let index = data
+                    .entries
+                    .iter()
                     .position(|e| e.id == id)
                     .ok_or_else(|| anyhow::anyhow!("条目不存在"))?;
                 data.entries.remove(index);
@@ -179,19 +199,24 @@ impl Plugin for AuthPlugin {
                 getrandom::getrandom(&mut secret_bytes)
                     .map_err(|e| anyhow::anyhow!("生成随机数失败: {}", e))?;
                 // 编码为 Base32（TOTP 标准编码格式）
-                let secret = base32::encode(base32::Alphabet::Rfc4648 { padding: true }, &secret_bytes);
+                let secret =
+                    base32::encode(base32::Alphabet::Rfc4648 { padding: true }, &secret_bytes);
                 Ok(serde_json::to_value(secret)?)
             }
 
             // ── 生成验证码 ──
             "generate_totp" => {
-                let secret = params.get("secret")
+                let secret = params
+                    .get("secret")
                     .and_then(|v| v.as_str())
                     .ok_or_else(|| anyhow::anyhow!("缺少 secret 参数"))?;
-                let digits = params.get("digits")
+                let digits = params
+                    .get("digits")
                     .and_then(|v| v.as_u64())
-                    .ok_or_else(|| anyhow::anyhow!("缺少 digits 参数"))? as u32;
-                let period = params.get("period")
+                    .ok_or_else(|| anyhow::anyhow!("缺少 digits 参数"))?
+                    as u32;
+                let period = params
+                    .get("period")
                     .and_then(|v| v.as_u64())
                     .ok_or_else(|| anyhow::anyhow!("缺少 period 参数"))?;
 

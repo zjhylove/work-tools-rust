@@ -17,11 +17,21 @@ use worktools_plugin_api::Plugin;
 pub struct JsonTools;
 
 impl Plugin for JsonTools {
-    fn id(&self) -> &str { "json-tools" }
-    fn name(&self) -> &str { "JSON 工具" }
-    fn description(&self) -> &str { "JSON格式化、编辑工具" }
-    fn version(&self) -> &str { "1.0.0" }
-    fn icon(&self) -> &str { "{ }" }
+    fn id(&self) -> &str {
+        "json-tools"
+    }
+    fn name(&self) -> &str {
+        "JSON 工具"
+    }
+    fn description(&self) -> &str {
+        "JSON格式化、编辑工具"
+    }
+    fn version(&self) -> &str {
+        "1.0.0"
+    }
+    fn icon(&self) -> &str {
+        "{ }"
+    }
     fn get_view(&self) -> String {
         "<div>插件前端资源加载中...</div>".to_string()
     }
@@ -36,7 +46,7 @@ impl Plugin for JsonTools {
             "format_json" => {
                 let json_str = params
                     .get("json")
-                    .and_then(|v| v.as_str())   // Value → Option<&str>
+                    .and_then(|v| v.as_str()) // Value → Option<&str>
                     .ok_or_else(|| anyhow::anyhow!("缺少 json 参数"))?;
 
                 // 先解析验证，然后格式化输出

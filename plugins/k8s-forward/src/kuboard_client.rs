@@ -1,8 +1,8 @@
-use anyhow::{Result, anyhow};
-use reqwest::redirect::Policy;
-use reqwest::{Client, cookie::Jar};
-use std::sync::Arc;
 use crate::models::*;
+use anyhow::{anyhow, Result};
+use reqwest::redirect::Policy;
+use reqwest::{cookie::Jar, Client};
+use std::sync::Arc;
 
 pub struct KuboardClient {
     client: Client,
@@ -32,8 +32,11 @@ impl KuboardClient {
     }
 
     fn url(&self, path: &str) -> String {
-        if path.starts_with("http") { path.to_string() }
-        else { format!("{}{}", self.base_url, path) }
+        if path.starts_with("http") {
+            path.to_string()
+        } else {
+            format!("{}{}", self.base_url, path)
+        }
     }
 
     fn resolve_url(base: &str, location: &str) -> String {
@@ -80,7 +83,8 @@ impl KuboardClient {
             if !(300..400).contains(&status) {
                 return Ok(resp);
             }
-            let location = resp.headers()
+            let location = resp
+                .headers()
                 .get("location")
                 .and_then(|v| v.to_str().ok())
                 .ok_or_else(|| anyhow!("Redirect (HTTP {}) 缺少 Location header", status))?
@@ -94,21 +98,25 @@ impl KuboardClient {
 
     /// 获取 SSO req_id
     async fn fetch_req_id(&self) -> Result<String> {
-        let resp = self.client
+        let resp = self
+            .client
             .get(&self.url("/kuboard/cluster"))
             .send()
             .await?;
         let mut dummy = None;
-        let resp = Self::follow_get_redirects(&self.client, &self.base_url, resp, &mut dummy).await?;
+        let resp =
+            Self::follow_get_redirects(&self.client, &self.base_url, resp, &mut dummy).await?;
         let final_url = resp.url().to_string();
         if let Some(pos) = final_url.find("req=") {
             return Ok(final_url[pos + 4..].to_string());
         }
-        let resp = self.client
+        let resp = self
+            .client
             .get(&self.url("/login?state=%2Fkuboard%2Fcluster"))
             .send()
             .await?;
-        let resp = Self::follow_get_redirects(&self.client, &self.base_url, resp, &mut dummy).await?;
+        let resp =
+            Self::follow_get_redirects(&self.client, &self.base_url, resp, &mut dummy).await?;
         let final_url = resp.url().to_string();
         if let Some(pos) = final_url.find("req=") {
             return Ok(final_url[pos + 4..].to_string());
@@ -124,11 +132,15 @@ impl KuboardClient {
         let req_id = self.fetch_req_id().await?;
 
         let pwd_json = format!("{{\"password\":\"{}\"}}", password);
-        let body = format!("login={}&password={}",
-            urlencoding(username), urlencoding(&pwd_json));
+        let body = format!(
+            "login={}&password={}",
+            urlencoding(username),
+            urlencoding(&pwd_json)
+        );
 
         let post_url = self.url(&format!("/sso/auth/default?req={}", req_id));
-        let resp = self.client
+        let resp = self
+            .client
             .post(&post_url)
             .header("Content-Type", "application/x-www-form-urlencoded")
             .body(body)
@@ -142,10 +154,20 @@ impl KuboardClient {
                 let next_url = Self::resolve_url(&self.base_url, location);
                 let next_resp = self.client.get(&next_url).send().await?;
                 Self::capture_token(&next_resp, &mut self.kuboard_token);
-                let _ = Self::follow_get_redirects(&self.client, &self.base_url, next_resp, &mut self.kuboard_token).await?;
+                let _ = Self::follow_get_redirects(
+                    &self.client,
+                    &self.base_url,
+                    next_resp,
+                    &mut self.kuboard_token,
+                )
+                .await?;
                 if self.kuboard_token.is_some() {
                     self.logged_in = true;
-                    return Ok(LoginResult { success: true, mfa_required: None, message: None });
+                    return Ok(LoginResult {
+                        success: true,
+                        mfa_required: None,
+                        message: None,
+                    });
                 }
             }
         }
@@ -159,16 +181,24 @@ impl KuboardClient {
 
         if status == 200 {
             self.logged_in = true;
-            return Ok(LoginResult { success: true, mfa_required: None, message: None });
+            return Ok(LoginResult {
+                success: true,
+                mfa_required: None,
+                message: None,
+            });
         }
 
-        Err(anyhow!("登录失败: HTTP {} - {}",
-            status, text.chars().take(200).collect::<String>()))
+        Err(anyhow!(
+            "登录失败: HTTP {} - {}",
+            status,
+            text.chars().take(200).collect::<String>()
+        ))
     }
 
     /// MFA 验证
     pub async fn mfa_verify(&mut self, passcode: &str) -> Result<()> {
-        let resp = self.client
+        let resp = self
+            .client
             .post(&self.url("/login/password"))
             .header("Content-Type", "application/json")
             .json(&serde_json::json!({
@@ -180,8 +210,8 @@ impl KuboardClient {
             .await?;
 
         let text = resp.text().await?;
-        let json: serde_json::Value = serde_json::from_str(&text)
-            .map_err(|_| anyhow!("MFA 响应非 JSON"))?;
+        let json: serde_json::Value =
+            serde_json::from_str(&text).map_err(|_| anyhow!("MFA 响应非 JSON"))?;
         let mfa_status = json["mfaVerifyStatus"].as_str().unwrap_or("");
         match mfa_status {
             "Pass" | "Restored" => {
@@ -193,28 +223,42 @@ impl KuboardClient {
         }
     }
 
-    pub fn is_logged_in(&self) -> bool { self.logged_in }
+    pub fn is_logged_in(&self) -> bool {
+        self.logged_in
+    }
 
-    pub fn username(&self) -> &str { &self.username }
+    pub fn username(&self) -> &str {
+        &self.username
+    }
 
     /// 为 API 请求添加认证 Cookie
     fn api_req(&self, path: &str) -> reqwest::RequestBuilder {
         let mut req = self.client.get(&self.url(path));
         if let Some(ref token) = self.kuboard_token {
-            req = req.header("Cookie", format!("KuboardToken={}; KuboardLogin=true", token));
+            req = req.header(
+                "Cookie",
+                format!("KuboardToken={}; KuboardLogin=true", token),
+            );
         }
         req
     }
 
     pub async fn list_clusters(&self) -> Result<Vec<String>> {
-        let resp = self.api_req("/kuboard-api/cluster/GLOBAL/kind/KuboardLicensedClusters/LicensedClusters")
-            .send().await?;
+        let resp = self
+            .api_req("/kuboard-api/cluster/GLOBAL/kind/KuboardLicensedClusters/LicensedClusters")
+            .send()
+            .await?;
         let status = resp.status();
         let text = resp.text().await?;
-        let json: serde_json::Value = serde_json::from_str(&text)
-            .map_err(|_| anyhow!("集群列表接口返回非 JSON 数据 (HTTP {}, body: {})",
-                status.as_u16(), &text[..text.len().min(500)]))?;
-        let clusters: Vec<String> = json["spec"]["clusters"].as_object()
+        let json: serde_json::Value = serde_json::from_str(&text).map_err(|_| {
+            anyhow!(
+                "集群列表接口返回非 JSON 数据 (HTTP {}, body: {})",
+                status.as_u16(),
+                &text[..text.len().min(500)]
+            )
+        })?;
+        let clusters: Vec<String> = json["spec"]["clusters"]
+            .as_object()
             .map(|m| m.keys().cloned().collect())
             .unwrap_or_default();
         Ok(clusters)
@@ -225,10 +269,15 @@ impl KuboardClient {
         let resp = self.api_req(&path).send().await?;
         let status = resp.status();
         let text = resp.text().await?;
-        let json: serde_json::Value = serde_json::from_str(&text)
-            .map_err(|_| anyhow!("命名空间列表接口返回非 JSON 数据 (HTTP {}, body: {})",
-                status.as_u16(), &text[..text.len().min(500)]))?;
-        let namespaces: Vec<String> = json["items"].as_array()
+        let json: serde_json::Value = serde_json::from_str(&text).map_err(|_| {
+            anyhow!(
+                "命名空间列表接口返回非 JSON 数据 (HTTP {}, body: {})",
+                status.as_u16(),
+                &text[..text.len().min(500)]
+            )
+        })?;
+        let namespaces: Vec<String> = json["items"]
+            .as_array()
             .unwrap_or(&vec![])
             .iter()
             .filter_map(|ns| ns["metadata"]["name"].as_str().map(String::from))
@@ -241,11 +290,16 @@ impl KuboardClient {
         let resp = self.api_req(&path).send().await?;
         let status = resp.status();
         let text = resp.text().await?;
-        let json: serde_json::Value = serde_json::from_str(&text)
-            .map_err(|_| anyhow!("Pod 列表接口返回非 JSON 数据 (HTTP {}, body: {})",
-                status.as_u16(), &text[..text.len().min(500)]))?;
+        let json: serde_json::Value = serde_json::from_str(&text).map_err(|_| {
+            anyhow!(
+                "Pod 列表接口返回非 JSON 数据 (HTTP {}, body: {})",
+                status.as_u16(),
+                &text[..text.len().min(500)]
+            )
+        })?;
 
-        let pods: Vec<PodInfo> = json["items"].as_array()
+        let pods: Vec<PodInfo> = json["items"]
+            .as_array()
             .unwrap_or(&vec![])
             .iter()
             .map(|pod| {
@@ -256,11 +310,13 @@ impl KuboardClient {
                 let ip = status["podIP"].as_str().unwrap_or("").to_string();
                 let phase = status["phase"].as_str().unwrap_or("Unknown").to_string();
 
-                let containers: Vec<ContainerInfo> = spec["containers"].as_array()
+                let containers: Vec<ContainerInfo> = spec["containers"]
+                    .as_array()
                     .unwrap_or(&vec![])
                     .iter()
                     .map(|c| {
-                        let ports: Vec<ContainerPort> = c["ports"].as_array()
+                        let ports: Vec<ContainerPort> = c["ports"]
+                            .as_array()
                             .unwrap_or(&vec![])
                             .iter()
                             .map(|p| ContainerPort {
@@ -269,11 +325,19 @@ impl KuboardClient {
                                 protocol: p["protocol"].as_str().unwrap_or("TCP").to_string(),
                             })
                             .collect();
-                        ContainerInfo { name: c["name"].as_str().unwrap_or("").to_string(), ports }
+                        ContainerInfo {
+                            name: c["name"].as_str().unwrap_or("").to_string(),
+                            ports,
+                        }
                     })
                     .collect();
 
-                PodInfo { name, ip, status: phase, containers }
+                PodInfo {
+                    name,
+                    ip,
+                    status: phase,
+                    containers,
+                }
             })
             .collect();
 
@@ -295,17 +359,49 @@ fn parse_login_message(msg: &str) -> LoginResult {
         let parts: Vec<&str> = msg.split(':').collect();
         if parts.len() >= 2 {
             match parts[1].trim() {
-                "PASS" => LoginResult { success: true, mfa_required: None, message: None },
-                "MFA_REQUIRED" => LoginResult { success: false, mfa_required: Some(true), message: Some("需要双因子认证".into()) },
-                "USER_NOT_FOUND" => LoginResult { success: false, mfa_required: None, message: Some("用户名未找到".into()) },
-                "WRONG_PASSWORD" => LoginResult { success: false, mfa_required: None, message: Some("密码错误".into()) },
-                "WRONG_PASSCODE" => LoginResult { success: false, mfa_required: None, message: Some("验证码错误".into()) },
-                _ => LoginResult { success: false, mfa_required: None, message: Some(msg.to_string()) },
+                "PASS" => LoginResult {
+                    success: true,
+                    mfa_required: None,
+                    message: None,
+                },
+                "MFA_REQUIRED" => LoginResult {
+                    success: false,
+                    mfa_required: Some(true),
+                    message: Some("需要双因子认证".into()),
+                },
+                "USER_NOT_FOUND" => LoginResult {
+                    success: false,
+                    mfa_required: None,
+                    message: Some("用户名未找到".into()),
+                },
+                "WRONG_PASSWORD" => LoginResult {
+                    success: false,
+                    mfa_required: None,
+                    message: Some("密码错误".into()),
+                },
+                "WRONG_PASSCODE" => LoginResult {
+                    success: false,
+                    mfa_required: None,
+                    message: Some("验证码错误".into()),
+                },
+                _ => LoginResult {
+                    success: false,
+                    mfa_required: None,
+                    message: Some(msg.to_string()),
+                },
             }
         } else {
-            LoginResult { success: false, mfa_required: None, message: Some(msg.to_string()) }
+            LoginResult {
+                success: false,
+                mfa_required: None,
+                message: Some(msg.to_string()),
+            }
         }
     } else {
-        LoginResult { success: false, mfa_required: None, message: Some(msg.to_string()) }
+        LoginResult {
+            success: false,
+            mfa_required: None,
+            message: Some(msg.to_string()),
+        }
     }
 }

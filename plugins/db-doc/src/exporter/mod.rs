@@ -4,8 +4,8 @@ mod word;
 pub use markdown::MarkdownExporter;
 pub use word::WordExporter;
 
+use crate::models::{ExportConfig, TableInfo};
 use anyhow::Result;
-use crate::models::{TableInfo, ExportConfig};
 
 /// 文档导出器 trait
 pub trait DocumentExporter {

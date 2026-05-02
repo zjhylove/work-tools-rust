@@ -15,8 +15,8 @@
 
 use serde_json::Value;
 
-pub mod storage;
 pub mod error;
+pub mod storage;
 
 // `pub use` 将子模块中的类型重新导出到当前模块，
 // 这样外部只需 `use worktools_plugin_api::PluginError` 而不是 `use worktools_plugin_api::error::PluginError`

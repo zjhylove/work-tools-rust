@@ -19,11 +19,11 @@
 
 mod commands;
 mod config;
+mod logger;
+mod paths;
 pub mod plugin_manager; // pub: 可能被外部 crate 引用
 mod plugin_package;
 mod plugin_registry;
-mod logger;
-mod paths;
 mod tray;
 
 use anyhow::Result;
@@ -128,6 +128,9 @@ pub fn run() {
         // `include!` 在编译时将指定文件的内容内联到此处
         // `concat!` 在编译时拼接字符串
         // `env!("OUT_DIR")` 获取编译输出目录
-        .run(include!(concat!(env!("OUT_DIR"), "/tauri-build-context.rs")))
+        .run(include!(concat!(
+            env!("OUT_DIR"),
+            "/tauri-build-context.rs"
+        )))
         .expect("error while running tauri application");
 }

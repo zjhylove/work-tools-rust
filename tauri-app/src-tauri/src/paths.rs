@@ -32,8 +32,7 @@ use std::path::PathBuf;
 /// 在极少数情况下（如系统配置异常）可能返回 None。
 fn worktools_base() -> Result<PathBuf> {
     let user_dirs =
-        directories::UserDirs::new()
-            .ok_or_else(|| anyhow::anyhow!("无法找到用户主目录"))?;
+        directories::UserDirs::new().ok_or_else(|| anyhow::anyhow!("无法找到用户主目录"))?;
     Ok(user_dirs.home_dir().join(".worktools"))
 }
 

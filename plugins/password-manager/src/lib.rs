@@ -18,21 +18,21 @@
 
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
-use worktools_plugin_api::{Plugin, storage::PluginStorage};
 use serde_json::Value;
+use worktools_plugin_api::{storage::PluginStorage, Plugin};
 mod crypto;
-use crypto::{PasswordEncryptor, CryptoConfig};
+use crypto::{CryptoConfig, PasswordEncryptor};
 use once_cell::sync::Lazy;
 
 /// 密码条目（加密存储版本）
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PasswordEntry {
-    pub id: String,            // UUID，唯一标识每个密码条目
-    pub url: Option<String>,   // 关联的网址（可选）
-    pub service: String,       // 服务名称
-    pub username: String,      // 用户名
-    pub password: String,      // 加密后的密码（存储为十六进制字符串）
-    pub created_at: String,    // 创建时间（RFC 3339 格式）
+    pub id: String,                 // UUID，唯一标识每个密码条目
+    pub url: Option<String>,        // 关联的网址（可选）
+    pub service: String,            // 服务名称
+    pub username: String,           // 用户名
+    pub password: String,           // 加密后的密码（存储为十六进制字符串）
+    pub created_at: String,         // 创建时间（RFC 3339 格式）
     pub updated_at: Option<String>, // 最后更新时间
 }
 
@@ -54,9 +54,8 @@ pub struct PasswordManager;
 /// `Lazy<T>` 在第一次访问时才初始化，之后返回同一个实例。
 /// 这比 `static mut` + `unsafe` 更安全和方便。
 /// `static` 变量在整个程序运行期间存在，`Lazy` 保证线程安全的延迟初始化。
-static ENCRYPTOR: Lazy<PasswordEncryptor> = Lazy::new(|| {
-    PasswordEncryptor::new(CryptoConfig::default())
-});
+static ENCRYPTOR: Lazy<PasswordEncryptor> =
+    Lazy::new(|| PasswordEncryptor::new(CryptoConfig::default()));
 
 impl PasswordManager {
     /// 获取数据存储实例
@@ -97,11 +96,21 @@ impl PasswordManager {
 
 /// 实现 Plugin trait — 密码管理器的核心行为
 impl Plugin for PasswordManager {
-    fn id(&self) -> &str { "password-manager" }
-    fn name(&self) -> &str { "密码管理器" }
-    fn description(&self) -> &str { "本地安全存储和管理密码" }
-    fn version(&self) -> &str { "1.0.0" }
-    fn icon(&self) -> &str { "🔐" }
+    fn id(&self) -> &str {
+        "password-manager"
+    }
+    fn name(&self) -> &str {
+        "密码管理器"
+    }
+    fn description(&self) -> &str {
+        "本地安全存储和管理密码"
+    }
+    fn version(&self) -> &str {
+        "1.0.0"
+    }
+    fn icon(&self) -> &str {
+        "🔐"
+    }
 
     fn get_view(&self) -> String {
         // 插件使用独立前端资源（assets/index.html），这个方法只是占位符
@@ -113,25 +122,33 @@ impl Plugin for PasswordManager {
     /// ## Rust 知识点: 模式匹配 + 错误处理
     /// `match method { ... _ => Err(...) }` 确保所有方法都被处理。
     /// `?` 操作符在 Ok 时解包，在 Err 时立即返回错误。
-    fn handle_call(&mut self, method: &str, params: Value) -> Result<Value, Box<dyn std::error::Error + Send + Sync>> {
+    fn handle_call(
+        &mut self,
+        method: &str,
+        params: Value,
+    ) -> Result<Value, Box<dyn std::error::Error + Send + Sync>> {
         match method {
             // ── 列出所有密码 ──
             "list_passwords" => {
                 let data = Self::load_data()?;
                 // 在返回给前端前解密密码
-                let entries: Vec<Value> = data.entries.into_iter().map(|entry| {
-                    let password = Self::decrypt_or_original(&entry.password);
+                let entries: Vec<Value> = data
+                    .entries
+                    .into_iter()
+                    .map(|entry| {
+                        let password = Self::decrypt_or_original(&entry.password);
 
-                    serde_json::json!({
-                        "id": entry.id,
-                        "url": entry.url.as_deref().unwrap_or_default(),
-                        "service": entry.service,
-                        "username": entry.username,
-                        "password": password, // 解密后的明文（仅在前端显示）
-                        "created_at": entry.created_at,
-                        "updated_at": entry.updated_at.as_deref().unwrap_or_default(),
+                        serde_json::json!({
+                            "id": entry.id,
+                            "url": entry.url.as_deref().unwrap_or_default(),
+                            "service": entry.service,
+                            "username": entry.username,
+                            "password": password, // 解密后的明文（仅在前端显示）
+                            "created_at": entry.created_at,
+                            "updated_at": entry.updated_at.as_deref().unwrap_or_default(),
+                        })
                     })
-                }).collect();
+                    .collect();
                 // 直接返回数组（不包装在对象中），前端可以直接遍历
                 Ok(serde_json::to_value(entries)?)
             }
@@ -140,15 +157,18 @@ impl Plugin for PasswordManager {
             "add_password" => {
                 // 从 JSON params 中提取字段
                 // `and_then(|v| v.as_str())` 先检查是否为字符串，再取出值
-                let service = params.get("service")
+                let service = params
+                    .get("service")
                     .and_then(|v| v.as_str())
                     .ok_or_else(|| anyhow::anyhow!("缺少 service 参数"))?;
 
-                let username = params.get("username")
+                let username = params
+                    .get("username")
                     .and_then(|v| v.as_str())
                     .ok_or_else(|| anyhow::anyhow!("缺少 username 参数"))?;
 
-                let password = params.get("password")
+                let password = params
+                    .get("password")
                     .and_then(|v| v.as_str())
                     .ok_or_else(|| anyhow::anyhow!("缺少 password 参数"))?;
 
@@ -187,16 +207,20 @@ impl Plugin for PasswordManager {
 
             // ── 更新密码 ──
             "update_password" => {
-                let id = params.get("id")
+                let id = params
+                    .get("id")
                     .and_then(|v| v.as_str())
                     .ok_or_else(|| anyhow::anyhow!("缺少 id 参数"))?;
-                let service = params.get("service")
+                let service = params
+                    .get("service")
                     .and_then(|v| v.as_str())
                     .ok_or_else(|| anyhow::anyhow!("缺少 service 参数"))?;
-                let username = params.get("username")
+                let username = params
+                    .get("username")
                     .and_then(|v| v.as_str())
                     .ok_or_else(|| anyhow::anyhow!("缺少 username 参数"))?;
-                let password = params.get("password")
+                let password = params
+                    .get("password")
                     .and_then(|v| v.as_str())
                     .ok_or_else(|| anyhow::anyhow!("缺少 password 参数"))?;
                 let url = params.get("url").and_then(|v| v.as_str());
@@ -205,7 +229,8 @@ impl Plugin for PasswordManager {
 
                 let mut data = Self::load_data()?;
                 // `position` 查找元素在 Vec 中的索引
-                let index = data.entries
+                let index = data
+                    .entries
                     .iter()
                     .position(|e| e.id == id)
                     .ok_or_else(|| anyhow::anyhow!("密码条目不存在"))?;
@@ -236,12 +261,14 @@ impl Plugin for PasswordManager {
 
             // ── 删除密码 ──
             "delete_password" => {
-                let id = params.get("id")
+                let id = params
+                    .get("id")
                     .and_then(|v| v.as_str())
                     .ok_or_else(|| anyhow::anyhow!("缺少 id 参数"))?;
 
                 let mut data = Self::load_data()?;
-                let index = data.entries
+                let index = data
+                    .entries
                     .iter()
                     .position(|e| e.id == id)
                     .ok_or_else(|| anyhow::anyhow!("密码条目不存在"))?;
@@ -271,7 +298,8 @@ impl Plugin for PasswordManager {
 
             // ── 导入密码 ──
             "import_passwords" => {
-                let json_data = params.get("data")
+                let json_data = params
+                    .get("data")
                     .and_then(|v| v.as_str())
                     .ok_or_else(|| anyhow::anyhow!("缺少 data 参数"))?;
 
