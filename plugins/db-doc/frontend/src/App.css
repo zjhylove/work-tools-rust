@@ -189,6 +189,8 @@
   font-size: 14px;
   margin-bottom: 12px;
   box-sizing: border-box;
+  background: var(--bg-primary);
+  color: var(--text-primary);
 }
 
 .search-input:focus {
@@ -257,6 +259,8 @@
   border: 1px solid var(--border-color);
   border-radius: var(--radius-sm);
   font-size: 14px;
+  background: var(--bg-primary);
+  color: var(--text-primary);
 }
 
 .form-group input:focus,
@@ -327,6 +331,8 @@
   border-radius: var(--radius-sm);
   font-size: 14px;
   width: 120px;
+  background: var(--bg-primary);
+  color: var(--text-primary);
 }
 
 .prefix-input:focus {
