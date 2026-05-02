@@ -33,6 +33,7 @@ cd tauri-app && npx tsc --noEmit            # TypeScript 类型检查
 cd tauri-app && npm run tauri build         # 生产构建 (Tauri 主应用)
 bash scripts/build-plugins.sh               # 一键编译+打包所有插件
 cargo build --release -p password-manager   # 单个插件编译
+cd plugins/text-diff/frontend && npm run build  # 单个插件前端构建
 ```
 
 ## 架构
@@ -50,7 +51,9 @@ work-tools-rust/
 │       ├── plugin_package.rs   # .wtplugin.zip 解析安装
 │       ├── plugin_registry.rs  # 插件注册表管理
 │       ├── logger.rs           # 日志系统 (tracing 三层架构)
-│       └── config.rs           # 插件配置持久化
+│       ├── config.rs           # 插件配置持久化
+│       ├── paths.rs            # 工作目录路径管理
+│       └── tray.rs             # 系统托盘
 ├── plugins/                # 8 个插件 (各有独立 frontend/)
 │   ├── password-manager/   # 密码管理器 (AES 加密)
 │   ├── json-tools/         # JSON 工具
@@ -71,7 +74,7 @@ work-tools-rust/
 插件前端通过 **iframe srcdoc** 渲染：
 1. `PluginPlaceholder` 读取已安装插件的 `index.html`、`main.js`、`styles.css`
 2. 内联到 HTML 字符串注入 iframe 的 srcdoc
-3. iframe 加载后注入 `window.pluginAPI` 对象，提供 `call()`、`get_plugin_config()`、`set_plugin_config()`、`open_url()`、`open_folder_dialog()`
+3. iframe 加载后注入 `window.pluginAPI` 对象，提供 `call()`、`get_plugin_config()`、`set_plugin_config()`、`open_url()`、`open_folder_dialog()`、`open_file_dialog()`、`write_file()`
 
 ### 主题系统
 
