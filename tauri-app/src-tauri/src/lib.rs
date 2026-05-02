@@ -123,7 +123,6 @@ pub fn run() {
             commands::write_file,
             commands::get_logs,
             commands::clear_logs,
-            commands::set_window_theme,
         ])
         // `include!` 在编译时将指定文件的内容内联到此处
         // `concat!` 在编译时拼接字符串

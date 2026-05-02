@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import PluginStore from "./components/PluginStore";
 import PluginPlaceholder from "./components/PluginPlaceholder";
 import ErrorBoundary from "./components/ErrorBoundary";
@@ -142,7 +143,9 @@ export default function App() {
         iframe.contentWindow?.postMessage({ type: "theme", theme: next }, "*");
       });
       if (isTauri()) {
-        invoke("set_window_theme", { theme: next }).catch(() => {});
+        getCurrentWindow().setTheme(next).catch((e) =>
+          devError("set_window_theme failed:", e),
+        );
       }
       return next;
     });
