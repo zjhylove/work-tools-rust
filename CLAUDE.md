@@ -160,7 +160,7 @@ work-tools-rust/
 
 ## CI/CD
 
-GitHub Actions (`.github/workflows/build.yml`): Tag push (`v*`) 触发多平台构建 — macOS (universal/intel/arm .dmg)、Windows (.msi)、Linux (.deb/.AppImage)，自动创建 GitHub Release。
+GitHub Actions (`.github/workflows/build.yml`): Tag push (`v*`) 触发多平台构建 — macOS (universal/intel/arm .dmg)、Windows (.msi)、Linux (.deb/.AppImage)，各平台插件包合并为 `plugins-<platform>.zip`，自动创建 GitHub Release。
 
 ## Git 提交规范
 
