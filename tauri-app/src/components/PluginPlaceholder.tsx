@@ -4,6 +4,7 @@ import { invoke } from "@tauri-apps/api/core";
 interface PluginPlaceholderProps {
   pluginId: string;
   setSelectedPlugin: (pluginId: string | null) => void;
+  theme: "light" | "dark";
 }
 
 const INJECTED_TOKENS = `
@@ -62,6 +63,38 @@ const INJECTED_TOKENS = `
     --transition-base: 0.2s ease;
     --transition-slow: 0.3s ease;
   }
+  [data-theme="dark"] {
+    --accent: #3b82f6;
+    --accent-hover: #60a5fa;
+    --accent-light: #1e3a5f;
+    --accent-ring: rgba(59, 130, 246, 0.25);
+    --success: #34d399;
+    --success-light: #064e3b;
+    --success-border: #065f46;
+    --success-text: #6ee7b7;
+    --warning: #fbbf24;
+    --warning-light: #78350f;
+    --warning-border: #92400e;
+    --warning-text: #fcd34d;
+    --error: #f87171;
+    --error-light: #7f1d1d;
+    --error-border: #991b1b;
+    --error-text: #fca5a5;
+    --bg-primary: #1a1b1e;
+    --bg-secondary: #25262b;
+    --bg-tertiary: #2c2e33;
+    --hover-bg: rgba(255, 255, 255, 0.05);
+    --text-primary: #e5e7eb;
+    --text-secondary: #9ca3af;
+    --text-tertiary: #6b7280;
+    --text-inverse: #1a1b1e;
+    --border-color: #373a40;
+    --border-light: #2c2e33;
+    --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.2);
+    --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.3);
+    --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.4);
+    --shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.5);
+  }
   html, body, #app {
     height: 100%;
   }
@@ -72,8 +105,8 @@ const INJECTED_TOKENS = `
     margin: 0;
     padding: 0;
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
-    color: #1b1c1d;
-    background: #ffffff;
+    color: var(--text-primary);
+    background: var(--bg-primary);
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
   }
@@ -123,6 +156,7 @@ const INJECTED_TOKENS = `
 export default function PluginPlaceholder({
   pluginId,
   setSelectedPlugin,
+  theme,
 }: PluginPlaceholderProps) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>("");
@@ -178,9 +212,10 @@ export default function PluginPlaceholder({
         const parts = html.split(
           '<script type="module" crossorigin src="./main.js"></script>',
         );
+        const themeScript = `<script>document.documentElement.dataset.theme="${theme}";window.addEventListener("message",function(e){if(e.data&&e.data.type==="theme"){document.documentElement.dataset.theme=e.data.theme}});</script>`;
         const fullHtml =
           parts[0] +
-          `<style>${INJECTED_TOKENS}${styles}</style><script type="module">${mainJs}</script>` +
+          `<style>${INJECTED_TOKENS}${styles}</style>${themeScript}<script type="module">${mainJs}</script>` +
           parts
             .slice(1)
             .join(
