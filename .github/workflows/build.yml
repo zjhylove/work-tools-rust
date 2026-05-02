@@ -89,6 +89,20 @@ jobs:
         env:
           PKG_PLATFORM: ${{ matrix.os }}
 
+      - name: Bundle plugins into single zip (macOS/Linux)
+        if: matrix.os != 'windows'
+        run: |
+          mkdir -p target/release/bundle
+          find plugins -name "*.wtplugin.zip" | zip -j "target/release/bundle/plugins-${{ matrix.os }}.zip" -@
+        shell: bash
+
+      - name: Bundle plugins into single zip (Windows)
+        if: matrix.os == 'windows'
+        run: |
+          New-Item -ItemType Directory -Force -Path target/release/bundle
+          Get-ChildItem -Path plugins -Recurse -Filter "*.wtplugin.zip" | Compress-Archive -DestinationPath "target/release/bundle/plugins-${{ matrix.os }}.zip"
+        shell: pwsh
+
       - name: Build Tauri app
         uses: tauri-apps/tauri-action@v0
         env:
@@ -103,7 +117,7 @@ jobs:
           name: work-tools-${{ matrix.os }}-${{ matrix.target }}
           path: |
             target/release/bundle/*/
-            plugins/**/*.wtplugin.zip
+            target/release/bundle/plugins-*.zip
           retention-days: 14
 
   release:
@@ -133,7 +147,7 @@ jobs:
             artifacts/**/*.exe
             artifacts/**/*.deb
             artifacts/**/*.AppImage
-            artifacts/**/*.wtplugin.zip
+            artifacts/**/plugins-*.zip
           draft: false
           prerelease: false
           generate_release_notes: true
