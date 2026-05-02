@@ -29,7 +29,7 @@ use serde::Deserialize;
 use serde_json::Value;
 use std::fs;
 use std::sync::Arc;
-use tauri::State;
+use tauri::{Manager, State};
 
 /// 插件管理器状态的类型别名
 /// `State<'_, PluginManagerState>` 比 `State<'_, Arc<PluginManager>>` 更简洁
@@ -578,5 +578,22 @@ pub fn get_logs(query: Option<LogQuery>) -> Result<Vec<LogEntry>, String> {
 pub fn clear_logs() -> Result<(), String> {
     let mut ring = LOG_RING.lock().map_err(|e| format!("Lock error: {}", e))?;
     ring.clear();
+    Ok(())
+}
+
+/// 设置窗口主题 (light / dark)
+#[tauri::command]
+pub async fn set_window_theme(
+    theme: String,
+    app: tauri::AppHandle,
+) -> Result<(), String> {
+    let tauri_theme = match theme.as_str() {
+        "dark" => Some(tauri::Theme::Dark),
+        "light" => Some(tauri::Theme::Light),
+        _ => None,
+    };
+    if let Some(window) = app.get_webview_window("main") {
+        window.set_theme(tauri_theme).map_err(|e| e.to_string())?;
+    }
     Ok(())
 }

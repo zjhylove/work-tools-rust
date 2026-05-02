@@ -8,7 +8,7 @@
   background: var(--bg-primary);
   border-radius: 12px;
   overflow: hidden;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  box-shadow: var(--shadow-md);
 }
 
 /* 编辑器面板 */
@@ -22,11 +22,11 @@
 /* 面板头部 */
 .pane-header {
   padding: 12px 16px;
-  background: #f8f9fa;
-  border-bottom: 2px solid #dee2e6;
+  background: var(--bg-secondary);
+  border-bottom: 2px solid var(--border-color);
   font-size: 14px;
   font-weight: 600;
-  color: #495057;
+  color: var(--text-primary);
   text-align: center;
   user-select: none;
 }
@@ -62,36 +62,32 @@
   color: var(--text-tertiary);
   font-size: 12px;
   user-select: none;
-  border-right: 1px solid #e8e8e8;
+  border-right: 1px solid var(--border-color);
   margin-right: 12px;
 }
 
 /* 行内容 */
 .line-content {
   flex: 1;
-  color: #333;
+  color: var(--text-primary);
 }
 
 /* 删除的行 */
 .diff-line-delete {
-  background-color: #ffeef0;
+  background-color: var(--error-light);
 }
 
 .diff-line-delete .line-content {
-  background-color: #ffc1c1;
-  border-radius: 3px;
-  padding: 0 4px;
+  color: var(--error-text);
 }
 
 /* 新增的行 */
 .diff-line-insert {
-  background-color: #e6ffed;
+  background-color: var(--success-light);
 }
 
 .diff-line-insert .line-content {
-  background-color: #b7ebc1;
-  border-radius: 3px;
-  padding: 0 4px;
+  color: var(--success-text);
 }
 
 /* 空行 */
@@ -109,13 +105,13 @@
 }
 
 .diff-line-equal:hover {
-  background-color: #f8f9fa;
+  background-color: var(--hover-bg);
 }
 
 /* 中间分隔线 */
 .diff-divider {
   width: 3px;
-  background: linear-gradient(to bottom, #e0e0e0, #d0d0d0, #e0e0e0);
+  background: var(--border-color);
   box-shadow: 1px 0 3px rgba(0, 0, 0, 0.1);
   flex-shrink: 0;
 }
@@ -127,20 +123,20 @@
 }
 
 .pane-content::-webkit-scrollbar-track {
-  background: #f1f1f1;
+  background: var(--bg-tertiary);
 }
 
 .pane-content::-webkit-scrollbar-thumb {
-  background: #c1c1c1;
+  background: var(--border-color);
   border-radius: 5px;
 }
 
 .pane-content::-webkit-scrollbar-thumb:hover {
-  background: #a8a8a8;
+  background: var(--text-tertiary);
 }
 
 /* 当前高亮的差异 (用于导航) */
 .diff-line.current-diff {
-  background-color: #fff3b8 !important;
-  border-left: 3px solid #ffc107;
+  background-color: var(--warning-light) !important;
+  border-left: 3px solid var(--warning);
 }

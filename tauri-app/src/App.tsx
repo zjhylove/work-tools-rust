@@ -141,6 +141,9 @@ export default function App() {
       document.querySelectorAll("iframe").forEach((iframe) => {
         iframe.contentWindow?.postMessage({ type: "theme", theme: next }, "*");
       });
+      if (isTauri()) {
+        invoke("set_window_theme", { theme: next }).catch(() => {});
+      }
       return next;
     });
   };

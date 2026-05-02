@@ -218,7 +218,7 @@
 
 .btn-danger:hover {
   background: var(--error) !important;
-  color: #fff !important;
+  color: var(--text-inverse) !important;
 }
 
 /* 表单样式 */

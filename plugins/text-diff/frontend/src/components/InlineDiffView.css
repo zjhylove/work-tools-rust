@@ -10,8 +10,8 @@
 
 .inline-header {
   padding: 12px 16px;
-  background: #f8f9fa;
-  border-bottom: 2px solid #dee2e6;
+  background: var(--bg-secondary);
+  border-bottom: 2px solid var(--border-color);
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -21,7 +21,7 @@
   margin: 0;
   font-size: 14px;
   font-weight: 600;
-  color: #495057;
+  color: var(--text-primary);
 }
 
 .inline-stats {
@@ -38,13 +38,13 @@
 }
 
 .stat-additions {
-  background: #e6ffed;
-  color: #22863a;
+  background: var(--success-light);
+  color: var(--success-text);
 }
 
 .stat-deletions {
-  background: #ffeef0;
-  color: #cb2431;
+  background: var(--error-light);
+  color: var(--error-text);
 }
 
 .inline-content {
@@ -82,13 +82,13 @@
   color: var(--text-tertiary);
   font-size: 12px;
   user-select: none;
-  border-right: 1px solid #e8e8e8;
+  border-right: 1px solid var(--border-color);
   margin-right: 12px;
 }
 
 .line-content {
   flex: 1;
-  color: #333;
+  color: var(--text-primary);
   white-space: pre-wrap;
   word-break: break-all;
 }
@@ -99,29 +99,29 @@
 }
 
 .inline-equal:hover {
-  background-color: #f8f9fa;
+  background-color: var(--hover-bg);
 }
 
 .inline-delete {
-  background-color: #ffeef0;
+  background-color: var(--error-light);
 }
 
 .inline-delete .line-marker {
-  color: #cb2431;
+  color: var(--error-text);
 }
 
 .inline-insert {
-  background-color: #e6ffed;
+  background-color: var(--success-light);
 }
 
 .inline-insert .line-marker {
-  color: #22863a;
+  color: var(--success-text);
 }
 
 /* 当前差异高亮 */
 .inline-line.current-diff {
-  background-color: #fff3b8 !important;
-  border-left: 3px solid #ffc107;
+  background-color: var(--warning-light) !important;
+  border-left: 3px solid var(--warning);
   animation: pulse-highlight 1s ease-in-out;
 }
 
@@ -140,14 +140,14 @@
 }
 
 .inline-content::-webkit-scrollbar-track {
-  background: #f1f1f1;
+  background: var(--bg-tertiary);
 }
 
 .inline-content::-webkit-scrollbar-thumb {
-  background: #c1c1c1;
+  background: var(--border-color);
   border-radius: 5px;
 }
 
 .inline-content::-webkit-scrollbar-thumb:hover {
-  background: #a8a8a8;
+  background: var(--text-tertiary);
 }

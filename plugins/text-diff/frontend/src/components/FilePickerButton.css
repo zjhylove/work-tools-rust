@@ -6,9 +6,9 @@
 .file-picker-button button {
   padding: 6px 12px;
   background: var(--bg-primary);
-  border: 1.5px solid #dee2e6;
+  border: 1.5px solid var(--border-color);
   border-radius: 6px;
-  color: #495057;
+  color: var(--text-primary);
   font-size: 14px;
   font-weight: 500;
   cursor: pointer;
@@ -25,7 +25,7 @@
 
 .file-picker-button button:hover:not(:disabled) {
   background: var(--accent);
-  color: var(--bg-primary);
+  color: var(--text-inverse);
   border-color: var(--accent);
   transform: translateY(-1px);
   box-shadow: 0 3px 6px rgba(0, 122, 255, 0.25);
@@ -56,8 +56,8 @@
   left: 0;
   right: 0;
   padding: 8px 12px;
-  background: #d32f2f;
-  color: var(--bg-primary);
+  background: var(--error);
+  color: var(--text-inverse);
   font-size: 12px;
   border-radius: 4px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
@@ -79,12 +79,12 @@
 
 /* 拖放时的高亮 */
 .file-picker-button.drag-over {
-  background: #e3f2fd;
-  border-color: #2196f3;
+  background: var(--accent-light);
+  border-color: var(--accent);
 }
 
 .file-picker-button.drag-over button {
-  background: #2196f3;
-  color: var(--bg-primary);
-  border-color: #2196f3;
+  background: var(--accent);
+  color: var(--text-inverse);
+  border-color: var(--accent);
 }

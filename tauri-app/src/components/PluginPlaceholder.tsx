@@ -215,7 +215,7 @@ export default function PluginPlaceholder({
         const themeScript = `<script>document.documentElement.dataset.theme="${theme}";window.addEventListener("message",function(e){if(e.data&&e.data.type==="theme"){document.documentElement.dataset.theme=e.data.theme}});</script>`;
         const fullHtml =
           parts[0] +
-          `<style>${INJECTED_TOKENS}${styles}</style>${themeScript}<script type="module">${mainJs}</script>` +
+          `<style>${styles}${INJECTED_TOKENS}</style>${themeScript}<script type="module">${mainJs}</script>` +
           parts
             .slice(1)
             .join(
