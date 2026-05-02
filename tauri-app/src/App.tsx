@@ -12,6 +12,8 @@ import {
   IconPackage,
   IconX,
   IconCode,
+  IconSun,
+  IconMoon,
 } from "./components/icons";
 import type { PluginInfo } from "./types/plugin";
 
@@ -37,6 +39,10 @@ export default function App() {
   const [visitedPlugins, setVisitedPlugins] = useState<string[]>([]);
   const [showLogs, setShowLogs] = useState(false);
   const [showPluginMarket, setShowPluginMarket] = useState(false);
+  const [theme, setTheme] = useState<"light" | "dark">(() => {
+    const stored = localStorage.getItem("theme");
+    return stored === "dark" ? "dark" : "light";
+  });
 
   const loadPlugins = useCallback(async () => {
     try {
@@ -107,6 +113,10 @@ export default function App() {
     return () => { p.then((fn) => fn()); };
   }, [loadPlugins]);
 
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme;
+  }, [theme]);
+
   const MAX_CACHED = 5;
 
   const openPlugin = (pluginId: string) => {
@@ -121,6 +131,17 @@ export default function App() {
         return [...prev.slice(1), pluginId];
       }
       return [...prev, pluginId];
+    });
+  };
+
+  const toggleTheme = () => {
+    setTheme((prev) => {
+      const next = prev === "light" ? "dark" : "light";
+      localStorage.setItem("theme", next);
+      document.querySelectorAll("iframe").forEach((iframe) => {
+        iframe.contentWindow?.postMessage({ type: "theme", theme: next }, "*");
+      });
+      return next;
     });
   };
 
@@ -167,6 +188,13 @@ export default function App() {
           </button>
           <button
             className="sidebar-footer-btn"
+            title={theme === "light" ? "切换暗色主题" : "切换亮色主题"}
+            onClick={toggleTheme}
+          >
+            {theme === "light" ? <IconMoon size={20} /> : <IconSun size={20} />}
+          </button>
+          <button
+            className="sidebar-footer-btn"
             title="插件市场"
             onClick={() => setShowPluginMarket(true)}
           >
@@ -196,6 +224,7 @@ export default function App() {
                   <PluginPlaceholder
                     pluginId={pluginId}
                     setSelectedPlugin={setSelectedPlugin}
+                    theme={theme}
                   />
                 </ErrorBoundary>
               </div>
