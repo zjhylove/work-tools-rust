@@ -79,6 +79,7 @@ impl SshService {
     /// 1. TCP 连接到 SSH 服务器
     /// 2. SSH 握手（密钥交换）
     /// 3. 用户名/密码认证
+    /// 4. 设置 non-blocking 模式（允许多个转发线程并发 IO）
     pub fn connect(&mut self, host: &str, port: u16, username: &str, password: &str) -> Result<()> {
         let addr = format!("{}:{}", host, port);
         let tcp = TcpStream::connect(&addr)?;
@@ -89,6 +90,7 @@ impl SshService {
         if !session.authenticated() {
             return Err(anyhow!("SSH 认证失败"));
         }
+        session.set_blocking(false); // 全局 non-blocking，转发线程通过 EAGAIN 重试处理 channel 创建
         // 用 Arc<Mutex<>> 包装，允许多线程访问
         self.session = Some(Arc::new(Mutex::new(session)));
         Ok(())
@@ -179,12 +181,25 @@ impl SshService {
                 let mut loc_write = stream;
 
                 // 创建 SSH direct-tcpip 通道（相当于 ssh -L 的效果）
-                let s = session.lock().unwrap();
-                let mut channel = match s.channel_direct_tcpip(&rh_for_thread, remote_port, None) {
-                    Ok(c) => c,
-                    Err(_) => continue,
+                // session 为 non-blocking，channel_direct_tcpip 可能返回 EAGAIN，需重试
+                let mut channel = 'create_channel: loop {
+                    if *stop.lock().unwrap() {
+                        return;
+                    }
+                    let s = session.lock().unwrap();
+                    match s.channel_direct_tcpip(&rh_for_thread, remote_port, None) {
+                        Ok(c) => break 'create_channel c,
+                        Err(e) => {
+                            drop(s); // 立即释放锁，避免阻塞其他转发线程
+                            let io_err: std::io::Error = e.into();
+                            if io_err.kind() == std::io::ErrorKind::WouldBlock {
+                                thread::sleep(Duration::from_millis(50));
+                                continue 'create_channel; // EAGAIN: 重试
+                            }
+                            continue; // 其它错误: 放弃本次连接
+                        }
+                    }
                 };
-                s.set_blocking(false);
 
                 // 双向转发数据
                 let stop_for_io = stop.clone();
@@ -214,7 +229,6 @@ impl SshService {
                     // 小延迟避免忙循环（busy loop）
                     thread::sleep(Duration::from_millis(10));
                 }
-                s.set_blocking(true);
             }
         });
 
