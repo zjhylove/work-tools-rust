@@ -1,0 +1,21 @@
+{
+  "id": "api-doc",
+  "name": "API文档",
+  "description": "解析Spring Boot JAR包,自动生成API接口文档 (Word/Markdown/HTML)",
+  "version": "1.0.0",
+  "icon": "📄",
+  "author": "Work Tools Team",
+  "homepage": "https://github.com/worktools/api-doc",
+  "files": {
+    "macos": "libapi_doc.dylib",
+    "linux": "libapi_doc.so",
+    "windows": "api_doc.dll"
+  },
+  "assets": {
+    "entry": "index.html"
+  },
+  "permissions": [
+    "filesystem",
+    "network"
+  ]
+}

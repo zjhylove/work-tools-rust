@@ -1,5 +1,6 @@
 use anyhow::Result;
 use std::io::{Cursor, Write};
+use worktools_plugin_api::escape_xml;
 
 use crate::models::{ExportConfig, TableInfo, TemplateStyle};
 
@@ -13,15 +14,6 @@ pub struct WordExporter {
 impl WordExporter {
     pub fn new(template_style: TemplateStyle) -> Self {
         Self { template_style }
-    }
-
-    /// XML 转义
-    fn xml_escape(s: &str) -> String {
-        s.replace('&', "&amp;")
-            .replace('<', "&lt;")
-            .replace('>', "&gt;")
-            .replace('"', "&quot;")
-            .replace('\'', "&apos;")
     }
 
     // ---- OOXML package parts ----
@@ -81,7 +73,7 @@ impl WordExporter {
 
     /// Build a paragraph with optional style
     fn build_paragraph(text: &str, style: Option<&str>) -> String {
-        let escaped = Self::xml_escape(text);
+        let escaped = escape_xml(text);
         let ppr = match style {
             Some(s) => format!("<w:pPr><w:pStyle w:val=\"{}\"/></w:pPr>", s),
             None => String::new(),
@@ -91,7 +83,7 @@ impl WordExporter {
 
     /// Build a bold paragraph (used for section labels)
     fn build_bold_paragraph(text: &str) -> String {
-        let escaped = Self::xml_escape(text);
+        let escaped = escape_xml(text);
         format!(
             "<w:p><w:pPr/><w:r><w:rPr><w:b/><w:sz w:val=\"22\"/><w:szCs w:val=\"22\"/></w:rPr><w:t xml:space=\"preserve\">{}</w:t></w:r></w:p>",
             escaped
@@ -100,7 +92,7 @@ impl WordExporter {
 
     /// Build a table cell with text
     fn build_cell(text: &str) -> String {
-        let escaped = Self::xml_escape(text);
+        let escaped = escape_xml(text);
         format!(
             "<w:tc><w:tcPr><w:shd w:val=\"clear\" w:color=\"auto\" w:fill=\"auto\"/></w:tcPr><w:p><w:r><w:rPr><w:sz w:val=\"20\"/><w:szCs w:val=\"20\"/></w:rPr><w:t xml:space=\"preserve\">{}</w:t></w:r></w:p></w:tc>",
             escaped
@@ -109,7 +101,7 @@ impl WordExporter {
 
     /// Build a header cell (bold, gray background)
     fn build_header_cell(text: &str) -> String {
-        let escaped = Self::xml_escape(text);
+        let escaped = escape_xml(text);
         format!(
             "<w:tc><w:tcPr><w:shd w:val=\"clear\" w:color=\"auto\" w:fill=\"E0E0E0\"/></w:tcPr><w:p><w:pPr><w:jc w:val=\"center\"/></w:pPr><w:r><w:rPr><w:b/><w:sz w:val=\"20\"/><w:szCs w:val=\"20\"/></w:rPr><w:t xml:space=\"preserve\">{}</w:t></w:r></w:p></w:tc>",
             escaped
@@ -443,9 +435,9 @@ mod tests {
 
     #[test]
     fn test_xml_escape() {
-        assert_eq!(WordExporter::xml_escape("a<b>c&d"), "a&lt;b&gt;c&amp;d");
+        assert_eq!(escape_xml("a<b>c&d"), "a&lt;b&gt;c&amp;d");
         assert_eq!(
-            WordExporter::xml_escape("test\"value\""),
+            escape_xml("test\"value\""),
             "test&quot;value&quot;"
         );
     }

@@ -17,10 +17,12 @@ use serde_json::Value;
 
 pub mod error;
 pub mod storage;
+pub mod utils;
 
 // `pub use` 将子模块中的类型重新导出到当前模块，
 // 这样外部只需 `use worktools_plugin_api::PluginError` 而不是 `use worktools_plugin_api::error::PluginError`
 pub use error::{PluginError, PluginResult};
+pub use utils::escape_xml;
 
 /// 插件 Trait —— 所有插件必须实现此接口
 ///
