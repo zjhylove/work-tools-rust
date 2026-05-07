@@ -1,5 +1,6 @@
 use anyhow::Result;
 use serde_json::Value;
+use tracing::{info, warn};
 use worktools_plugin_api::Plugin;
 
 use crate::exporter::DocumentExporter;
@@ -23,6 +24,7 @@ impl ApiDocPlugin {
     fn handle_save_config(&self, params: Value) -> Result<Value> {
         let config: models::ApiDocConfig = serde_json::from_value(params)?;
         self.storage.save_config(&config)?;
+        info!("API 文档配置已保存");
         Ok(serde_json::json!({"success": true}))
     }
 
@@ -36,8 +38,10 @@ impl ApiDocPlugin {
             .as_str()
             .ok_or_else(|| anyhow::anyhow!("缺少 source_jar_path 参数"))?;
 
+        info!(jar_path = %jar_path, "开始扫描 Spring Boot JAR");
         let parser = parser::JarParser::new(jar_path)?;
         let controllers = parser.scan_controllers()?;
+        info!(count = controllers.len(), "Controller 扫描完成");
         Ok(serde_json::to_value(controllers)?)
     }
 
@@ -50,9 +54,9 @@ impl ApiDocPlugin {
             serde_json::from_value(params["controllers"].clone())?;
         let selected: Vec<(String, String)> = serde_json::from_value(params["selected"].clone())?;
 
+        info!(jar_path = %jar_path, api_count = selected.len(), "开始解析 API 详情");
         let mut parser = parser::JarParser::new(jar_path)?;
 
-        // 加载依赖
         let dep_jars: Vec<String> = params["dependency_jars"]
             .as_array()
             .map(|arr| {
@@ -64,10 +68,13 @@ impl ApiDocPlugin {
         let auto_scan = params["auto_scan_dependencies"].as_bool().unwrap_or(false);
 
         if auto_scan || !dep_jars.is_empty() {
-            let _ = parser.load_dependencies(jar_path, &dep_jars, auto_scan);
+            if let Err(e) = parser.load_dependencies(jar_path, &dep_jars, auto_scan) {
+                warn!(error = %e, "加载依赖 JAR 失败，继续解析");
+            }
         }
 
         let apis = parser.parse_api_details(&controllers, &selected, service_name)?;
+        info!(count = apis.len(), "API 详情解析完成");
         Ok(serde_json::to_value(apis)?)
     }
 
@@ -75,6 +82,8 @@ impl ApiDocPlugin {
         let config: models::ExportConfig = serde_json::from_value(params.clone())?;
         let apis: Vec<models::ApiInfo> = serde_json::from_value(params["apis"].clone())?;
         let service_name = params["service_name"].as_str().unwrap_or("unknown");
+
+        info!(count = apis.len(), formats = ?config.formats, output_dir = %config.output_dir, "开始导出文档");
 
         let mut output_files = Vec::new();
 

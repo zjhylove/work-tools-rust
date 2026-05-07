@@ -6,6 +6,7 @@ use std::collections::{HashMap, HashSet};
 use std::io::Read;
 
 use anyhow::{Context, Result};
+use tracing::info;
 use zip::ZipArchive;
 
 use crate::models::{ApiInfo, ControllerInfo};
@@ -45,6 +46,8 @@ impl JarParser {
             }
         }
 
+        info!(jar_path = %jar_path, class_count = classes.len(), "JAR 文件加载完成");
+
         Ok(Self {
             classes,
             dependency_classes: HashMap::new(),
@@ -58,6 +61,7 @@ impl JarParser {
         prefixes: &[String],
         auto_scan: bool,
     ) -> Result<()> {
+        info!(jar_path = %jar_path, auto_scan, dep_count = %prefixes.len(), "开始加载依赖 JAR");
         let file = std::fs::File::open(jar_path)?;
         let mut archive = ZipArchive::new(file)?;
 
@@ -88,6 +92,7 @@ impl JarParser {
                 }
             }
         }
+        info!(count = self.dependency_classes.len(), "依赖 JAR 加载完成");
         Ok(())
     }
 
@@ -112,6 +117,7 @@ impl JarParser {
         }
 
         controllers.sort_by(|a, b| a.class_name.cmp(&b.class_name));
+        info!(total_classes = self.classes.len(), controller_count = controllers.len(), "Controller 扫描完成");
         Ok(controllers)
     }
 
@@ -203,6 +209,7 @@ impl JarParser {
         }
 
         apis.sort_by(|a, b| a.full_path.cmp(&b.full_path));
+        info!(count = apis.len(), "API 详情解析完成");
         Ok(apis)
     }
 

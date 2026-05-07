@@ -60,7 +60,7 @@ pub fn generate_resp_mock_json(nodes: &[NodeInfo]) -> String {
 
 /// 获取类名的简名 (最后一个 . 或 / 之后的部分)
 fn short_name(name: &str) -> &str {
-    name.rsplit(|c| c == '.' || c == '/')
+    name.rsplit(['.', '/'])
         .next()
         .unwrap_or(name)
 }
@@ -68,7 +68,7 @@ fn short_name(name: &str) -> &str {
 fn generate_node_mock(node: &NodeInfo, all_nodes: &[NodeInfo], indent: &str) -> String {
     let inner_indent = format!("  {}", indent);
     let mut lines = Vec::new();
-    lines.push(format!("{{"));
+    lines.push("{".to_string());
 
     for (i, field) in node.resp_fields.iter().enumerate() {
         // 检查字段是否引用了另一个节点（按简名匹配）

@@ -77,6 +77,7 @@ build_plugin() {
     if [ -d "$frontend_dir" ]; then
         echo "  → 构建前端..."
         cd "$frontend_dir"
+        npm install --silent > /dev/null 2>&1
         if npm run build > /dev/null 2>&1; then
             echo -e "${GREEN}  ✓ 前端构建完成${NC}"
         else
