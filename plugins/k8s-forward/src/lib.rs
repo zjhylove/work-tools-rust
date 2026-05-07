@@ -97,6 +97,8 @@ impl K8sForwardPlugin {
         let password = get_str(params, "password")?;
 
         let mut ssh = self.ssh.lock().unwrap();
+        // 先断开旧连接清理所有线程和端口绑定，避免旧 listener 占用端口导致恢复规则失败
+        ssh.disconnect();
         ssh.connect(host, port, username, password)?;
 
         // 连接成功后自动恢复之前保存的转发规则

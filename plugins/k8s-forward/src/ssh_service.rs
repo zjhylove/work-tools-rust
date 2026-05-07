@@ -10,18 +10,16 @@
 //!   → 远程主机:端口 (channel_direct_tcpip)
 //! ```
 //!
-//! 每个转发规则启动一个独立的线程：
-//! 1. 绑定本地端口（TCP Listener）
-//! 2. 接受连接后，创建 SSH direct-tcpip channel
-//! 3. 双向转发数据（本地 ↔ SSH Channel）
+//! 每个转发规则一个独立线程，线程内通过非阻塞 I/O 复用多个并发连接：
+//! 1. 非阻塞 accept 新连接 → 创建 SSH channel → 加入活跃连接列表
+//! 2. 轮询所有活跃连接：local→remote、remote→local 双向转发
+//! 3. 检测到 EOF/错误 → 从列表移除该连接
+//! 4. 无工作时短暂休眠避免忙循环
 //!
-//! ## Rust 知识点
-//! - `thread::spawn`: 创建操作系统线程
-//! - `Arc<Mutex<T>>`: 多线程共享数据
-//! - `TcpListener`: 监听 TCP 连接
-//! - `Session::channel_direct_tcpip`: 创建 SSH 直接转发通道
-//! - `JoinHandle`: 线程句柄，用于等待线程结束
-//! - `set_nonblocking`: 设置非阻塞模式（避免读/写阻塞整个线程）
+//! ## 线程安全
+//! 所有 channel 操作都在 session 锁保护下执行。同一 forward 的多个连接
+//! 在同一线程内串行处理无需额外同步；不同 forward 之间通过 session 锁
+//! 互斥，锁持有时间极短（非阻塞操作立刻返回），无锁竞争问题。
 
 use crate::models::{ForwardRule, RuleType};
 use anyhow::{anyhow, Result};
@@ -32,14 +30,13 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
 
-/// SSH 转发服务
-///
-/// ## 字段说明
-/// - `session`: SSH 会话（Arc<Mutex<>> 允许多线程共享）
-/// - `forwards`: 活跃的转发条目列表
-/// - `next_port`: 自动分配端口的起始值（10000-60000）
-/// - `threads`: 转发线程的 JoinHandle（用于 join 等待）
-/// - `stop_flags`: 每个转发线程的停止信号
+/// 活跃的转发连接
+struct ActiveConn {
+    local_read: TcpStream,
+    local_write: TcpStream,
+    channel: ssh2::Channel,
+}
+
 pub struct SshService {
     session: Option<Arc<Mutex<Session>>>,
     forwards: Vec<ForwardEntry>,
@@ -48,10 +45,9 @@ pub struct SshService {
     stop_flags: Vec<Arc<Mutex<bool>>>,
 }
 
-/// 转发条目（内部追踪结构）
 struct ForwardEntry {
     rule: ForwardRule,
-    stop_flag: Arc<Mutex<bool>>, // 设置 true 时转发线程退出
+    stop_flag: Arc<Mutex<bool>>,
 }
 
 impl SshService {
@@ -59,13 +55,12 @@ impl SshService {
         Self {
             session: None,
             forwards: vec![],
-            next_port: 10000, // 自动端口分配从 10000 开始
+            next_port: 10000,
             threads: vec![],
             stop_flags: vec![],
         }
     }
 
-    /// 检查 SSH 是否已连接且已认证
     pub fn is_connected(&self) -> bool {
         self.session
             .as_ref()
@@ -73,57 +68,34 @@ impl SshService {
             .unwrap_or(false)
     }
 
-    /// 建立 SSH 连接
-    ///
-    /// ## 连接步骤
-    /// 1. TCP 连接到 SSH 服务器
-    /// 2. SSH 握手（密钥交换）
-    /// 3. 用户名/密码认证
-    /// 4. 设置 non-blocking 模式（允许多个转发线程并发 IO）
     pub fn connect(&mut self, host: &str, port: u16, username: &str, password: &str) -> Result<()> {
         let addr = format!("{}:{}", host, port);
         let tcp = TcpStream::connect(&addr)?;
         let mut session = Session::new()?;
         session.set_tcp_stream(tcp);
-        session.handshake()?; // SSH 握手
-        session.userauth_password(username, password)?; // 密码认证
+        session.handshake()?;
+        session.userauth_password(username, password)?;
         if !session.authenticated() {
             return Err(anyhow!("SSH 认证失败"));
         }
-        session.set_blocking(false); // 全局 non-blocking，转发线程通过 EAGAIN 重试处理 channel 创建
-        // 用 Arc<Mutex<>> 包装，允许多线程访问
+        session.set_blocking(false);
         self.session = Some(Arc::new(Mutex::new(session)));
         Ok(())
     }
 
-    /// 断开 SSH 连接并停止所有转发线程
-    ///
-    /// 清理顺序：
-    /// 1. 设置所有转发线程的停止标志
-    /// 2. join 等待所有线程退出（drain 取出并消耗）
-    /// 3. 清除状态
     pub fn disconnect(&mut self) {
-        // 通知所有转发线程停止
         for flag in &self.stop_flags {
             *flag.lock().unwrap() = true;
         }
-        // join 等待所有线程退出
         for handle in self.threads.drain(..) {
             let _ = handle.join();
         }
         self.stop_flags.clear();
         self.forwards.clear();
-        self.session = None; // 释放 SSH 会话
+        self.session = None;
     }
 
-    /// 添加端口转发规则
-    ///
-    /// ## 参数
-    /// - `local_port = 0`: 自动分配端口
-    /// - `local_port > 0`: 使用指定端口
-    ///
-    /// ## 返回值
-    /// 实际使用的本地端口号
+    /// 添加端口转发规则，返回实际使用的本地端口
     pub fn add_forward(
         &mut self,
         local_host: &str,
@@ -133,106 +105,131 @@ impl SshService {
     ) -> Result<u16> {
         let session = self.session.clone().ok_or_else(|| anyhow!("SSH 未连接"))?;
 
-        // 自动分配或使用指定端口
-        let local_port = if local_port > 0 {
-            local_port
+        let (listener, local_port) = if local_port > 0 {
+            let addr = format!("{}:{}", local_host, local_port);
+            let listener = TcpListener::bind(&addr)
+                .map_err(|e| anyhow!("端口 {} 绑定失败: {}", local_port, e))?;
+            (listener, local_port)
         } else {
-            self.allocate_port()
+            self.bind_auto_port(local_host)?
         };
-        let bind_addr = format!("{}:{}", local_host, local_port);
+        listener.set_nonblocking(true).ok();
 
-        let rh_for_thread = remote_host.to_string();
+        let rh = remote_host.to_string();
         let rh_for_rule = remote_host.to_string();
         let stop_flag = Arc::new(Mutex::new(false));
         let stop = stop_flag.clone();
         let stop_for_entry = stop_flag.clone();
 
-        // 启动转发线程
         let handle = thread::spawn(move || {
-            // 绑定本地端口
-            let listener = match TcpListener::bind(&bind_addr) {
-                Ok(l) => l,
-                Err(_) => return,
-            };
-            // 设置为非阻塞，避免 accept 阻塞整个线程
-            listener.set_nonblocking(true).ok();
+            let mut connections: Vec<ActiveConn> = Vec::new();
+            let mut buf = [0u8; 8192];
 
             loop {
-                // 检查停止信号
                 if *stop.lock().unwrap() {
                     return;
                 }
+                let mut did_work = false;
 
-                // 非阻塞 accept
-                let stream = match listener.accept() {
-                    Ok((s, _)) => s,
-                    Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock => {
-                        thread::sleep(Duration::from_millis(100));
-                        continue;
+                // 1. 尝试 accept 新连接
+                match listener.accept() {
+                    Ok((stream, _)) => {
+                        stream.set_nonblocking(true).ok();
+                        if let Ok(local_read) = stream.try_clone() {
+                            let local_write = stream;
+                            let mut channel = None;
+                            loop {
+                                if *stop.lock().unwrap() {
+                                    return;
+                                }
+                                let s = session.lock().unwrap();
+                                match s.channel_direct_tcpip(&rh, remote_port, None) {
+                                    Ok(c) => {
+                                        channel = Some(c);
+                                        break;
+                                    }
+                                    Err(e) => {
+                                        drop(s);
+                                        let io: std::io::Error = e.into();
+                                        if io.kind() == std::io::ErrorKind::WouldBlock {
+                                            thread::sleep(Duration::from_millis(50));
+                                            continue;
+                                        }
+                                        break;
+                                    }
+                                }
+                            }
+                            if let Some(ch) = channel {
+                                connections.push(ActiveConn {
+                                    local_read,
+                                    local_write,
+                                    channel: ch,
+                                });
+                                did_work = true;
+                            }
+                        }
                     }
+                    Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock => {}
                     Err(_) => return,
-                };
+                }
 
-                stream.set_nonblocking(true).ok();
-                let mut loc_read = match stream.try_clone() {
-                    Ok(r) => r,
-                    Err(_) => continue,
-                };
-                let mut loc_write = stream;
-
-                // 创建 SSH direct-tcpip 通道（相当于 ssh -L 的效果）
-                // session 为 non-blocking，channel_direct_tcpip 可能返回 EAGAIN，需重试
-                let mut channel = 'create_channel: loop {
+                // 2. 服务所有活跃连接
+                let mut i = 0;
+                while i < connections.len() {
                     if *stop.lock().unwrap() {
                         return;
                     }
-                    let s = session.lock().unwrap();
-                    match s.channel_direct_tcpip(&rh_for_thread, remote_port, None) {
-                        Ok(c) => break 'create_channel c,
-                        Err(e) => {
-                            drop(s); // 立即释放锁，避免阻塞其他转发线程
-                            let io_err: std::io::Error = e.into();
-                            if io_err.kind() == std::io::ErrorKind::WouldBlock {
-                                thread::sleep(Duration::from_millis(50));
-                                continue 'create_channel; // EAGAIN: 重试
-                            }
-                            continue; // 其它错误: 放弃本次连接
-                        }
-                    }
-                };
 
-                // 双向转发数据
-                let stop_for_io = stop.clone();
-                let mut buf = [0u8; 8192]; // 8KB 缓冲区
-                loop {
-                    if *stop_for_io.lock().unwrap() {
-                        break;
-                    }
+                    let conn = &mut connections[i];
+                    let mut dead = false;
+
                     // 本地 → 远程
-                    match loc_read.read(&mut buf) {
-                        Ok(0) => break, // 连接关闭
+                    match conn.local_read.read(&mut buf) {
+                        Ok(0) => dead = true,
                         Ok(n) => {
-                            let _ = channel.write_all(&buf[..n]);
+                            did_work = true;
+                            let write_ok = {
+                                let _lock = session.lock().unwrap();
+                                conn.channel.write_all(&buf[..n]).is_ok()
+                            };
+                            if !write_ok {
+                                dead = true;
+                            }
                         }
                         Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock => {}
-                        Err(_) => break,
+                        Err(_) => dead = true,
                     }
+
                     // 远程 → 本地
-                    match channel.read(&mut buf) {
-                        Ok(0) => break,
-                        Ok(n) => {
-                            let _ = loc_write.write_all(&buf[..n]);
+                    if !dead {
+                        let channel_result = {
+                            let _lock = session.lock().unwrap();
+                            conn.channel.read(&mut buf)
+                        };
+                        match channel_result {
+                            Ok(0) => dead = true,
+                            Ok(n) => {
+                                did_work = true;
+                                let _ = conn.local_write.write_all(&buf[..n]);
+                            }
+                            Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock => {}
+                            Err(_) => dead = true,
                         }
-                        Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock => {}
-                        Err(_) => break,
                     }
-                    // 小延迟避免忙循环（busy loop）
+
+                    if dead {
+                        connections.swap_remove(i);
+                    } else {
+                        i += 1;
+                    }
+                }
+
+                if !did_work {
                     thread::sleep(Duration::from_millis(10));
                 }
             }
         });
 
-        // 记录转发条目
         let rule = ForwardRule {
             id: uuid::Uuid::new_v4().to_string(),
             name: format!("forward-{}", local_port),
@@ -250,7 +247,7 @@ impl SshService {
         self.threads.push(handle);
         self.stop_flags.push(stop_flag);
         self.forwards.push(ForwardEntry {
-            rule: rule.clone(),
+            rule,
             stop_flag: stop_for_entry,
         });
 
@@ -265,8 +262,10 @@ impl SshService {
             .position(|f| f.rule.local_port == local_port)
         {
             let entry = self.forwards.remove(pos);
-            *entry.stop_flag.lock().unwrap() = true; // 通知线程停止
+            *entry.stop_flag.lock().unwrap() = true;
             self.stop_flags.remove(pos);
+            let handle = self.threads.remove(pos);
+            let _ = handle.join();
         }
         Ok(())
     }
@@ -279,24 +278,21 @@ impl SshService {
         self.forwards.len()
     }
 
-    /// 自动分配一个可用的本地端口（10000-60000 范围内）
-    fn allocate_port(&mut self) -> u16 {
+    fn bind_auto_port(&mut self, local_host: &str) -> Result<(TcpListener, u16)> {
         let used_ports: Vec<u16> = self.forwards.iter().map(|f| f.rule.local_port).collect();
         loop {
             let port = self.next_port;
             self.next_port += 1;
             if self.next_port > 60000 {
                 self.next_port = 10000;
-            } // 回绕
-              // 端口未被占用且 OS 层面可用
-            if !used_ports.contains(&port) && port_is_available(port) {
-                return port;
+            }
+            if used_ports.contains(&port) {
+                continue;
+            }
+            let addr = format!("{}:{}", local_host, port);
+            if let Ok(listener) = TcpListener::bind(&addr) {
+                return Ok((listener, port));
             }
         }
     }
-}
-
-/// 检查端口是否可用（尝试绑定来测试）
-fn port_is_available(port: u16) -> bool {
-    std::net::TcpListener::bind(("127.0.0.1", port)).is_ok()
 }
