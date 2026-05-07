@@ -60,9 +60,10 @@ pub async fn get_installed_plugins(
 pub async fn call_plugin_method(
     plugin_id: String,
     method: String,
-    params: serde_json::Value,
+    params: Option<serde_json::Value>,
     manager: State<'_, PluginManagerState>,
 ) -> Result<serde_json::Value, String> {
+    let params = params.unwrap_or(serde_json::Value::Object(Default::default()));
     manager
         .call_plugin_method(&plugin_id, &method, params)
         .await
@@ -480,6 +481,7 @@ pub async fn open_folder_dialog(
 #[tauri::command]
 pub async fn open_file_dialog(
     title: Option<String>,
+    filters: Option<Vec<serde_json::Value>>,
     app: tauri::AppHandle,
 ) -> Result<Option<String>, String> {
     use tauri_plugin_dialog::DialogExt;
@@ -488,6 +490,23 @@ pub async fn open_file_dialog(
 
     if let Some(title) = title {
         builder = builder.set_title(title);
+    }
+
+    if let Some(filters) = filters {
+        for filter in filters {
+            let name = filter["name"].as_str().unwrap_or("Files");
+            let extensions: Vec<&str> = filter["extensions"]
+                .as_array()
+                .map(|arr| {
+                    arr.iter()
+                        .filter_map(|v| v.as_str())
+                        .collect()
+                })
+                .unwrap_or_default();
+            if !extensions.is_empty() {
+                builder = builder.add_filter(name, &extensions);
+            }
+        }
     }
 
     let file_path = builder.blocking_pick_file();

@@ -376,15 +376,13 @@ export default function PluginPlaceholder({
                   title: title || "选择目录",
                 });
               },
-              open_file_dialog: async (title?: string) => {
-                console.log(`[PluginAPI] 打开文件对话框`);
-                return await invoke("open_file_dialog", {
-                  title: title || "选择文件",
-                });
-              },
               write_file: async (path: string, content: string) => {
                 console.log(`[PluginAPI] 写入文件: ${path}`);
                 return await invoke("write_file", { path, content });
+              },
+              open_file_dialog: async (title?: string, filters?: Record<string, string[]>[]) => {
+                console.log(`[PluginAPI] 打开文件选择对话框`);
+                return await invoke("open_file_dialog", { title: title || "选择文件", filters });
               },
             };
             console.log("[PluginPlaceholder] pluginAPI 注入成功");

@@ -46,7 +46,7 @@ interface PluginAPI {
   open_folder_dialog: (title?: string) => Promise<string | null>;
 
   /** 打开文件选择对话框 */
-  open_file_dialog: (title?: string) => Promise<string | null>;
+  open_file_dialog: (title?: string, filters?: Record<string, string[]>[]) => Promise<string | null>;
 
   /**
    * 写入文本文件到指定路径

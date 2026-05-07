@@ -119,7 +119,7 @@ function App() {
   const callAPI = async <T,>(method: string, params?: Record<string, unknown>): Promise<T> => {
     try {
       setError(null)
-      return await window.pluginAPI.call('db-doc', method, params) as T
+      return await window.pluginAPI.call('db-doc', method, params ?? {}) as T
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e)
       setError(message)
