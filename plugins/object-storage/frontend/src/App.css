@@ -1,7 +1,6 @@
-html, body, #app {
-  height: 100%;
-  margin: 0;
-  overflow: hidden;
+/* html/body/#app height handled by injected tokens; overflow:hidden on html breaks
+   WebKit srcdoc iframe viewport sizing — rely on .object-storage for clipping */
+body {
   font-family: var(--font-sans);
 }
 
@@ -13,7 +12,6 @@ html, body, #app {
   display: flex;
   flex-direction: column;
   gap: 16px;
-  overflow: hidden;
   min-height: 0;
 }
 
