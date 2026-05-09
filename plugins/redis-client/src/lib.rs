@@ -7,6 +7,8 @@ use worktools_plugin_api::storage::PluginStorage;
 use worktools_plugin_api::Plugin;
 
 pub mod connection;
+pub(crate) mod hex;
+pub(crate) mod ssh_tunnel;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct SavedConnection {
@@ -23,27 +25,6 @@ struct ConnectionConfig {
     host: String,
     port: u16,
     db: i64,
-}
-
-const XOR_KEY: &[u8] = b"worktools-redis-2026";
-
-fn obfuscate(s: &str) -> String {
-    let bytes: Vec<u8> = s
-        .bytes()
-        .zip(XOR_KEY.iter().cycle())
-        .map(|(a, b)| a ^ b)
-        .collect();
-    hex::encode(&bytes)
-}
-
-fn deobfuscate(s: &str) -> Option<String> {
-    let bytes: Vec<u8> = hex::decode(s).ok()?;
-    let decoded: Vec<u8> = bytes
-        .iter()
-        .zip(XOR_KEY.iter().cycle())
-        .map(|(a, b)| a ^ b)
-        .collect();
-    String::from_utf8(decoded).ok()
 }
 
 pub struct RedisClientPlugin {
@@ -184,7 +165,7 @@ impl Plugin for RedisClientPlugin {
                         host: host.to_string(),
                         port,
                         db,
-                        password_obfuscated: password.map(obfuscate).unwrap_or_default(),
+                        password_obfuscated: password.map(hex::obfuscate).unwrap_or_default(),
                     };
                     self.saved_connections.push(conn);
                     self.persist_connections().ok();
@@ -236,7 +217,7 @@ impl Plugin for RedisClientPlugin {
                     password_obfuscated: if password.is_empty() {
                         String::new()
                     } else {
-                        obfuscate(password)
+                        hex::obfuscate(password)
                     },
                 };
 
@@ -280,7 +261,7 @@ impl Plugin for RedisClientPlugin {
                 if conn.password_obfuscated.is_empty() {
                     Ok(serde_json::json!({ "password": "" }))
                 } else {
-                    let pass = deobfuscate(&conn.password_obfuscated).unwrap_or_default();
+                    let pass = hex::deobfuscate(&conn.password_obfuscated).unwrap_or_default();
                     Ok(serde_json::json!({ "password": pass }))
                 }
             }
@@ -598,22 +579,6 @@ impl Plugin for RedisClientPlugin {
 pub extern "C" fn plugin_create() -> *mut Box<dyn Plugin> {
     let plugin: Box<Box<dyn Plugin>> = Box::new(Box::new(RedisClientPlugin::new()));
     Box::leak(plugin) as *mut Box<dyn Plugin>
-}
-
-mod hex {
-    pub fn encode(bytes: &[u8]) -> String {
-        bytes.iter().map(|b| format!("{b:02x}")).collect()
-    }
-
-    pub fn decode(s: &str) -> Result<Vec<u8>, ()> {
-        if !s.len().is_multiple_of(2) {
-            return Err(());
-        }
-        (0..s.len())
-            .step_by(2)
-            .map(|i| u8::from_str_radix(&s[i..i + 2], 16).map_err(|_| ()))
-            .collect()
-    }
 }
 
 #[cfg(test)]
