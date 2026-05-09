@@ -1,6 +1,5 @@
 use anyhow::Context;
 use redis::{Client, Commands, Connection};
-use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashMap;
 use worktools_plugin_api::storage::PluginStorage;
@@ -8,31 +7,16 @@ use worktools_plugin_api::Plugin;
 
 pub mod connection;
 pub(crate) mod hex;
+pub(crate) mod operations;
 pub(crate) mod ssh_tunnel;
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-struct SavedConnection {
-    id: String,
-    name: String,
-    host: String,
-    port: u16,
-    db: i64,
-    password_obfuscated: String,
-}
-
-#[derive(Debug, Clone)]
-struct ConnectionConfig {
-    host: String,
-    port: u16,
-    db: i64,
-}
 
 pub struct RedisClientPlugin {
     client: Option<Client>,
-    current_config: Option<ConnectionConfig>,
+    current_config: Option<connection::ConnectionConfig>,
     storage: PluginStorage,
-    saved_connections: Vec<SavedConnection>,
+    saved_connections: Vec<connection::ConnectionConfig>,
     connections_loaded: bool,
+    ssh_tunnel: Option<ssh_tunnel::SshTunnel>,
 }
 
 impl RedisClientPlugin {
@@ -43,6 +27,7 @@ impl RedisClientPlugin {
             storage: PluginStorage::new("redis-client", "redis-client.json"),
             saved_connections: Vec::new(),
             connections_loaded: false,
+            ssh_tunnel: None,
         }
     }
 
@@ -52,7 +37,7 @@ impl RedisClientPlugin {
         }
         self.saved_connections = self
             .storage
-            .load_json::<Vec<SavedConnection>>()
+            .load_json::<Vec<connection::ConnectionConfig>>()
             .unwrap_or_default();
         self.connections_loaded = true;
     }
@@ -69,25 +54,58 @@ impl RedisClientPlugin {
         self.storage.save_json(&self.saved_connections)?;
         Ok(())
     }
-}
 
-fn scan_key_infos(
-    keys: &[String],
-    conn: &mut Connection,
-) -> Result<Vec<Value>, Box<dyn std::error::Error + Send + Sync>> {
-    keys.iter()
-        .map(|k| {
-            let key_type: String = redis::cmd("TYPE")
-                .arg(k)
-                .query(conn)
-                .unwrap_or_else(|_| "unknown".into());
-            let ttl: i64 = redis::cmd("TTL")
-                .arg(k)
-                .query(conn)
-                .unwrap_or(-2);
-            Ok(serde_json::json!({ "key": k, "type": key_type, "ttl": ttl }))
-        })
-        .collect()
+    fn connect_client(
+        conn_cfg: &connection::ConnectionConfig,
+        password: Option<String>,
+        ssh_tunnel: &mut Option<ssh_tunnel::SshTunnel>,
+    ) -> Result<Client, Box<dyn std::error::Error + Send + Sync>> {
+        let mode = conn_cfg.to_connection_mode(password);
+        match mode {
+            connection::ConnectionMode::Direct {
+                host,
+                port,
+                db,
+                password,
+            } => {
+                let url = Self::make_redis_url(&host, port, db, password.as_deref());
+                Client::open(url.as_str()).map_err(|e| e.into())
+            }
+            connection::ConnectionMode::SshTunnel {
+                ssh,
+                remote_host,
+                remote_port,
+                db,
+                password,
+            } => {
+                let tunnel = ssh_tunnel::SshTunnel::connect(&ssh, &remote_host, remote_port)
+                    .map_err(|e| format!("SSH tunnel failed: {e}"))?;
+                let local_port = tunnel.local_port();
+                let url =
+                    Self::make_redis_url("127.0.0.1", local_port, db, password.as_deref());
+                let client = Client::open(url.as_str()).map_err(|e| e.into());
+                *ssh_tunnel = Some(tunnel);
+                client
+            }
+            connection::ConnectionMode::Cluster { seed_nodes, password } => {
+                let node_urls: Vec<String> = seed_nodes
+                    .iter()
+                    .map(|n| match &password {
+                        Some(p) if !p.is_empty() => format!("redis://:{p}@{n}"),
+                        _ => format!("redis://{n}"),
+                    })
+                    .collect();
+                Client::open(node_urls[0].as_str()).map_err(|e| e.into())
+            }
+        }
+    }
+
+    fn make_redis_url(host: &str, port: u16, db: i64, password: Option<&str>) -> String {
+        match password {
+            Some(p) if !p.is_empty() => format!("redis://:{}@{}:{}/{}", p, host, port, db),
+            _ => format!("redis://{}:{}/{}", host, port, db),
+        }
+    }
 }
 
 impl Plugin for RedisClientPlugin {
@@ -113,6 +131,7 @@ impl Plugin for RedisClientPlugin {
     fn destroy(&mut self) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         self.client = None;
         self.current_config = None;
+        self.ssh_tunnel = None;
         tracing::info!("Redis 客户端已销毁");
         Ok(())
     }
@@ -125,67 +144,130 @@ impl Plugin for RedisClientPlugin {
         match method {
             // ── 连接管理 ──
             "connect" => {
-                let host = params
-                    .get("host")
-                    .and_then(|v| v.as_str())
-                    .unwrap_or("127.0.0.1");
-                let port = params.get("port").and_then(|v| v.as_u64()).unwrap_or(6379) as u16;
-                let db = params.get("db").and_then(|v| v.as_i64()).unwrap_or(0);
-                let password = params
-                    .get("password")
-                    .and_then(|v| v.as_str())
-                    .filter(|s| !s.is_empty());
+                self.client = None;
+                self.ssh_tunnel = None;
+                self.current_config = None;
 
-                let url = if let Some(pass) = password {
-                    format!("redis://:{}@{}:{}/{}", pass, host, port, db)
-                } else {
-                    format!("redis://{}:{}/{}", host, port, db)
-                };
+                let (conn_cfg, password) =
+                    if let Some(id) = params.get("id").and_then(|v| v.as_str()).filter(|s| !s.is_empty()) {
+                        self.ensure_connections_loaded();
+                        let cfg = self
+                            .saved_connections
+                            .iter()
+                            .find(|c| c.id == id)
+                            .ok_or("连接配置不存在")?
+                            .clone();
+                        let pw = params
+                            .get("password")
+                            .and_then(|v| v.as_str())
+                            .filter(|s| !s.is_empty())
+                            .map(|s| s.to_string())
+                            .or_else(|| {
+                                if cfg.password_obfuscated.is_empty() {
+                                    None
+                                } else {
+                                    hex::deobfuscate(&cfg.password_obfuscated)
+                                }
+                            });
+                        (cfg, pw)
+                    } else {
+                        let host = params
+                            .get("host")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("127.0.0.1");
+                        let port =
+                            params.get("port").and_then(|v| v.as_u64()).unwrap_or(6379) as u16;
+                        let db = params.get("db").and_then(|v| v.as_i64()).unwrap_or(0);
+                        let password = params
+                            .get("password")
+                            .and_then(|v| v.as_str())
+                            .filter(|s| !s.is_empty())
+                            .map(|s| s.to_string());
+                        let cfg = connection::ConnectionConfig {
+                            id: String::new(),
+                            name: format!("{host}:{port}"),
+                            color: None,
+                            host: host.to_string(),
+                            port,
+                            db,
+                            password_obfuscated: String::new(),
+                            ssh: None,
+                            cluster: None,
+                        };
+                        (cfg, password)
+                    };
 
-                let client = Client::open(url.as_str()).context("Redis 连接失败")?;
-                let _: String = redis::cmd("PING").query(&mut client.get_connection()?)?;
+                let client =
+                    Self::connect_client(&conn_cfg, password, &mut self.ssh_tunnel)?;
+                let _: String =
+                    redis::cmd("PING").query(&mut client.get_connection().context("Redis 连接失败")?)?;
 
                 self.client = Some(client);
-                self.current_config = Some(ConnectionConfig {
-                    host: host.to_string(),
-                    port,
-                    db,
-                });
+                self.current_config = Some(conn_cfg.clone());
 
-                // 自动保存连接，重连时无需重新输入密码
-                self.ensure_connections_loaded();
-                let exists = self.saved_connections.iter().any(|c| {
-                    c.host == host && c.port == port && c.db == db
-                });
-                if !exists {
-                    let auto_name = format!("{host}:{port}");
-                    let conn = SavedConnection {
-                        id: uuid::Uuid::new_v4().to_string(),
-                        name: auto_name,
-                        host: host.to_string(),
-                        port,
-                        db,
-                        password_obfuscated: password.map(hex::obfuscate).unwrap_or_default(),
-                    };
-                    self.saved_connections.push(conn);
-                    self.persist_connections().ok();
-                }
-
-                tracing::info!(host, port, db, "Redis 连接成功");
-                Ok(serde_json::json!({ "ok": true, "host": host, "port": port, "db": db }))
+                tracing::info!(
+                    host = %conn_cfg.host,
+                    port = conn_cfg.port,
+                    db = conn_cfg.db,
+                    "Redis 连接成功"
+                );
+                Ok(serde_json::json!({ "ok": true, "host": conn_cfg.host, "port": conn_cfg.port, "db": conn_cfg.db }))
             }
 
             "disconnect" => {
                 self.client = None;
                 self.current_config = None;
+                self.ssh_tunnel = None;
+                Ok(serde_json::json!({ "ok": true }))
+            }
+
+            "test_connection" => {
+                let id = params.get("id").and_then(|v| v.as_str()).ok_or("缺少 id")?;
+                self.ensure_connections_loaded();
+                let cfg = self
+                    .saved_connections
+                    .iter()
+                    .find(|c| c.id == id)
+                    .ok_or("连接配置不存在")?;
+
+                // Test SSH first if configured
+                if let Some(ssh) = &cfg.ssh {
+                    ssh_tunnel::SshTunnel::test_connect(ssh)
+                        .map_err(|e| format!("SSH 连接测试失败: {e}"))?;
+                }
+
+                // Test Redis connectivity
+                let password = params
+                    .get("password")
+                    .and_then(|v| v.as_str())
+                    .filter(|s| !s.is_empty())
+                    .map(|s| s.to_string())
+                    .or_else(|| {
+                        if cfg.password_obfuscated.is_empty() {
+                            None
+                        } else {
+                            hex::deobfuscate(&cfg.password_obfuscated)
+                        }
+                    });
+
+                let mut temp_tunnel: Option<ssh_tunnel::SshTunnel> = None;
+                let client = Self::connect_client(cfg, password, &mut temp_tunnel)?;
+                let _: String =
+                    redis::cmd("PING").query(&mut client.get_connection()?)?;
                 Ok(serde_json::json!({ "ok": true }))
             }
 
             "get_connection_info" => {
                 if let Some(ref cfg) = self.current_config {
-                    Ok(
-                        serde_json::json!({ "connected": true, "host": cfg.host, "port": cfg.port, "db": cfg.db }),
-                    )
+                    Ok(serde_json::json!({
+                        "connected": true,
+                        "id": cfg.id,
+                        "name": cfg.name,
+                        "color": cfg.color,
+                        "host": cfg.host,
+                        "port": cfg.port,
+                        "db": cfg.db,
+                    }))
                 } else {
                     Ok(serde_json::json!({ "connected": false }))
                 }
@@ -193,6 +275,12 @@ impl Plugin for RedisClientPlugin {
 
             "save_connection" => {
                 self.ensure_connections_loaded();
+                let id = params
+                    .get("id")
+                    .and_then(|v| v.as_str())
+                    .filter(|s| !s.is_empty())
+                    .map(|s| s.to_string())
+                    .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
                 let name = params
                     .get("name")
                     .and_then(|v| v.as_str())
@@ -201,48 +289,71 @@ impl Plugin for RedisClientPlugin {
                     .get("host")
                     .and_then(|v| v.as_str())
                     .unwrap_or("127.0.0.1");
-                let port = params.get("port").and_then(|v| v.as_u64()).unwrap_or(6379) as u16;
+                let port =
+                    params.get("port").and_then(|v| v.as_u64()).unwrap_or(6379) as u16;
                 let db = params.get("db").and_then(|v| v.as_i64()).unwrap_or(0);
-                let password = params
-                    .get("password")
+                let color = params
+                    .get("color")
                     .and_then(|v| v.as_str())
-                    .unwrap_or("");
+                    .map(|s| s.to_string());
 
-                let conn = SavedConnection {
-                    id: uuid::Uuid::new_v4().to_string(),
+                let password_obfuscated = match params.get("password").and_then(|v| v.as_str()) {
+                    Some(p) if !p.is_empty() => hex::obfuscate(p),
+                    _ => String::new(),
+                };
+
+                let ssh: Option<connection::SshConfig> = params
+                    .get("ssh")
+                    .and_then(|v| if v.is_null() { None } else { serde_json::from_value(v.clone()).ok() });
+                let cluster: Option<connection::ClusterConfig> = params
+                    .get("cluster")
+                    .and_then(|v| if v.is_null() { None } else { serde_json::from_value(v.clone()).ok() });
+
+                let conn_cfg = connection::ConnectionConfig {
+                    id: id.clone(),
                     name: name.to_string(),
+                    color,
                     host: host.to_string(),
                     port,
                     db,
-                    password_obfuscated: if password.is_empty() {
-                        String::new()
-                    } else {
-                        hex::obfuscate(password)
-                    },
+                    password_obfuscated,
+                    ssh,
+                    cluster,
                 };
 
-                self.saved_connections.push(conn);
+                // Upsert
+                if let Some(existing) = self.saved_connections.iter_mut().find(|c| c.id == id) {
+                    *existing = conn_cfg;
+                } else {
+                    self.saved_connections.push(conn_cfg);
+                }
                 self.persist_connections()?;
-                Ok(serde_json::json!({ "ok": true }))
+                Ok(serde_json::json!({ "ok": true, "id": id }))
             }
 
-            "list_saved_connections" => {
+            "list_connections" => {
                 self.ensure_connections_loaded();
                 let list: Vec<Value> = self
                     .saved_connections
                     .iter()
                     .map(|c| {
                         serde_json::json!({
-                            "id": c.id, "name": c.name, "host": c.host,
-                            "port": c.port, "db": c.db,
+                            "id": c.id,
+                            "name": c.name,
+                            "color": c.color,
+                            "host": c.host,
+                            "port": c.port,
+                            "db": c.db,
                             "has_password": !c.password_obfuscated.is_empty(),
+                            "has_ssh": c.ssh.is_some(),
+                            "has_cluster": c.cluster.is_some(),
                         })
                     })
                     .collect();
                 Ok(serde_json::json!({ "connections": list }))
             }
 
-            "delete_saved_connection" => {
+            "delete_connection" => {
                 self.ensure_connections_loaded();
                 let id = params.get("id").and_then(|v| v.as_str()).ok_or("缺少 id")?;
                 self.saved_connections.retain(|c| c.id != id);
@@ -269,7 +380,8 @@ impl Plugin for RedisClientPlugin {
             // ── Key 操作 ──
             "scan_keys" => {
                 let mut conn = self.get_conn()?;
-                let cursor: u64 = params.get("cursor").and_then(|v| v.as_u64()).unwrap_or(0);
+                let cursor: u64 =
+                    params.get("cursor").and_then(|v| v.as_u64()).unwrap_or(0);
                 let pattern = params
                     .get("pattern")
                     .and_then(|v| v.as_str())
@@ -291,7 +403,7 @@ impl Plugin for RedisClientPlugin {
                     .take(20) // 硬限制防止阻塞命令线程过久
                     .collect();
 
-                let key_infos: Vec<Value> = scan_key_infos(&keys, &mut conn)?;
+                let key_infos: Vec<Value> = operations::scan_key_infos(&keys, &mut conn)?;
 
                 Ok(serde_json::json!({ "cursor": next_cursor, "keys": key_infos }))
             }
@@ -325,6 +437,20 @@ impl Plugin for RedisClientPlugin {
                 let mut conn = self.get_conn()?;
                 let deleted: i32 = conn.del(key)?;
                 Ok(serde_json::json!({ "deleted": deleted }))
+            }
+
+            "delete_keys" => {
+                let keys = params
+                    .get("keys")
+                    .and_then(|v| v.as_array())
+                    .ok_or("缺少 keys")?;
+                let mut conn = self.get_conn()?;
+                let mut cmd = redis::cmd("DEL");
+                for k in keys.iter().filter_map(|v| v.as_str()) {
+                    cmd.arg(k);
+                }
+                let count: i32 = cmd.query(&mut conn)?;
+                Ok(serde_json::json!({ "deleted": count }))
             }
 
             "rename_key" => {
@@ -568,6 +694,37 @@ impl Plugin for RedisClientPlugin {
                 let mut conn = self.get_conn()?;
                 let removed: i32 = conn.zrem(key, member)?;
                 Ok(serde_json::json!({ "removed": removed }))
+            }
+
+            // ── Operations ──
+            "search_value" => {
+                let key = params
+                    .get("key")
+                    .and_then(|v| v.as_str())
+                    .ok_or("缺少 key")?;
+                let key_type = params
+                    .get("key_type")
+                    .and_then(|v| v.as_str())
+                    .ok_or("缺少 key_type")?;
+                let query = params
+                    .get("query")
+                    .and_then(|v| v.as_str())
+                    .ok_or("缺少 query")?;
+                let mut conn = self.get_conn()?;
+                operations::search_value(&mut conn, key, key_type, query)
+            }
+
+            "hex_dump" => {
+                let key = params
+                    .get("key")
+                    .and_then(|v| v.as_str())
+                    .ok_or("缺少 key")?;
+                let max_bytes = params
+                    .get("max_bytes")
+                    .and_then(|v| v.as_u64())
+                    .unwrap_or(256) as usize;
+                let mut conn = self.get_conn()?;
+                operations::hex_dump(&mut conn, key, max_bytes)
             }
 
             _ => Err(format!("未知方法: {method}").into()),
