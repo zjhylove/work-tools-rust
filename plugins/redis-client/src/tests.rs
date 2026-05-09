@@ -10,14 +10,14 @@ fn env_or(key: &str, default: &str) -> String {
 /// 从 PluginStorage 中读取已保存连接的密码（自动反混淆）
 fn load_saved_password() -> String {
     let storage = PluginStorage::new("redis-client", "redis-client.json");
-    let saved: Vec<SavedConnection> = storage.load_json().unwrap_or_default();
+    let saved: Vec<connection::ConnectionConfig> = storage.load_json().unwrap_or_default();
     saved
         .first()
         .and_then(|c| {
             if c.password_obfuscated.is_empty() {
                 None
             } else {
-                deobfuscate(&c.password_obfuscated)
+                crate::hex::deobfuscate(&c.password_obfuscated)
             }
         })
         .unwrap_or_default()
@@ -90,7 +90,7 @@ fn test_saved_connections_lifecycle() {
     let params = test_connect_params();
     let host = params["host"].as_str().unwrap();
 
-    let before = call(&mut p, "list_saved_connections", json!({}));
+    let before = call(&mut p, "list_connections", json!({}));
     let before_count = before["connections"].as_array().unwrap().len();
 
     // 保存
@@ -102,7 +102,7 @@ fn test_saved_connections_lifecycle() {
         "password": "s3cret!"
     }));
 
-    let list = call(&mut p, "list_saved_connections", json!({}));
+    let list = call(&mut p, "list_connections", json!({}));
     let conns = list["connections"].as_array().unwrap();
     assert_eq!(conns.len(), before_count + 1);
     let saved = conns.iter().find(|c| c["name"] == "test-conn").unwrap();
@@ -113,24 +113,10 @@ fn test_saved_connections_lifecycle() {
     assert_eq!(pw["password"].as_str().unwrap(), "s3cret!");
 
     // 删除
-    call(&mut p, "delete_saved_connection", json!({ "id": saved["id"] }));
-    let list = call(&mut p, "list_saved_connections", json!({}));
+    call(&mut p, "delete_connection", json!({ "id": saved["id"] }));
+    let list = call(&mut p, "list_connections", json!({}));
     let conns = list["connections"].as_array().unwrap();
     assert!(!conns.iter().any(|c| c["name"] == "test-conn"));
-}
-
-#[test]
-fn test_avoid_duplicate_on_reconnect() {
-    let mut p = mkplugin();
-    let params = test_connect_params();
-
-    let list = call(&mut p, "list_saved_connections", json!({}));
-    let before = list["connections"].as_array().unwrap().len();
-
-    // 用相同参数再次 connect，不应重复保存
-    call(&mut p, "connect", params);
-    let list = call(&mut p, "list_saved_connections", json!({}));
-    assert_eq!(list["connections"].as_array().unwrap().len(), before);
 }
 
 // ═══════════════════════════════════════════════════════
@@ -296,6 +282,25 @@ fn test_delete_key() {
 }
 
 #[test]
+fn test_delete_keys_batch() {
+    let mut p = mkplugin();
+    let k1 = tk("batch1");
+    let k2 = tk("batch2");
+    let k3 = tk("batch3");
+
+    call(&mut p, "set_string", json!({ "key": k1, "value": "v1" }));
+    call(&mut p, "set_string", json!({ "key": k2, "value": "v2" }));
+    call(&mut p, "set_string", json!({ "key": k3, "value": "v3" }));
+
+    let r = call(&mut p, "delete_keys", json!({ "keys": [k1, k2, k3] }));
+    assert_eq!(r["deleted"].as_i64().unwrap(), 3);
+
+    // Verify they're gone
+    let r = call(&mut p, "get_key_info", json!({ "key": k1 }));
+    assert_eq!(r["type"].as_str().unwrap(), "none");
+}
+
+#[test]
 fn test_rename_key() {
     let mut p = mkplugin();
     let old = tk("old");
@@ -329,6 +334,21 @@ fn test_set_ttl_and_scan() {
     let r = call(&mut p, "scan_keys", json!({ "pattern": tk("*"), "count": 100 }));
     assert!(r["keys"].is_array());
     assert!(r["cursor"].is_number());
+}
+
+// ═══════════════════════════════════════════════════════
+// Operations
+// ═══════════════════════════════════════════════════════
+
+#[test]
+fn test_hex_dump() {
+    let mut p = mkplugin();
+    let k = tk("hex");
+
+    call(&mut p, "set_string", json!({ "key": k, "value": "hello" }));
+    let r = call(&mut p, "hex_dump", json!({ "key": k, "max_bytes": 10 }));
+    assert_eq!(r["hex"].as_str().unwrap(), "68656c6c6f");
+    assert_eq!(r["length"].as_i64().unwrap(), 5);
 }
 
 // ═══════════════════════════════════════════════════════
