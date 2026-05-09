@@ -25,17 +25,49 @@ fn load_saved_password() -> String {
 
 /// 构造连接参数
 /// 优先级: 环境变量 REDIS_TEST_PASSWORD > 已保存连接中的密码 > 空
+///
+/// SSH 隧道模式: 设置 REDIS_USE_SSH=1 启用，通过插件内建 SSH 隧道连接 Redis。
+/// 环境变量:
+///   REDIS_SSH_HOST (默认 10.73.64.28)
+///   REDIS_SSH_PORT (默认 10022)
+///   REDIS_SSH_USER (默认 lbscheck)
+///   REDIS_SSH_PASSWORD
 fn test_connect_params() -> serde_json::Value {
     let password = std::env::var("REDIS_TEST_PASSWORD")
         .ok()
         .unwrap_or_else(load_saved_password);
 
-    json!({
-        "host": env_or("REDIS_TEST_HOST", "127.0.0.1"),
-        "port": env_or("REDIS_TEST_PORT", "6379").parse::<u16>().unwrap_or(6379),
-        "db": env_or("REDIS_TEST_DB", "0").parse::<i64>().unwrap_or(0),
-        "password": password,
-    })
+    let use_ssh = std::env::var("REDIS_USE_SSH").map(|v| v == "1").unwrap_or(false);
+
+    let remote_host = env_or("REDIS_TEST_HOST", "10.73.70.213");
+    let remote_port = env_or("REDIS_TEST_PORT", "6379").parse::<u16>().unwrap_or(6379);
+
+    if use_ssh {
+        let ssh_password = env_or("REDIS_SSH_PASSWORD", "");
+        json!({
+            "host": remote_host,
+            "port": remote_port,
+            "db": env_or("REDIS_TEST_DB", "0").parse::<i64>().unwrap_or(0),
+            "password": password,
+            "ssh": {
+                "host": env_or("REDIS_SSH_HOST", "10.73.64.28"),
+                "port": env_or("REDIS_SSH_PORT", "10022").parse::<u16>().unwrap_or(10022),
+                "username": env_or("REDIS_SSH_USER", "lbscheck"),
+                "auth": {
+                    "type": "password",
+                    "password_obfuscated": crate::hex::obfuscate(&ssh_password),
+                },
+                "timeout_secs": 10,
+            }
+        })
+    } else {
+        json!({
+            "host": env_or("REDIS_TEST_HOST", "127.0.0.1"),
+            "port": remote_port,
+            "db": env_or("REDIS_TEST_DB", "0").parse::<i64>().unwrap_or(0),
+            "password": password,
+        })
+    }
 }
 
 fn call(plugin: &mut RedisClientPlugin, method: &str, params: Value) -> Value {

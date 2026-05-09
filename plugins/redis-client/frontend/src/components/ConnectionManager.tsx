@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { SavedConnection } from '../types';
 import { ConnectionEdit } from './modals/ConnectionEdit';
 import { DeleteConfirm } from './modals/DeleteConfirm';
+import { COLORS } from '../api';
 
 interface Props {
   savedConns: SavedConnection[];
@@ -12,39 +13,56 @@ interface Props {
   onEditStart: (id: string | null) => void;
 }
 
-const COLORS = ['#ef4444', '#f59e0b', '#10b981', '#3b82f6', '#8b5cf6', '#ec4899', '#06b6d4', '#6b7280'];
-
 export function ConnectionManager({ savedConns, onBack, onSave, onDelete, editId, onEditStart }: Props) {
   const [deleteId, setDeleteId] = useState<string | null>(null);
 
   return (
     <div className="connection-manager">
       <div className="manager-header">
-        <button onClick={onBack}>← 返回</button>
+        <button className="btn-back" onClick={onBack}>&#8592; 返回</button>
         <h3>连接管理</h3>
-        <button className="btn-primary" onClick={() => onEditStart(null)}>+ 新建</button>
+        <button className="btn-accent" onClick={() => onEditStart('')}>+ 新建</button>
       </div>
-      <div className="manager-list">
-        {savedConns.map((c, i) => (
-          <div key={c.id} className="conn-card">
-            <div className="conn-card-color" style={{ background: c.color || COLORS[i % COLORS.length] }} />
-            <div className="conn-card-info">
-              <div className="conn-card-name">{c.name}</div>
-              <div className="conn-card-detail">{c.host}:{c.port} db{c.db}</div>
-              {c.has_ssh && <span className="conn-badge">SSH</span>}
-              {c.has_cluster && <span className="conn-badge">Cluster</span>}
-            </div>
-            <div className="conn-card-actions">
-              <button onClick={() => onEditStart(c.id)}>编辑</button>
-              <button className="btn-danger-text" onClick={() => setDeleteId(c.id)}>删除</button>
-            </div>
-          </div>
-        ))}
-      </div>
+
+      {savedConns.length === 0 ? (
+        <div className="manager-empty">
+          <div className="empty-icon">&#9997;</div>
+          <div className="empty-text">还没有保存的连接</div>
+          <button className="btn-accent" onClick={() => onEditStart('')}>创建第一个连接</button>
+        </div>
+      ) : (
+        <div className="manager-grid">
+          {savedConns.map((c, i) => {
+            const color = c.color || COLORS[i % COLORS.length];
+            return (
+              <div key={c.id} className="conn-card" style={{ borderLeftColor: color }}>
+                <div className="conn-card-header">
+                  <span className="conn-card-name">{c.name}</span>
+                  <span className="conn-card-dot" style={{ background: color }} />
+                </div>
+                <div className="conn-card-body">
+                  <span className="conn-card-addr">{c.host}:{c.port}</span>
+                  <span className="conn-card-db">db{c.db}</span>
+                </div>
+                {(c.has_ssh || c.has_cluster) && (
+                  <div className="conn-card-tags">
+                    {c.has_ssh && <span className="conn-tag">SSH</span>}
+                    {c.has_cluster && <span className="conn-tag">Cluster</span>}
+                  </div>
+                )}
+                <div className="conn-card-actions">
+                  <button className="btn-icon" title="编辑" onClick={() => onEditStart(c.id)}>&#9998;</button>
+                  <button className="btn-icon btn-icon-danger" title="删除" onClick={() => setDeleteId(c.id)}>&#10005;</button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
 
       {editId !== null && (
         <ConnectionEdit
-          connId={editId}
+          connId={editId || null}
           onClose={() => onEditStart(null)}
           onSave={() => { onSave(); onEditStart(null); }}
         />

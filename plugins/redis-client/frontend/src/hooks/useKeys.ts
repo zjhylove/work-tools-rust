@@ -1,6 +1,7 @@
 import { useState, useCallback, useMemo } from 'react';
 import { KeyInfo, TreeNode } from '../types';
 import { buildTree } from '../utils/tree';
+import { call } from '../api';
 
 export function useKeys() {
   const [keys, setKeys] = useState<KeyInfo[]>([]);
@@ -21,20 +22,19 @@ export function useKeys() {
 
   const scan = useCallback(async (pattern: string, append = false) => {
     setScanLoading(true);
-    setHasScanned(false);
     const cursor = append ? nextCursor : 0;
-    const r = await window.pluginAPI?.call('redis-client', 'scan_keys', { cursor, pattern, count: 200 });
-    if (r && (r as Record<string, unknown>).keys) {
-      const data = r as { keys: KeyInfo[]; cursor: number };
-      setKeys(prev => append ? [...prev, ...data.keys] : data.keys);
-      setNextCursor(data.cursor);
-    }
+    if (!append) setHasScanned(false);
+    try {
+      const data = await call('scan_keys', { cursor, pattern, count: 200 });
+      setKeys(prev => append ? [...prev, ...(data.keys as KeyInfo[])] : (data.keys as KeyInfo[]));
+      setNextCursor(data.cursor as number);
+    } catch { /* handled in component */ }
     setHasScanned(true);
     setScanLoading(false);
   }, [nextCursor]);
 
   const deleteSelectedKeys = useCallback(async (selectedKeys: string[]) => {
-    await window.pluginAPI?.call('redis-client', 'delete_keys', { keys: selectedKeys });
+    await call('delete_keys', { keys: selectedKeys });
     setKeys(prev => prev.filter(k => !selectedKeys.includes(k.key)));
   }, []);
 

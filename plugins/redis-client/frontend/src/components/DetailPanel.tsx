@@ -29,14 +29,16 @@ export function DetailPanel({ selectedKey, keyDetail, valueData, detailLoading,
   if (!selectedKey || !keyDetail) return <div className="empty-detail">选择一个 Key 查看详情</div>;
 
   const kType = keyDetail.type as string;
+  const ttl = keyDetail.ttl as number;
+  const ttlText = ttl === -1 ? '永不过期' : ttl === -2 ? '已过期' : `${ttl}s`;
 
   return (
     <div className="detail-panel">
       <div className="detail-header">
         <h4>{selectedKey}</h4>
         <span className="type-badge">{kType}</span>
-        <span className="ttl-badge">TTL: {keyDetail.ttl as number}s</span>
-        <button className="btn-danger" onClick={onDeleteKey}>删除</button>
+        <span className="ttl-badge">TTL: {ttlText}</span>
+        <button className="btn-delete-key" onClick={onDeleteKey}>删除</button>
       </div>
 
       <DetailToolbar viewerMode={viewerMode} showSearch={showSearch} searchQuery={searchQuery}

@@ -1,13 +1,12 @@
 import { useState, useEffect } from 'react';
 import { ConnectionForm } from '../../types';
+import { COLORS, call } from '../../api';
 
 interface Props {
   connId: string | null;
   onClose: () => void;
   onSave: () => void;
 }
-
-const COLORS = ['#ef4444', '#f59e0b', '#10b981', '#3b82f6', '#8b5cf6', '#ec4899', '#06b6d4', '#6b7280'];
 
 const defaultForm: ConnectionForm = {
   name: '', color: null, host: '127.0.0.1', port: 6379, db: 0, password: '',
@@ -79,7 +78,7 @@ export function ConnectionEdit({ connId, onClose, onSave }: Props) {
       <div className="modal-content">
         <div className="modal-header">
           <h3>{connId ? '编辑连接' : '新建连接'}</h3>
-          <button onClick={onClose}>✕</button>
+          <button className="btn-secondary" onClick={onClose}>✕</button>
         </div>
         <div className="modal-body">
           <div className="form-group">
@@ -153,9 +152,9 @@ export function ConnectionEdit({ connId, onClose, onSave }: Props) {
         </div>
         <div className="modal-footer">
           {testResult && <span className={testResult.includes('成功') ? 'text-success' : 'text-error'}>{testResult}</span>}
-          <button onClick={handleTest} disabled={testing}>{testing ? '测试中…' : '测试连接'}</button>
-          <button onClick={onClose}>取消</button>
-          <button className="btn-primary" onClick={handleSave} disabled={saving}>{saving ? '保存中…' : '保存'}</button>
+          <button className="btn-secondary" onClick={handleTest} disabled={testing}>{testing ? '测试中…' : '测试连接'}</button>
+          <button className="btn-secondary" onClick={onClose}>取消</button>
+          <button className="btn-accent" onClick={handleSave} disabled={saving}>{saving ? '保存中…' : '保存'}</button>
         </div>
       </div>
     </div>

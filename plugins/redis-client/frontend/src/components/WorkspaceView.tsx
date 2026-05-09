@@ -5,6 +5,7 @@ import { KeyPanel } from './KeyPanel';
 import { DetailPanel } from './DetailPanel';
 import { useKeys } from '../hooks/useKeys';
 import { useKeyDetail } from '../hooks/useKeyDetail';
+import { call } from '../api';
 
 interface Props {
   savedConns: SavedConnection[];
@@ -15,7 +16,7 @@ interface Props {
 }
 
 export function WorkspaceView({ savedConns, currentConnectionId, onDisconnect, onManage, onConnect }: Props) {
-  const { keys: _keys, tree, nextCursor, scanLoading, hasScanned, expandedPaths,
+  const { tree, nextCursor, scanLoading, hasScanned, expandedPaths,
     togglePath, scan, deleteSelectedKeys } = useKeys();
   const { selectedKey, keyDetail, valueData, detailLoading, selectKey, refresh } = useKeyDetail();
   const [multiSelect, setMultiSelect] = useState<Set<string>>(new Set());
@@ -33,25 +34,25 @@ export function WorkspaceView({ savedConns, currentConnectionId, onDisconnect, o
 
   const handleSaveString = useCallback(async (value: string) => {
     if (!selectedKey) return;
-    await window.pluginAPI?.call('redis-client', 'set_string', { key: selectedKey, value });
+    await call('set_string', { key: selectedKey, value });
     refresh();
   }, [selectedKey, refresh]);
 
   const handleSetHashField = useCallback(async (field: string, value: string) => {
     if (!selectedKey) return;
-    await window.pluginAPI?.call('redis-client', 'set_hash_field', { key: selectedKey, field, value });
+    await call('set_hash_field', { key: selectedKey, field, value });
     refresh();
   }, [selectedKey, refresh]);
 
   const handleDelHashField = useCallback(async (field: string) => {
     if (!selectedKey) return;
-    await window.pluginAPI?.call('redis-client', 'del_hash_field', { key: selectedKey, field });
+    await call('del_hash_field', { key: selectedKey, field });
     refresh();
   }, [selectedKey, refresh]);
 
   const handleDeleteKey = useCallback(async () => {
     if (!selectedKey) return;
-    await window.pluginAPI?.call('redis-client', 'delete_key', { key: selectedKey });
+    await call('delete_key', { key: selectedKey });
     scan(pattern, false);
   }, [selectedKey, scan, pattern]);
 

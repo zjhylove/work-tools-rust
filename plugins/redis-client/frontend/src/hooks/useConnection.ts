@@ -1,13 +1,6 @@
 import { useState, useCallback } from 'react';
 import { ConnectionInfo } from '../types';
-
-declare global {
-  interface Window {
-    pluginAPI?: {
-      call: (pluginId: string, method: string, params?: Record<string, unknown>) => Promise<unknown>;
-    };
-  }
-}
+import { call } from '../api';
 
 export function useConnection() {
   const [connected, setConnected] = useState(false);
@@ -16,23 +9,25 @@ export function useConnection() {
 
   const connect = useCallback(async (id: string, password?: string) => {
     setError(null);
-    const r = await window.pluginAPI?.call('redis-client', 'connect', { id, password });
-    if (r && (r as Record<string, unknown>).ok) {
-      const info = r as ConnectionInfo;
-      setConnected(true);
-      setConnectionInfo(info);
-      return true;
+    try {
+      const r = await call('connect', { id, password });
+      if (r.ok) {
+        const info = await call('get_connection_info');
+        setConnected(true);
+        setConnectionInfo(info as unknown as ConnectionInfo);
+        return true;
+      }
+    } catch (e) {
+      setError(String(e));
     }
     return false;
   }, []);
 
   const disconnect = useCallback(async () => {
-    await window.pluginAPI?.call('redis-client', 'disconnect', {});
+    await call('disconnect');
     setConnected(false);
     setConnectionInfo({ connected: false });
   }, []);
 
-  const clearError = useCallback(() => setError(null), []);
-
-  return { connected, connectionInfo, error, setError, connect, disconnect, clearError };
+  return { connected, connectionInfo, error, connect, disconnect };
 }

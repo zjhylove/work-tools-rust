@@ -50,9 +50,19 @@ impl RedisClientPlugin {
             .map_err(|e| e.into())
     }
 
-    fn persist_connections(&mut self) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-        self.storage.save_json(&self.saved_connections)?;
-        Ok(())
+    fn resolve_password(params: &Value, obfuscated: &str) -> Option<String> {
+        params
+            .get("password")
+            .and_then(|v| v.as_str())
+            .filter(|s| !s.is_empty())
+            .map(|s| s.to_string())
+            .or_else(|| {
+                if obfuscated.is_empty() {
+                    None
+                } else {
+                    hex::deobfuscate(obfuscated)
+                }
+            })
     }
 
     fn connect_client(
@@ -157,18 +167,7 @@ impl Plugin for RedisClientPlugin {
                             .find(|c| c.id == id)
                             .ok_or("连接配置不存在")?
                             .clone();
-                        let pw = params
-                            .get("password")
-                            .and_then(|v| v.as_str())
-                            .filter(|s| !s.is_empty())
-                            .map(|s| s.to_string())
-                            .or_else(|| {
-                                if cfg.password_obfuscated.is_empty() {
-                                    None
-                                } else {
-                                    hex::deobfuscate(&cfg.password_obfuscated)
-                                }
-                            });
+                        let pw = Self::resolve_password(&params, &cfg.password_obfuscated);
                         (cfg, pw)
                     } else {
                         let host = params
@@ -178,11 +177,6 @@ impl Plugin for RedisClientPlugin {
                         let port =
                             params.get("port").and_then(|v| v.as_u64()).unwrap_or(6379) as u16;
                         let db = params.get("db").and_then(|v| v.as_i64()).unwrap_or(0);
-                        let password = params
-                            .get("password")
-                            .and_then(|v| v.as_str())
-                            .filter(|s| !s.is_empty())
-                            .map(|s| s.to_string());
                         let cfg = connection::ConnectionConfig {
                             id: String::new(),
                             name: format!("{host}:{port}"),
@@ -191,10 +185,10 @@ impl Plugin for RedisClientPlugin {
                             port,
                             db,
                             password_obfuscated: String::new(),
-                            ssh: None,
-                            cluster: None,
+                            ssh: parse_optional_struct(&params, "ssh"),
+                            cluster: parse_optional_struct(&params, "cluster"),
                         };
-                        (cfg, password)
+                        (cfg, opt_str(&params, "password"))
                     };
 
                 let client =
@@ -222,36 +216,45 @@ impl Plugin for RedisClientPlugin {
             }
 
             "test_connection" => {
-                let id = params.get("id").and_then(|v| v.as_str()).ok_or("缺少 id")?;
-                self.ensure_connections_loaded();
-                let cfg = self
-                    .saved_connections
-                    .iter()
-                    .find(|c| c.id == id)
-                    .ok_or("连接配置不存在")?;
+                let cfg = if let Some(id) = opt_str(&params, "id") {
+                    self.ensure_connections_loaded();
+                    let cfg = self
+                        .saved_connections
+                        .iter()
+                        .find(|c| c.id == id)
+                        .ok_or("连接配置不存在")?;
+                    let password = Self::resolve_password(&params, &cfg.password_obfuscated);
+                    let mut temp_cfg = cfg.clone();
+                    temp_cfg.id = id;
+                    (temp_cfg, password)
+                } else {
+                    let host = params.get("host").and_then(|v| v.as_str()).unwrap_or("127.0.0.1").to_string();
+                    let port = params.get("port").and_then(|v| v.as_u64()).unwrap_or(6379) as u16;
+                    let db = params.get("db").and_then(|v| v.as_i64()).unwrap_or(0);
+                    let password = opt_str(&params, "password");
+                    let ssh: Option<connection::SshConfig> = parse_optional_struct(&params, "ssh");
+                    let cluster: Option<connection::ClusterConfig> = parse_optional_struct(&params, "cluster");
+                    let cfg = connection::ConnectionConfig {
+                        id: String::new(),
+                        name: String::new(),
+                        color: None,
+                        host,
+                        port,
+                        db,
+                        password_obfuscated: String::new(),
+                        ssh,
+                        cluster,
+                    };
+                    (cfg, password)
+                };
 
-                // Test SSH first if configured
-                if let Some(ssh) = &cfg.ssh {
+                if let Some(ssh) = &cfg.0.ssh {
                     ssh_tunnel::SshTunnel::test_connect(ssh)
                         .map_err(|e| format!("SSH 连接测试失败: {e}"))?;
                 }
 
-                // Test Redis connectivity
-                let password = params
-                    .get("password")
-                    .and_then(|v| v.as_str())
-                    .filter(|s| !s.is_empty())
-                    .map(|s| s.to_string())
-                    .or_else(|| {
-                        if cfg.password_obfuscated.is_empty() {
-                            None
-                        } else {
-                            hex::deobfuscate(&cfg.password_obfuscated)
-                        }
-                    });
-
                 let mut temp_tunnel: Option<ssh_tunnel::SshTunnel> = None;
-                let client = Self::connect_client(cfg, password, &mut temp_tunnel)?;
+                let client = Self::connect_client(&cfg.0, cfg.1, &mut temp_tunnel)?;
                 let _: String =
                     redis::cmd("PING").query(&mut client.get_connection()?)?;
                 Ok(serde_json::json!({ "ok": true }))
@@ -275,16 +278,8 @@ impl Plugin for RedisClientPlugin {
 
             "save_connection" => {
                 self.ensure_connections_loaded();
-                let id = params
-                    .get("id")
-                    .and_then(|v| v.as_str())
-                    .filter(|s| !s.is_empty())
-                    .map(|s| s.to_string())
-                    .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
-                let name = params
-                    .get("name")
-                    .and_then(|v| v.as_str())
-                    .ok_or("缺少 name")?;
+                let id = opt_str(&params, "id").unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
+                let name = require_str(&params, "name")?;
                 let host = params
                     .get("host")
                     .and_then(|v| v.as_str())
@@ -302,13 +297,6 @@ impl Plugin for RedisClientPlugin {
                     _ => String::new(),
                 };
 
-                let ssh: Option<connection::SshConfig> = params
-                    .get("ssh")
-                    .and_then(|v| if v.is_null() { None } else { serde_json::from_value(v.clone()).ok() });
-                let cluster: Option<connection::ClusterConfig> = params
-                    .get("cluster")
-                    .and_then(|v| if v.is_null() { None } else { serde_json::from_value(v.clone()).ok() });
-
                 let conn_cfg = connection::ConnectionConfig {
                     id: id.clone(),
                     name: name.to_string(),
@@ -317,17 +305,16 @@ impl Plugin for RedisClientPlugin {
                     port,
                     db,
                     password_obfuscated,
-                    ssh,
-                    cluster,
+                    ssh: parse_optional_struct(&params, "ssh"),
+                    cluster: parse_optional_struct(&params, "cluster"),
                 };
 
-                // Upsert
                 if let Some(existing) = self.saved_connections.iter_mut().find(|c| c.id == id) {
                     *existing = conn_cfg;
                 } else {
                     self.saved_connections.push(conn_cfg);
                 }
-                self.persist_connections()?;
+                self.storage.save_json(&self.saved_connections)?;
                 Ok(serde_json::json!({ "ok": true, "id": id }))
             }
 
@@ -355,39 +342,34 @@ impl Plugin for RedisClientPlugin {
 
             "delete_connection" => {
                 self.ensure_connections_loaded();
-                let id = params.get("id").and_then(|v| v.as_str()).ok_or("缺少 id")?;
+                let id = require_str(&params, "id")?;
                 self.saved_connections.retain(|c| c.id != id);
-                self.persist_connections()?;
+                self.storage.save_json(&self.saved_connections)?;
                 Ok(serde_json::json!({ "ok": true }))
             }
 
             "get_saved_password" => {
                 self.ensure_connections_loaded();
-                let id = params.get("id").and_then(|v| v.as_str()).ok_or("缺少 id")?;
+                let id = require_str(&params, "id")?;
                 let conn = self
                     .saved_connections
                     .iter()
                     .find(|c| c.id == id)
                     .ok_or("连接配置不存在")?;
-                if conn.password_obfuscated.is_empty() {
-                    Ok(serde_json::json!({ "password": "" }))
+                let pass = if conn.password_obfuscated.is_empty() {
+                    String::new()
                 } else {
-                    let pass = hex::deobfuscate(&conn.password_obfuscated).unwrap_or_default();
-                    Ok(serde_json::json!({ "password": pass }))
-                }
+                    hex::deobfuscate(&conn.password_obfuscated).unwrap_or_default()
+                };
+                Ok(serde_json::json!({ "password": pass }))
             }
 
             // ── Key 操作 ──
             "scan_keys" => {
                 let mut conn = self.get_conn()?;
-                let cursor: u64 =
-                    params.get("cursor").and_then(|v| v.as_u64()).unwrap_or(0);
-                let pattern = params
-                    .get("pattern")
-                    .and_then(|v| v.as_str())
-                    .unwrap_or("*");
-                let count: usize =
-                    params.get("count").and_then(|v| v.as_u64()).unwrap_or(50) as usize;
+                let cursor: u64 = params.get("cursor").and_then(|v| v.as_u64()).unwrap_or(0);
+                let pattern = params.get("pattern").and_then(|v| v.as_str()).unwrap_or("*");
+                let count: usize = params.get("count").and_then(|v| v.as_u64()).unwrap_or(50) as usize;
 
                 let (next_cursor, raw_keys): (u64, Vec<Vec<u8>>) = redis::cmd("SCAN")
                     .arg(cursor)
@@ -409,10 +391,7 @@ impl Plugin for RedisClientPlugin {
             }
 
             "get_key_info" => {
-                let key = params
-                    .get("key")
-                    .and_then(|v| v.as_str())
-                    .ok_or("缺少 key")?;
+                let key = require_str(&params, "key")?;
                 let mut conn = self.get_conn()?;
                 let key_type: String = redis::cmd("TYPE").arg(key).query(&mut conn)?;
                 let ttl: i64 = redis::cmd("TTL").arg(key).query(&mut conn)?;
@@ -430,10 +409,7 @@ impl Plugin for RedisClientPlugin {
             }
 
             "delete_key" => {
-                let key = params
-                    .get("key")
-                    .and_then(|v| v.as_str())
-                    .ok_or("缺少 key")?;
+                let key = require_str(&params, "key")?;
                 let mut conn = self.get_conn()?;
                 let deleted: i32 = conn.del(key)?;
                 Ok(serde_json::json!({ "deleted": deleted }))
@@ -454,14 +430,8 @@ impl Plugin for RedisClientPlugin {
             }
 
             "rename_key" => {
-                let old = params
-                    .get("old")
-                    .and_then(|v| v.as_str())
-                    .ok_or("缺少 old")?;
-                let new = params
-                    .get("new")
-                    .and_then(|v| v.as_str())
-                    .ok_or("缺少 new")?;
+                let old = require_str(&params, "old")?;
+                let new = require_str(&params, "new")?;
                 let mut conn = self.get_conn()?;
                 redis::cmd("RENAME")
                     .arg(old)
@@ -471,10 +441,7 @@ impl Plugin for RedisClientPlugin {
             }
 
             "set_ttl" => {
-                let key = params
-                    .get("key")
-                    .and_then(|v| v.as_str())
-                    .ok_or("缺少 key")?;
+                let key = require_str(&params, "key")?;
                 let seconds = params
                     .get("seconds")
                     .and_then(|v| v.as_i64())
@@ -486,24 +453,15 @@ impl Plugin for RedisClientPlugin {
 
             // ── String ──
             "get_string" => {
-                let key = params
-                    .get("key")
-                    .and_then(|v| v.as_str())
-                    .ok_or("缺少 key")?;
+                let key = require_str(&params, "key")?;
                 let mut conn = self.get_conn()?;
                 let value: String = conn.get(key)?;
-                Ok(serde_json::json!({ "value": value }))
+                Ok(serde_json::json!({ "value": value, "is_json": operations::is_json(&value) }))
             }
 
             "set_string" => {
-                let key = params
-                    .get("key")
-                    .and_then(|v| v.as_str())
-                    .ok_or("缺少 key")?;
-                let value = params
-                    .get("value")
-                    .and_then(|v| v.as_str())
-                    .ok_or("缺少 value")?;
+                let key = require_str(&params, "key")?;
+                let value = require_str(&params, "value")?;
                 let mut conn = self.get_conn()?;
                 let _: () = conn.set(key, value)?;
                 Ok(serde_json::json!({ "ok": true }))
@@ -511,42 +469,24 @@ impl Plugin for RedisClientPlugin {
 
             // ── Hash ──
             "get_hash" => {
-                let key = params
-                    .get("key")
-                    .and_then(|v| v.as_str())
-                    .ok_or("缺少 key")?;
+                let key = require_str(&params, "key")?;
                 let mut conn = self.get_conn()?;
                 let fields: HashMap<String, String> = conn.hgetall(key)?;
                 Ok(serde_json::json!({ "fields": fields }))
             }
 
             "set_hash_field" => {
-                let key = params
-                    .get("key")
-                    .and_then(|v| v.as_str())
-                    .ok_or("缺少 key")?;
-                let field = params
-                    .get("field")
-                    .and_then(|v| v.as_str())
-                    .ok_or("缺少 field")?;
-                let value = params
-                    .get("value")
-                    .and_then(|v| v.as_str())
-                    .ok_or("缺少 value")?;
+                let key = require_str(&params, "key")?;
+                let field = require_str(&params, "field")?;
+                let value = require_str(&params, "value")?;
                 let mut conn = self.get_conn()?;
                 let _: () = conn.hset(key, field, value)?;
                 Ok(serde_json::json!({ "ok": true }))
             }
 
             "del_hash_field" => {
-                let key = params
-                    .get("key")
-                    .and_then(|v| v.as_str())
-                    .ok_or("缺少 key")?;
-                let field = params
-                    .get("field")
-                    .and_then(|v| v.as_str())
-                    .ok_or("缺少 field")?;
+                let key = require_str(&params, "key")?;
+                let field = require_str(&params, "field")?;
                 let mut conn = self.get_conn()?;
                 let _: () = conn.hdel(key, field)?;
                 Ok(serde_json::json!({ "ok": true }))
@@ -554,10 +494,7 @@ impl Plugin for RedisClientPlugin {
 
             // ── List ──
             "get_list" => {
-                let key = params
-                    .get("key")
-                    .and_then(|v| v.as_str())
-                    .ok_or("缺少 key")?;
+                let key = require_str(&params, "key")?;
                 let start: isize =
                     params.get("start").and_then(|v| v.as_i64()).unwrap_or(0) as isize;
                 let stop: isize =
@@ -568,38 +505,23 @@ impl Plugin for RedisClientPlugin {
             }
 
             "lpush" => {
-                let key = params
-                    .get("key")
-                    .and_then(|v| v.as_str())
-                    .ok_or("缺少 key")?;
-                let value = params
-                    .get("value")
-                    .and_then(|v| v.as_str())
-                    .ok_or("缺少 value")?;
+                let key = require_str(&params, "key")?;
+                let value = require_str(&params, "value")?;
                 let mut conn = self.get_conn()?;
                 let len: i32 = conn.lpush(key, value)?;
                 Ok(serde_json::json!({ "length": len }))
             }
 
             "rpush" => {
-                let key = params
-                    .get("key")
-                    .and_then(|v| v.as_str())
-                    .ok_or("缺少 key")?;
-                let value = params
-                    .get("value")
-                    .and_then(|v| v.as_str())
-                    .ok_or("缺少 value")?;
+                let key = require_str(&params, "key")?;
+                let value = require_str(&params, "value")?;
                 let mut conn = self.get_conn()?;
                 let len: i32 = conn.rpush(key, value)?;
                 Ok(serde_json::json!({ "length": len }))
             }
 
             "lrem" => {
-                let key = params
-                    .get("key")
-                    .and_then(|v| v.as_str())
-                    .ok_or("缺少 key")?;
+                let key = require_str(&params, "key")?;
                 let index = params
                     .get("index")
                     .and_then(|v| v.as_i64())
@@ -612,38 +534,23 @@ impl Plugin for RedisClientPlugin {
 
             // ── Set ──
             "get_set" => {
-                let key = params
-                    .get("key")
-                    .and_then(|v| v.as_str())
-                    .ok_or("缺少 key")?;
+                let key = require_str(&params, "key")?;
                 let mut conn = self.get_conn()?;
                 let members: Vec<String> = conn.smembers(key)?;
                 Ok(serde_json::json!({ "members": members }))
             }
 
             "sadd" => {
-                let key = params
-                    .get("key")
-                    .and_then(|v| v.as_str())
-                    .ok_or("缺少 key")?;
-                let member = params
-                    .get("member")
-                    .and_then(|v| v.as_str())
-                    .ok_or("缺少 member")?;
+                let key = require_str(&params, "key")?;
+                let member = require_str(&params, "member")?;
                 let mut conn = self.get_conn()?;
                 let added: i32 = conn.sadd(key, member)?;
                 Ok(serde_json::json!({ "added": added }))
             }
 
             "srem" => {
-                let key = params
-                    .get("key")
-                    .and_then(|v| v.as_str())
-                    .ok_or("缺少 key")?;
-                let member = params
-                    .get("member")
-                    .and_then(|v| v.as_str())
-                    .ok_or("缺少 member")?;
+                let key = require_str(&params, "key")?;
+                let member = require_str(&params, "member")?;
                 let mut conn = self.get_conn()?;
                 let removed: i32 = conn.srem(key, member)?;
                 Ok(serde_json::json!({ "removed": removed }))
@@ -651,10 +558,7 @@ impl Plugin for RedisClientPlugin {
 
             // ── ZSet ──
             "get_zset" => {
-                let key = params
-                    .get("key")
-                    .and_then(|v| v.as_str())
-                    .ok_or("缺少 key")?;
+                let key = require_str(&params, "key")?;
                 let mut conn = self.get_conn()?;
                 let members: Vec<(String, f64)> = conn.zrange_withscores(key, 0, -1)?;
                 let result: Vec<Value> = members
@@ -665,32 +569,20 @@ impl Plugin for RedisClientPlugin {
             }
 
             "zadd" => {
-                let key = params
-                    .get("key")
-                    .and_then(|v| v.as_str())
-                    .ok_or("缺少 key")?;
+                let key = require_str(&params, "key")?;
                 let score = params
                     .get("score")
                     .and_then(|v| v.as_f64())
                     .ok_or("缺少 score")?;
-                let member = params
-                    .get("member")
-                    .and_then(|v| v.as_str())
-                    .ok_or("缺少 member")?;
+                let member = require_str(&params, "member")?;
                 let mut conn = self.get_conn()?;
                 let added: i32 = conn.zadd(key, member, score)?;
                 Ok(serde_json::json!({ "added": added }))
             }
 
             "zrem" => {
-                let key = params
-                    .get("key")
-                    .and_then(|v| v.as_str())
-                    .ok_or("缺少 key")?;
-                let member = params
-                    .get("member")
-                    .and_then(|v| v.as_str())
-                    .ok_or("缺少 member")?;
+                let key = require_str(&params, "key")?;
+                let member = require_str(&params, "member")?;
                 let mut conn = self.get_conn()?;
                 let removed: i32 = conn.zrem(key, member)?;
                 Ok(serde_json::json!({ "removed": removed }))
@@ -698,27 +590,15 @@ impl Plugin for RedisClientPlugin {
 
             // ── Operations ──
             "search_value" => {
-                let key = params
-                    .get("key")
-                    .and_then(|v| v.as_str())
-                    .ok_or("缺少 key")?;
-                let key_type = params
-                    .get("key_type")
-                    .and_then(|v| v.as_str())
-                    .ok_or("缺少 key_type")?;
-                let query = params
-                    .get("query")
-                    .and_then(|v| v.as_str())
-                    .ok_or("缺少 query")?;
+                let key = require_str(&params, "key")?;
+                let key_type = require_str(&params, "key_type")?;
+                let query = require_str(&params, "query")?;
                 let mut conn = self.get_conn()?;
                 operations::search_value(&mut conn, key, key_type, query)
             }
 
             "hex_dump" => {
-                let key = params
-                    .get("key")
-                    .and_then(|v| v.as_str())
-                    .ok_or("缺少 key")?;
+                let key = require_str(&params, "key")?;
                 let max_bytes = params
                     .get("max_bytes")
                     .and_then(|v| v.as_u64())
@@ -736,6 +616,20 @@ impl Plugin for RedisClientPlugin {
 pub extern "C" fn plugin_create() -> *mut Box<dyn Plugin> {
     let plugin: Box<Box<dyn Plugin>> = Box::new(Box::new(RedisClientPlugin::new()));
     Box::leak(plugin) as *mut Box<dyn Plugin>
+}
+
+fn require_str<'a>(params: &'a Value, key: &str) -> Result<&'a str, Box<dyn std::error::Error + Send + Sync>> {
+    params.get(key).and_then(|v| v.as_str()).ok_or(format!("缺少 {key}").into())
+}
+
+fn opt_str(params: &Value, key: &str) -> Option<String> {
+    params.get(key).and_then(|v| v.as_str()).filter(|s| !s.is_empty()).map(|s| s.to_string())
+}
+
+fn parse_optional_struct<T: serde::de::DeserializeOwned>(params: &Value, key: &str) -> Option<T> {
+    params.get(key).and_then(|v| {
+        if v.is_null() { None } else { serde_json::from_value(v.clone()).ok() }
+    })
 }
 
 #[cfg(test)]
