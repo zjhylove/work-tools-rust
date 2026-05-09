@@ -115,6 +115,14 @@ export default function App() {
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
+    document.querySelectorAll("iframe").forEach((iframe) => {
+      iframe.contentWindow?.postMessage({ type: "theme", theme }, "*");
+    });
+    if (isTauri()) {
+      invoke("set_window_theme", { theme }).catch((e) =>
+        devError("set_window_theme failed:", e),
+      );
+    }
   }, [theme]);
 
   const MAX_CACHED = 5;
@@ -138,14 +146,6 @@ export default function App() {
     setTheme((prev) => {
       const next = prev === "light" ? "dark" : "light";
       localStorage.setItem("theme", next);
-      document.querySelectorAll("iframe").forEach((iframe) => {
-        iframe.contentWindow?.postMessage({ type: "theme", theme: next }, "*");
-      });
-      if (isTauri()) {
-        invoke("set_window_theme", { theme: next }).catch((e) =>
-          devError("set_window_theme failed:", e),
-        );
-      }
       return next;
     });
   };
