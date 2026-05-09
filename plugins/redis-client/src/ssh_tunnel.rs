@@ -2,15 +2,16 @@ use crate::connection::{SshAuth, SshConfig};
 use ssh2::Session;
 use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread::{self, JoinHandle};
 use std::time::Duration;
 
 pub struct SshTunnel {
     handle: Option<JoinHandle<()>>,
-    session: Option<Session>,
-    _listener: TcpListener,
+    session: Option<Arc<Mutex<Session>>>,
     local_port: u16,
+    stop_flag: Arc<AtomicBool>,
 }
 
 impl SshTunnel {
@@ -21,12 +22,18 @@ impl SshTunnel {
 
 impl Drop for SshTunnel {
     fn drop(&mut self) {
-        // Drop session first to terminate active channels
-        self.session.take();
+        // Signal stop and unblock the listener
+        self.stop_flag.store(true, Ordering::Relaxed);
+        // Connect to our own port to unblock listener.incoming()
+        if let Ok(stream) = TcpStream::connect(format!("127.0.0.1:{}", self.local_port)) {
+            drop(stream);
+        }
         // Join the forwarding thread
         if let Some(h) = self.handle.take() {
             h.join().ok();
         }
+        // Drop session after thread exits
+        self.session.take();
     }
 }
 
@@ -75,6 +82,7 @@ impl SshTunnel {
         remote_port: u16,
     ) -> Result<Self, String> {
         let session = create_authenticated_session(config)?;
+        let session = Arc::new(Mutex::new(session));
 
         let listener = TcpListener::bind("127.0.0.1:0")
             .map_err(|e| format!("Local port bind failed: {e}"))?;
@@ -82,22 +90,28 @@ impl SshTunnel {
             .map_err(|e| format!("Get local port failed: {e}"))?
             .port();
 
+        let stop_flag = Arc::new(AtomicBool::new(false));
+        let stop_for_thread = Arc::clone(&stop_flag);
+        let session_for_thread = Arc::clone(&session);
         let rh = remote_host.to_string();
 
         let handle = thread::Builder::new()
             .name("redis-ssh-fwd".into())
             .spawn(move || {
                 for stream in listener.incoming() {
-                    let mut stream = match stream {
+                    if stop_for_thread.load(Ordering::Relaxed) {
+                        break;
+                    }
+
+                    let stream = match stream {
                         Ok(s) => s,
                         Err(_) => break,
                     };
 
-                    let mut channel = match session.channel_direct_tcpip(
-                        &rh,
-                        remote_port,
-                        None,
-                    ) {
+                    let channel = match session_for_thread
+                        .lock().unwrap()
+                        .channel_direct_tcpip(&rh, remote_port, None)
+                    {
                         Ok(ch) => ch,
                         Err(e) => {
                             tracing::warn!(?e, "ssh channel_direct_tcpip failed");
@@ -105,7 +119,6 @@ impl SshTunnel {
                         }
                     };
 
-                    // Bidirectional forwarding: two threads with shared channel
                     let ch = Arc::new(Mutex::new(channel));
                     let mut reader = match stream.try_clone() {
                         Ok(r) => r,
@@ -119,7 +132,7 @@ impl SshTunnel {
                     let ch_reader = Arc::clone(&ch);
 
                     // local -> remote
-                    let t1 = thread::Builder::new()
+                    let t1 = match thread::Builder::new()
                         .name("ssh-fwd-local-to-remote".into())
                         .spawn(move || {
                             let mut buf = [0u8; 8192];
@@ -140,11 +153,16 @@ impl SshTunnel {
                                     break;
                                 }
                             }
-                        })
-                        .unwrap();
+                        }) {
+                            Ok(h) => h,
+                            Err(e) => {
+                                tracing::warn!(?e, "failed to spawn local->remote thread");
+                                continue;
+                            }
+                        };
 
                     // remote -> local
-                    let t2 = thread::Builder::new()
+                    let t2 = match thread::Builder::new()
                         .name("ssh-fwd-remote-to-local".into())
                         .spawn(move || {
                             let mut buf = [0u8; 8192];
@@ -167,8 +185,13 @@ impl SshTunnel {
                                     break;
                                 }
                             }
-                        })
-                        .unwrap();
+                        }) {
+                            Ok(h) => h,
+                            Err(e) => {
+                                tracing::warn!(?e, "failed to spawn remote->local thread");
+                                continue;
+                            }
+                        };
 
                     t1.join().ok();
                     t2.join().ok();
@@ -179,8 +202,8 @@ impl SshTunnel {
         Ok(SshTunnel {
             handle: Some(handle),
             session: Some(session),
-            _listener: listener,
             local_port,
+            stop_flag,
         })
     }
 
