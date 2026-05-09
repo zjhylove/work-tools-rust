@@ -4069,6 +4069,7 @@ dependencies = [
  "redis",
  "serde",
  "serde_json",
+ "ssh2",
  "tracing",
  "uuid",
  "worktools-plugin-api",

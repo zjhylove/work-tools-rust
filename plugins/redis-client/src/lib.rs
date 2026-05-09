@@ -6,6 +6,8 @@ use std::collections::HashMap;
 use worktools_plugin_api::storage::PluginStorage;
 use worktools_plugin_api::Plugin;
 
+pub mod connection;
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct SavedConnection {
     id: String,
