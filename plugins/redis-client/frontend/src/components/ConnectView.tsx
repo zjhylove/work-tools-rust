@@ -1,7 +1,15 @@
 import { useState } from 'react';
 import { SavedConnection, COLORS } from '../types';
 import { call } from '../api';
-import { useToast } from './Toast';
+
+declare global {
+  interface Window {
+    WorkTools: {
+      toast: { success(m: string): void; error(m: string): void; info(m: string): void; warning(m: string): void };
+    };
+  }
+  var WorkTools: Window['WorkTools'];
+}
 
 interface Props {
   savedConns: SavedConnection[];
@@ -14,14 +22,13 @@ export function ConnectView({ savedConns, onConnect, onQuickConnect, onManage }:
   const [mode, setMode] = useState<'saved' | 'quick'>('saved');
   const [quick, setQuick] = useState({ host: '127.0.0.1', port: 6379, db: 0, password: '' });
   const [connecting, setConnecting] = useState(false);
-  const { showToast } = useToast();
 
   const handleQuickConnect = async () => {
     setConnecting(true);
     try {
-      onQuickConnect(quick.host, quick.port, quick.db, quick.password);
+      await onQuickConnect(quick.host, quick.port, quick.db, quick.password);
     } catch (e) {
-      showToast(`连接失败: ${e}`);
+      WorkTools.toast.error(`连接失败: ${e}`);
     }
     setConnecting(false);
   };

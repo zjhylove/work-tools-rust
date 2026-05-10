@@ -2,7 +2,15 @@ import { useState, useEffect } from 'react';
 import { ConnectionForm } from '../../types';
 import { COLORS } from '../../types';
 import { call } from '../../api';
-import { useToast } from '../Toast';
+
+declare global {
+  interface Window {
+    WorkTools: {
+      toast: { success(m: string): void; error(m: string): void; info(m: string): void; warning(m: string): void };
+    };
+  }
+  var WorkTools: Window['WorkTools'];
+}
 
 interface Props {
   connId: string | null;
@@ -19,7 +27,6 @@ export function ConnectionEdit({ connId, onClose, onSave }: Props) {
   const [form, setForm] = useState<ConnectionForm>(defaultForm);
   const [testing, setTesting] = useState(false);
   const [saving, setSaving] = useState(false);
-  const { showToast } = useToast();
 
   useEffect(() => {
     if (connId) {
@@ -81,8 +88,8 @@ export function ConnectionEdit({ connId, onClose, onSave }: Props) {
         } : null,
         cluster: form.cluster ? { seed_nodes: form.cluster.seedNodes.split(',').map((s: string) => s.trim()) } : null,
       });
-      showToast('连接成功', 'success');
-    } catch (e) { showToast(`连接失败: ${e}`, 'error'); }
+      WorkTools.toast.success('连接成功');
+    } catch (e) { WorkTools.toast.error(`连接失败: ${e}`); }
     setTesting(false);
   };
 

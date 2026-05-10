@@ -6,7 +6,15 @@ import { DetailPanel } from './DetailPanel';
 import { useKeys } from '../hooks/useKeys';
 import { useKeyDetail } from '../hooks/useKeyDetail';
 import { call } from '../api';
-import { useToast } from './Toast';
+
+declare global {
+  interface Window {
+    WorkTools: {
+      toast: { success(m: string): void; error(m: string): void; info(m: string): void; warning(m: string): void };
+    };
+  }
+  var WorkTools: Window['WorkTools'];
+}
 
 interface Props {
   savedConns: SavedConnection[];
@@ -23,7 +31,6 @@ export function WorkspaceView({ savedConns, currentConnectionId, onDisconnect, o
   const [multiSelect, setMultiSelect] = useState<Set<string>>(new Set());
   const [pattern, setPattern] = useState('*');
   const [deleteProgress, setDeleteProgress] = useState<{ prefix: string; scanned: number; phase: 'scanning' | 'deleting' } | null>(null);
-  const { showToast } = useToast();
 
   const handleScan = useCallback((p: string) => {
     setPattern(p);
@@ -78,9 +85,9 @@ export function WorkspaceView({ savedConns, currentConnectionId, onDisconnect, o
       if (selectedKey === key) selectKey(null);
       scan(pattern, false);
     } catch (e) {
-      showToast(`删除失败: ${e}`, 'error');
+      WorkTools.toast.error(`删除失败: ${e}`);
     }
-  }, [selectedKey, selectKey, scan, pattern, showToast]);
+  }, [selectedKey, selectKey, scan, pattern]);
 
   const handleCtxDeleteFolder = useCallback(async (prefix: string) => {
     setDeleteProgress({ prefix, scanned: 0, phase: 'scanning' });
@@ -102,16 +109,16 @@ export function WorkspaceView({ savedConns, currentConnectionId, onDisconnect, o
           const batch = allKeys.slice(i, i + 500);
           await call('delete_keys', { keys: batch });
         }
-        showToast(`已删除 ${allKeys.length} 个 key`, 'success');
+        WorkTools.toast.success(`已删除 ${allKeys.length} 个 key`);
       } else {
-        showToast('该目录下没有 key', 'info');
+        WorkTools.toast.info('该目录下没有 key');
       }
     } catch (e) {
-      showToast(`删除失败: ${e}`, 'error');
+      WorkTools.toast.error(`删除失败: ${e}`);
     }
     setDeleteProgress(null);
     scan(pattern, false);
-  }, [scan, pattern, showToast]);
+  }, [scan, pattern]);
 
   return (
     <>

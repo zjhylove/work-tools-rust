@@ -3,7 +3,6 @@ import { AppView, SavedConnection } from './types';
 import { ConnectView } from './components/ConnectView';
 import { WorkspaceView } from './components/WorkspaceView';
 import { ConnectionManager } from './components/ConnectionManager';
-import { ToastProvider } from './components/Toast';
 import { call } from './api';
 import './App.css';
 
@@ -65,7 +64,6 @@ function App() {
   }, [loadSavedConns]);
 
   return (
-    <ToastProvider>
       <div className="redis-client" ref={rootRef}>
         {(() => {
           switch (view) {
@@ -92,7 +90,6 @@ function App() {
           }
         })()}
       </div>
-    </ToastProvider>
   );
 }
 
