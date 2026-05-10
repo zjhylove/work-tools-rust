@@ -297,17 +297,15 @@ const INJECTED_SCRIPTS = `
         var err = document.createElement('div');
         err.className = 'wt-field-error';
         err.textContent = message;
-        inputEl.parentNode.appendChild(err);
+        inputEl._wtErrorEl = err;
+        var p = inputEl.parentNode;
+        if (p) p.appendChild(err);
       },
       clear: function(inputEl) {
         inputEl.classList.remove('wt-form-input--error');
-        var next = inputEl.nextElementSibling;
-        if (next && next.classList.contains('wt-field-error')) next.remove();
-        var parent = inputEl.parentNode;
-        if (parent) {
-          var err = parent.querySelector('.wt-field-error');
-          if (err) err.remove();
-        }
+        var err = inputEl._wtErrorEl;
+        if (err && err.parentNode) { err.parentNode.removeChild(err); }
+        inputEl._wtErrorEl = null;
       },
       clearAll: function(formEl) {
         formEl.querySelectorAll('.wt-form-input--error').forEach(function(el) {
