@@ -1,6 +1,22 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import './App.css';
 import type { ConnectionConfig, ObjectInfo, ListObjectsResult } from './models';
+
+declare global {
+  var WorkTools: {
+    toast: {
+      success(m: string): void;
+      error(m: string): void;
+      info(m: string): void;
+      warning(m: string): void;
+    };
+    FieldError: {
+      show(el: HTMLElement, m: string): void;
+      clear(el: HTMLElement): void;
+      clearAll(f: HTMLElement): void;
+    };
+  };
+}
 
 const PLUGIN_ID = 'object-storage';
 
@@ -15,10 +31,10 @@ function App() {
   const [currentPrefix, setCurrentPrefix] = useState<string>('');
   const [search, setSearch] = useState<string>('');
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string>('');
-  const [success, setSuccess] = useState<string>('');
   const [showForm, setShowForm] = useState(false);
   const [editingConnId, setEditingConnId] = useState<string | null>(null);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState('');
 
   const [connForm, setConnForm] = useState(EMPTY_FORM);
 
@@ -30,25 +46,11 @@ function App() {
     []
   );
 
-  const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
-
-  useEffect(() => () => timers.current.forEach(clearTimeout), []);
-
-  const showError = (msg: string) => {
-    setError(msg);
-    timers.current.push(setTimeout(() => setError(''), 3000));
-  };
-
-  const showSuccess = (msg: string) => {
-    setSuccess(msg);
-    timers.current.push(setTimeout(() => setSuccess(''), 2000));
-  };
-
   const loadConnections = async () => {
     try {
       const list = (await api('list_connections')) as ConnectionConfig[];
       setConnections(list);
-    } catch (e) { showError('加载连接失败: ' + (e as Error).message); }
+    } catch (e) { WorkTools.toast.error('加载连接失败: ' + (e as Error).message); }
   };
 
   const handleSelectConn = async (id: string) => {
@@ -94,7 +96,7 @@ function App() {
       }));
       setObjects([...dirs, ...result.objects]);
     } catch (e) {
-      showError('列举对象失败: ' + (e as Error).message);
+      WorkTools.toast.error('列举对象失败: ' + (e as Error).message);
     } finally { setLoading(false); }
   };
 
@@ -103,16 +105,21 @@ function App() {
     if (conn?.bucket) await loadObjects(selectedConnId, conn.bucket, currentPrefix);
   };
 
-  const handleDelete = async (key: string) => {
-    if (!confirm(`确认删除 ${key}?`)) return;
+  const handleDelete = (key: string) => {
+    setDeleteTarget(key);
+    setShowDeleteConfirm(true);
+  };
+
+  const handleConfirmDelete = async () => {
     const conn = connections.find((c) => c.id === selectedConnId);
-    if (!conn?.bucket) return;
+    if (!conn?.bucket || !deleteTarget) return;
+    setShowDeleteConfirm(false);
     setLoading(true);
     try {
-      await api('delete_object', { connection_id: selectedConnId, bucket: conn.bucket, key });
-      showSuccess('删除成功');
+      await api('delete_object', { connection_id: selectedConnId, bucket: conn.bucket, key: deleteTarget });
+      WorkTools.toast.success('删除成功');
       await loadObjects(selectedConnId, conn.bucket, currentPrefix);
-    } catch (e) { showError('删除失败: ' + (e as Error).message); } finally { setLoading(false); }
+    } catch (e) { WorkTools.toast.error('删除失败: ' + (e as Error).message); } finally { setLoading(false); }
   };
 
   const handleUpload = async () => {
@@ -125,9 +132,9 @@ function App() {
     setLoading(true);
     try {
       await api('upload_object', { connection_id: selectedConnId, bucket: conn.bucket, key, file_path: filePath });
-      showSuccess('上传成功');
+      WorkTools.toast.success('上传成功');
       await loadObjects(selectedConnId, conn.bucket, currentPrefix);
-    } catch (e) { showError('上传失败: ' + (e as Error).message); } finally { setLoading(false); }
+    } catch (e) { WorkTools.toast.error('上传失败: ' + (e as Error).message); } finally { setLoading(false); }
   };
 
   const handleDownload = async (key: string) => {
@@ -140,8 +147,8 @@ function App() {
     setLoading(true);
     try {
       await api('download_object', { connection_id: selectedConnId, bucket: conn.bucket, key, file_path: filePath });
-      showSuccess('下载完成: ' + filePath);
-    } catch (e) { showError('下载失败: ' + (e as Error).message); } finally { setLoading(false); }
+      WorkTools.toast.success('下载完成: ' + filePath);
+    } catch (e) { WorkTools.toast.error('下载失败: ' + (e as Error).message); } finally { setLoading(false); }
   };
 
   const handleEditConn = async () => {
@@ -151,22 +158,35 @@ function App() {
       setConnForm({ name: data.name || '', provider: data.provider || 'aliyun', access_key: data.access_key || '', secret_key: data.secret_key || '', region: data.region || '', bucket: data.bucket || '', endpoint: data.endpoint || '' });
       setEditingConnId(selectedConnId);
       setShowForm(true);
-    } catch (e) { showError('获取连接信息失败: ' + (e as Error).message); }
+    } catch (e) { WorkTools.toast.error('获取连接信息失败: ' + (e as Error).message); }
   };
 
   const handleSaveConnection = async () => {
+    let valid = true;
+    if (!connForm.name.trim()) {
+      const el = document.querySelector('.conn-name-input') as HTMLInputElement;
+      if (el) WorkTools.FieldError.show(el, '连接名称不能为空');
+      valid = false;
+    }
+    if (!connForm.access_key.trim()) {
+      const el = document.querySelector('.conn-ak-input') as HTMLInputElement;
+      if (el) WorkTools.FieldError.show(el, 'Access Key 不能为空');
+      valid = false;
+    }
+    if (!valid) return;
+
     try {
       setLoading(true);
       if (editingConnId) {
         await api('update_connection', { id: editingConnId, ...connForm });
-        showSuccess('连接已更新');
+        WorkTools.toast.success('连接已更新');
       } else {
         await api('add_connection', connForm);
-        showSuccess('连接已保存');
+        WorkTools.toast.success('连接已保存');
       }
       setShowForm(false); setEditingConnId(null); setConnForm(EMPTY_FORM);
       await loadConnections();
-    } catch (e) { showError((editingConnId ? '更新' : '添加') + '连接失败: ' + (e as Error).message); } finally { setLoading(false); }
+    } catch (e) { WorkTools.toast.error((editingConnId ? '更新' : '添加') + '连接失败: ' + (e as Error).message); } finally { setLoading(false); }
   };
 
   const handleDeleteConn = async () => {
@@ -174,9 +194,9 @@ function App() {
     try {
       await api('delete_connection', { id: selectedConnId });
       setSelectedConnId(''); setObjects([]);
-      showSuccess('连接已删除');
+      WorkTools.toast.success('连接已删除');
       await loadConnections();
-    } catch (e) { showError('删除连接失败: ' + (e as Error).message); }
+    } catch (e) { WorkTools.toast.error('删除连接失败: ' + (e as Error).message); }
   };
 
   const currentConn = connections.find((c) => c.id === selectedConnId);
@@ -192,8 +212,22 @@ function App() {
 
   return (
     <div className="object-storage">
-      {error && <div className="error-message" onClick={() => setError('')}>{error}</div>}
-      {success && <div className="error-message success">{success}</div>}
+      {showDeleteConfirm && (
+        <div className="wt-modal-overlay" onClick={() => setShowDeleteConfirm(false)}>
+          <div className="wt-modal" onClick={e => e.stopPropagation()}>
+            <div className="wt-modal-header">
+              <h3>确认删除</h3>
+            </div>
+            <div className="wt-modal-body">
+              确定要删除 "{deleteTarget}" 吗？此操作不可撤销。
+            </div>
+            <div className="wt-modal-footer">
+              <button className="wt-btn wt-btn--secondary" onClick={() => setShowDeleteConfirm(false)}>取消</button>
+              <button className="wt-btn wt-btn--danger" onClick={handleConfirmDelete}>删除</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="toolbar">
         <select value={selectedConnId} onChange={(e) => handleSelectConn(e.target.value)}>
@@ -204,11 +238,11 @@ function App() {
             </option>
           ))}
         </select>
-        <button className="btn-secondary" onClick={() => { setEditingConnId(null); setConnForm(EMPTY_FORM); setShowForm(!showForm); }}>+ 添加连接</button>
+        <button className="wt-btn wt-btn--secondary" onClick={() => { setEditingConnId(null); setConnForm(EMPTY_FORM); setShowForm(!showForm); }}>+ 添加连接</button>
         {selectedConnId && (
           <>
-            <button className="btn-secondary" onClick={handleEditConn}>编辑连接</button>
-            <button className="btn-secondary" onClick={handleDeleteConn}>删除连接</button>
+            <button className="wt-btn wt-btn--secondary" onClick={handleEditConn}>编辑连接</button>
+            <button className="wt-btn wt-btn--secondary" onClick={handleDeleteConn}>删除连接</button>
           </>
         )}
         <span className="spacer" />
@@ -218,18 +252,18 @@ function App() {
       {showForm && (
         <div className="conn-form">
           <h3>{editingConnId ? '编辑连接' : '添加云服务连接'}</h3>
-          <div className="form-row"><label>名称</label><input value={connForm.name} onChange={(e) => setConnForm({ ...connForm, name: e.target.value })} placeholder="我的阿里云" /></div>
+          <div className="form-row"><label>名称</label><input className="conn-name-input" value={connForm.name} onChange={(e) => setConnForm({ ...connForm, name: e.target.value })} onInput={() => { const el = document.querySelector('.conn-name-input') as HTMLInputElement; if (el) WorkTools.FieldError.clear(el); }} placeholder="我的阿里云" /></div>
           <div className="form-row"><label>服务商</label><select value={connForm.provider} onChange={(e) => setConnForm({ ...connForm, provider: e.target.value })}><option value="aliyun">阿里云 OSS</option><option value="tencent">腾讯云 COS</option></select></div>
-          <div className="form-row"><label>AccessKey</label><input value={connForm.access_key} onChange={(e) => setConnForm({ ...connForm, access_key: e.target.value })} placeholder="AccessKey ID" /></div>
+          <div className="form-row"><label>AccessKey</label><input className="conn-ak-input" value={connForm.access_key} onChange={(e) => setConnForm({ ...connForm, access_key: e.target.value })} onInput={() => { const el = document.querySelector('.conn-ak-input') as HTMLInputElement; if (el) WorkTools.FieldError.clear(el); }} placeholder="AccessKey ID" /></div>
           <div className="form-row"><label>SecretKey</label><input type="password" value={connForm.secret_key} onChange={(e) => setConnForm({ ...connForm, secret_key: e.target.value })} placeholder="AccessKey Secret" /></div>
           <div className="form-row"><label>Region</label><input value={connForm.region} onChange={(e) => setConnForm({ ...connForm, region: e.target.value })} placeholder="oss-cn-hangzhou" /></div>
           <div className="form-row"><label>Bucket</label><input value={connForm.bucket} onChange={(e) => setConnForm({ ...connForm, bucket: e.target.value })} placeholder="my-bucket" /></div>
           <div className="form-row"><label>Endpoint</label><input value={connForm.endpoint} onChange={(e) => setConnForm({ ...connForm, endpoint: e.target.value })} placeholder="如 oss-cn-hangzhou.aliyuncs.com" /></div>
           <div className="form-actions">
-            <button className="btn-primary" onClick={handleSaveConnection} disabled={!connForm.name || !connForm.access_key || !connForm.secret_key || !connForm.bucket}>
+            <button className="wt-btn wt-btn--primary" onClick={handleSaveConnection} disabled={!connForm.name || !connForm.access_key || !connForm.secret_key || !connForm.bucket}>
               {editingConnId ? '更新连接' : '保存连接'}
             </button>
-            <button className="btn-secondary" onClick={() => { setShowForm(false); setEditingConnId(null); }}>取消</button>
+            <button className="wt-btn wt-btn--secondary" onClick={() => { setShowForm(false); setEditingConnId(null); }}>取消</button>
           </div>
         </div>
       )}
@@ -249,7 +283,7 @@ function App() {
                   ))}
                 </div>
                 <input className="search-input" placeholder="搜索文件..." value={search} onChange={(e) => setSearch(e.target.value)} />
-                <button className="btn-primary" onClick={handleUpload}>上传文件</button>
+                <button className="wt-btn wt-btn--primary" onClick={handleUpload}>上传文件</button>
               </div>
 
               {currentPrefix && <div className="go-up" onClick={handleGoUp}>返回上级目录</div>}
@@ -269,8 +303,8 @@ function App() {
                         <td>{o.is_dir ? '-' : formatSize(o.size)}</td>
                         <td>{o.last_modified ? new Date(o.last_modified).toLocaleString('zh-CN') : ''}</td>
                         <td>
-                          {!o.is_dir && <button className="btn-sm" onClick={() => handleDownload(o.key)}>下载</button>}
-                          <button className="btn-sm btn-danger" onClick={() => handleDelete(o.key)}>删除</button>
+                          {!o.is_dir && <button className="wt-btn wt-btn--sm" onClick={() => handleDownload(o.key)}>下载</button>}
+                          <button className="wt-btn wt-btn--sm wt-btn--danger" onClick={() => handleDelete(o.key)}>删除</button>
                         </td>
                       </tr>
                     ))}
