@@ -154,7 +154,7 @@ body {
   font-weight: 700;
 }
 
-.auth-form-header .btn-secondary {
+.auth-form-header .wt-btn--secondary {
   padding: 8px 16px;
   background: var(--bg-secondary);
   color: var(--text-primary);
@@ -166,25 +166,25 @@ body {
   transition: all 0.2s;
 }
 
-.auth-form-header .btn-secondary:hover {
+.auth-form-header .wt-btn--secondary:hover {
   background: var(--hover-bg);
 }
 
 /* 模态框样式(仅用于删除确认) */
-.modal-overlay {
+.wt-modal-overlay {
   position: fixed;
   top: 0;
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(0, 0, 0, 0.5);
+  background: var(--wt-modal-overlay-bg);
   display: flex;
   align-items: center;
   justify-content: center;
   z-index: 1000;
 }
 
-.modal {
+.wt-modal {
   background: var(--bg-primary);
   padding: 24px;
   border-radius: 12px;
@@ -194,20 +194,20 @@ body {
   border: 1px solid var(--border-color);
 }
 
-.modal h3 {
+.wt-modal h3 {
   margin: 0 0 16px 0;
   font-size: 18px;
   font-weight: 600;
   color: var(--text-primary);
 }
 
-.modal p {
+.wt-modal p {
   margin: 0 0 20px 0;
   color: var(--text-secondary);
   font-size: 14px;
 }
 
-.modal-actions {
+.wt-modal-footer {
   display: flex;
   gap: 10px;
   justify-content: flex-end;
@@ -245,13 +245,16 @@ body {
   appearance: none;
   -webkit-appearance: none;
   -moz-appearance: none;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23666' d='M6 9L1 4h10z'/%3E%3C/svg%3E");
+  background-image:
+    linear-gradient(to bottom right, transparent 50%, var(--text-tertiary) 50%),
+    linear-gradient(to bottom left, transparent 50%, var(--text-tertiary) 50%);
   background-repeat: no-repeat;
-  background-position: right 14px center;
+  background-position: right 18px center, right 12px center;
+  background-size: 6px 6px, 6px 6px;
   padding-right: 36px;
 }
 
-.form-group .input-error {
+.form-group .wt-form-input--error {
   border-color: var(--error);
   box-shadow: 0 0 0 3px var(--error-light);
 }
@@ -289,61 +292,6 @@ body {
   display: flex;
   gap: 10px;
   margin-top: 20px;
-}
-
-/* 按钮样式 */
-.btn-primary,
-.btn-secondary,
-.btn-danger,
-.btn-icon {
-  padding: 9px 18px;
-  border: none;
-  border-radius: 8px;
-  font-size: 13px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.btn-primary {
-  background: var(--accent);
-  color: var(--text-inverse);
-  box-shadow: var(--shadow-sm);
-}
-
-.btn-primary:hover {
-  background: var(--accent-hover);
-  transform: translateY(-1px);
-}
-
-.btn-secondary {
-  background: var(--bg-primary);
-  color: var(--text-primary);
-  border: 1px solid var(--border-color);
-}
-
-.btn-secondary:hover {
-  background: var(--hover-bg);
-}
-
-.btn-danger {
-  background: var(--error);
-  color: var(--text-inverse);
-}
-
-.btn-danger:hover {
-  background: #c82333;
-}
-
-.btn-icon {
-  padding: 6px 10px;
-  background: transparent;
-  font-size: 12px;
-  border-radius: 3px;
-}
-
-.btn-icon:hover {
-  background: var(--hover-bg);
 }
 
 /* 空状态 */

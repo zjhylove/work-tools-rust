@@ -7044,7 +7044,6 @@ function App() {
   const [entries, setEntries] = reactExports.useState([]);
   const entriesRef = reactExports.useRef([]);
   const isMountedRef = reactExports.useRef(true);
-  const errorTimeoutRef = reactExports.useRef(null);
   const [loading, setLoading] = reactExports.useState(true);
   const [viewMode, setViewMode] = reactExports.useState("list");
   const [selectedEntry, setSelectedEntry] = reactExports.useState(null);
@@ -7058,15 +7057,11 @@ function App() {
     period: 30
   });
   const [fieldErrors, setFieldErrors] = reactExports.useState({});
-  const [error, setError] = reactExports.useState("");
   const [showDeleteConfirm, setShowDeleteConfirm] = reactExports.useState(false);
   reactExports.useEffect(() => {
     isMountedRef.current = true;
     return () => {
       isMountedRef.current = false;
-      if (errorTimeoutRef.current !== null) {
-        clearTimeout(errorTimeoutRef.current);
-      }
     };
   }, []);
   reactExports.useEffect(() => {
@@ -7125,7 +7120,7 @@ function App() {
       }
     } catch (err) {
       if (isMountedRef.current) {
-        setError("加载认证条目失败");
+        window.WorkTools.toast.error("加载认证条目失败");
         setEntries([]);
       }
     } finally {
@@ -7155,17 +7150,12 @@ function App() {
           [entry.id]: { code, remaining_seconds: remaining }
         }));
         if (forceRefresh && isMountedRef.current) {
-          setError("✓ 验证码已刷新");
-          if (errorTimeoutRef.current !== null) clearTimeout(errorTimeoutRef.current);
-          errorTimeoutRef.current = setTimeout(() => {
-            errorTimeoutRef.current = null;
-            if (isMountedRef.current) setError("");
-          }, 1500);
+          window.WorkTools.toast.success("验证码已刷新");
         }
       } catch (err) {
         if (isMountedRef.current) {
           devError("生成验证码失败:", entry.issuer, err);
-          setError("生成验证码失败");
+          window.WorkTools.toast.error("生成验证码失败");
         }
       }
     }),
@@ -7231,20 +7221,14 @@ function App() {
     return () => {
       isMountedRef.current = false;
       if (timeoutId !== null) clearTimeout(timeoutId);
-      if (errorTimeoutRef.current !== null) clearTimeout(errorTimeoutRef.current);
     };
   }, []);
   const copyCode = (code) => __async(this, null, function* () {
     try {
       yield navigator.clipboard.writeText(code);
-      setError("✓ 验证码已复制");
-      if (errorTimeoutRef.current !== null) clearTimeout(errorTimeoutRef.current);
-      errorTimeoutRef.current = setTimeout(() => {
-        errorTimeoutRef.current = null;
-        if (isMountedRef.current) setError("");
-      }, 1500);
+      window.WorkTools.toast.success("验证码已复制");
     } catch (err) {
-      setError("复制失败");
+      window.WorkTools.toast.error("复制失败");
     }
   });
   const saveEntry = () => __async(this, null, function* () {
@@ -7253,14 +7237,14 @@ function App() {
       const errors = {};
       for (const [key, rule] of Object.entries(validationRules)) {
         const value = formData[key] || "";
-        const error2 = validateField(key, value);
-        if (error2) {
-          errors[key] = error2;
+        const error = validateField(key, value);
+        if (error) {
+          errors[key] = error;
         }
       }
       if (Object.keys(errors).length > 0) {
         setFieldErrors(errors);
-        setError("请修正表单中的错误");
+        window.WorkTools.toast.error("请修正表单中的错误");
         return;
       }
       let savedEntry = null;
@@ -7286,9 +7270,8 @@ function App() {
       }
       setViewMode("list");
       setFieldErrors({});
-      setError("");
     } catch (err) {
-      setError("保存认证条目失败");
+      window.WorkTools.toast.error("保存认证条目失败");
     }
   });
   const deleteEntry = () => __async(this, null, function* () {
@@ -7303,7 +7286,7 @@ function App() {
       setSelectedEntry(null);
       setViewMode("list");
     } catch (err) {
-      setError("删除认证条目失败");
+      window.WorkTools.toast.error("删除认证条目失败");
     }
   });
   const editEntry = (entry) => {
@@ -7324,7 +7307,6 @@ function App() {
     });
     setFieldErrors({});
     setViewMode("add");
-    setError("");
   };
   const generateSecret = () => __async(this, null, function* () {
     var _a;
@@ -7347,7 +7329,7 @@ function App() {
     viewMode === "list" && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "auth-list-container", children: [
       /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "auth-plugin-header", children: [
         /* @__PURE__ */ jsxRuntimeExports.jsx("h2", { children: "双因素认证" }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("button", { className: "btn-primary", onClick: addNew, children: "+ 添加" })
+        /* @__PURE__ */ jsxRuntimeExports.jsx("button", { className: "wt-btn wt-btn--primary", onClick: addNew, children: "+ 添加" })
       ] }),
       /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "auth-list", children: !loading && entries.length > 0 ? entries.map((entry) => /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "auth-item", children: [
         /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "auth-item-info", children: [
@@ -7366,7 +7348,7 @@ function App() {
           /* @__PURE__ */ jsxRuntimeExports.jsx(
             "button",
             {
-              className: "btn-icon",
+              className: "wt-btn wt-btn--ghost wt-btn--sm",
               onClick: () => {
                 var _a;
                 return copyCode(((_a = totpMap[entry.id]) == null ? void 0 : _a.code) || "");
@@ -7378,7 +7360,7 @@ function App() {
           /* @__PURE__ */ jsxRuntimeExports.jsx(
             "button",
             {
-              className: "btn-icon",
+              className: "wt-btn wt-btn--ghost wt-btn--sm",
               onClick: () => generateTotp(entry, true),
               title: "刷新验证码",
               children: "🔄"
@@ -7387,7 +7369,7 @@ function App() {
           /* @__PURE__ */ jsxRuntimeExports.jsx(
             "button",
             {
-              className: "btn-icon",
+              className: "wt-btn wt-btn--ghost wt-btn--sm",
               onClick: () => editEntry(entry),
               title: "编辑",
               children: "✏️"
@@ -7396,7 +7378,7 @@ function App() {
           /* @__PURE__ */ jsxRuntimeExports.jsx(
             "button",
             {
-              className: "btn-icon btn-danger",
+              className: "wt-btn wt-btn--ghost wt-btn--sm wt-btn--danger",
               onClick: () => {
                 setSelectedEntry(entry);
                 setShowDeleteConfirm(true);
@@ -7408,20 +7390,13 @@ function App() {
         ] })
       ] }, entry.id)) : /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "empty-state", children: "暂无认证条目" }) })
     ] }),
-    error && /* @__PURE__ */ jsxRuntimeExports.jsx(
-      "div",
-      {
-        className: `error-message${String(error).startsWith("✓") ? " success" : ""}${String(error).startsWith("⏳") ? " info" : ""}${String(error).startsWith("⚠️") ? " warning" : ""}`,
-        children: String(error)
-      }
-    ),
     (viewMode === "add" || viewMode === "edit") && /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "auth-form-container", children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "auth-form-content", children: [
       /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "auth-form-header", children: [
         /* @__PURE__ */ jsxRuntimeExports.jsx("h2", { children: viewMode === "add" ? "添加认证" : "编辑认证" }),
         /* @__PURE__ */ jsxRuntimeExports.jsxs(
           "button",
           {
-            className: "btn-secondary",
+            className: "wt-btn wt-btn--secondary",
             onClick: () => setViewMode("list"),
             children: [
               /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: { fontSize: 18, lineHeight: 1 }, children: "×" }),
@@ -7440,19 +7415,19 @@ function App() {
             onInput: (e) => {
               const value = e.target.value;
               setFormData((prev) => __spreadProps(__spreadValues({}, prev), { issuer: value }));
-              const error2 = validateField("issuer", value);
+              const error = validateField("issuer", value);
               setFieldErrors((prev) => {
                 const newErrors = __spreadValues({}, prev);
-                if (error2) newErrors.issuer = error2;
+                if (error) newErrors.issuer = error;
                 else delete newErrors.issuer;
                 return newErrors;
               });
             },
             placeholder: "例如: Google",
-            className: fieldErrors.issuer ? "input-error" : ""
+            className: fieldErrors.issuer ? "wt-form-input--error" : ""
           }
         ),
-        fieldErrors.issuer && /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "field-error", children: fieldErrors.issuer })
+        fieldErrors.issuer && /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "wt-field-error", children: fieldErrors.issuer })
       ] }),
       /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "form-group", children: [
         /* @__PURE__ */ jsxRuntimeExports.jsx("label", { children: "账户名称 *" }),
@@ -7464,19 +7439,19 @@ function App() {
             onInput: (e) => {
               const value = e.target.value;
               setFormData((prev) => __spreadProps(__spreadValues({}, prev), { name: value }));
-              const error2 = validateField("name", value);
+              const error = validateField("name", value);
               setFieldErrors((prev) => {
                 const newErrors = __spreadValues({}, prev);
-                if (error2) newErrors.name = error2;
+                if (error) newErrors.name = error;
                 else delete newErrors.name;
                 return newErrors;
               });
             },
             placeholder: "例如: user@example.com",
-            className: fieldErrors.name ? "input-error" : ""
+            className: fieldErrors.name ? "wt-form-input--error" : ""
           }
         ),
-        fieldErrors.name && /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "field-error", children: fieldErrors.name })
+        fieldErrors.name && /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "wt-field-error", children: fieldErrors.name })
       ] }),
       /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "form-group", children: [
         /* @__PURE__ */ jsxRuntimeExports.jsx("label", { children: "密钥 *" }),
@@ -7489,21 +7464,21 @@ function App() {
               onInput: (e) => {
                 const value = e.target.value;
                 setFormData((prev) => __spreadProps(__spreadValues({}, prev), { secret: value }));
-                const error2 = validateField("secret", value);
+                const error = validateField("secret", value);
                 setFieldErrors((prev) => {
                   const newErrors = __spreadValues({}, prev);
-                  if (error2) newErrors.secret = error2;
+                  if (error) newErrors.secret = error;
                   else delete newErrors.secret;
                   return newErrors;
                 });
               },
               placeholder: "输入或生成密钥",
-              className: fieldErrors.secret ? "input-error" : ""
+              className: fieldErrors.secret ? "wt-form-input--error" : ""
             }
           ),
-          /* @__PURE__ */ jsxRuntimeExports.jsx("button", { className: "btn-secondary", onClick: generateSecret, children: "生成" })
+          /* @__PURE__ */ jsxRuntimeExports.jsx("button", { className: "wt-btn wt-btn--secondary", onClick: generateSecret, children: "生成" })
         ] }),
-        fieldErrors.secret && /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "field-error", children: fieldErrors.secret })
+        fieldErrors.secret && /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "wt-field-error", children: fieldErrors.secret })
       ] }),
       /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "form-row", children: [
         /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "form-group", children: [
@@ -7563,7 +7538,7 @@ function App() {
         /* @__PURE__ */ jsxRuntimeExports.jsx(
           "button",
           {
-            className: "btn-primary",
+            className: "wt-btn wt-btn--primary",
             onClick: saveEntry,
             disabled: !isFormValid,
             style: !isFormValid ? { opacity: 0.5, cursor: "not-allowed" } : {},
@@ -7573,22 +7548,22 @@ function App() {
         /* @__PURE__ */ jsxRuntimeExports.jsx(
           "button",
           {
-            className: "btn-secondary",
+            className: "wt-btn wt-btn--secondary",
             onClick: () => setViewMode("list"),
             children: "取消"
           }
         )
       ] })
     ] }) }),
-    showDeleteConfirm && /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "modal-overlay", children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "modal", children: [
+    showDeleteConfirm && /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "wt-modal-overlay", children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "wt-modal", children: [
       /* @__PURE__ */ jsxRuntimeExports.jsx("h3", { children: "确认删除" }),
       /* @__PURE__ */ jsxRuntimeExports.jsx("p", { children: "确定要删除这个认证条目吗?" }),
-      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "modal-actions", children: [
-        /* @__PURE__ */ jsxRuntimeExports.jsx("button", { className: "btn-danger", onClick: deleteEntry, children: "删除" }),
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "wt-modal-footer", children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx("button", { className: "wt-btn wt-btn--danger", onClick: deleteEntry, children: "删除" }),
         /* @__PURE__ */ jsxRuntimeExports.jsx(
           "button",
           {
-            className: "btn-secondary",
+            className: "wt-btn wt-btn--secondary",
             onClick: () => setShowDeleteConfirm(false),
             children: "取消"
           }

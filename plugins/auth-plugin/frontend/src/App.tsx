@@ -2,6 +2,24 @@ import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import "./App.css";
 import "./types";
 
+declare global {
+  interface Window {
+    WorkTools: {
+      toast: {
+        success(msg: string): void;
+        error(msg: string): void;
+        info(msg: string): void;
+        warning(msg: string): void;
+      };
+      FieldError: {
+        show(el: HTMLElement, msg: string): void;
+        clear(el: HTMLElement): void;
+        clearAll(form: HTMLElement): void;
+      };
+    };
+  }
+}
+
 interface AuthEntry {
   id: string;
   name: string;
@@ -31,7 +49,6 @@ function App() {
   const [entries, setEntries] = useState<AuthEntry[]>([]);
   const entriesRef = useRef<AuthEntry[]>([]);
   const isMountedRef = useRef(true);
-  const errorTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [loading, setLoading] = useState(true);
   const [viewMode, setViewMode] = useState<"list" | "add" | "edit">("list");
   const [selectedEntry, setSelectedEntry] = useState<AuthEntry | null>(null);
@@ -45,16 +62,12 @@ function App() {
     period: 30,
   });
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
-  const [error, setError] = useState("");
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   useEffect(() => {
     isMountedRef.current = true;
     return () => {
       isMountedRef.current = false;
-      if (errorTimeoutRef.current !== null) {
-        clearTimeout(errorTimeoutRef.current);
-      }
     };
   }, []);
 
@@ -135,7 +148,7 @@ function App() {
     } catch (err) {
       if (isMountedRef.current) {
         devError("加载认证条目失败:", err);
-        setError("加载认证条目失败");
+        window.WorkTools.toast.error("加载认证条目失败");
         setEntries([]);
       }
     } finally {
@@ -181,17 +194,12 @@ function App() {
 
         // 如果是强制刷新，显示反馈
         if (forceRefresh && isMountedRef.current) {
-          setError("✓ 验证码已刷新");
-          if (errorTimeoutRef.current !== null) clearTimeout(errorTimeoutRef.current);
-          errorTimeoutRef.current = setTimeout(() => {
-            errorTimeoutRef.current = null;
-            if (isMountedRef.current) setError("");
-          }, 1500);
+          window.WorkTools.toast.success("验证码已刷新");
         }
       } catch (err) {
         if (isMountedRef.current) {
           devError("生成验证码失败:", entry.issuer, err);
-          setError("生成验证码失败");
+          window.WorkTools.toast.error("生成验证码失败");
         }
       }
     },
@@ -270,7 +278,6 @@ function App() {
     return () => {
       isMountedRef.current = false;
       if (timeoutId !== null) clearTimeout(timeoutId);
-      if (errorTimeoutRef.current !== null) clearTimeout(errorTimeoutRef.current);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -279,15 +286,10 @@ function App() {
   const copyCode = async (code: string) => {
     try {
       await navigator.clipboard.writeText(code);
-      setError("✓ 验证码已复制");
-      if (errorTimeoutRef.current !== null) clearTimeout(errorTimeoutRef.current);
-      errorTimeoutRef.current = setTimeout(() => {
-        errorTimeoutRef.current = null;
-        if (isMountedRef.current) setError("");
-      }, 1500);
+      window.WorkTools.toast.success("验证码已复制");
     } catch (err) {
       devError("复制失败:", err);
-      setError("复制失败");
+      window.WorkTools.toast.error("复制失败");
     }
   };
 
@@ -306,7 +308,7 @@ function App() {
 
       if (Object.keys(errors).length > 0) {
         setFieldErrors(errors);
-        setError("请修正表单中的错误");
+        window.WorkTools.toast.error("请修正表单中的错误");
         return;
       }
 
@@ -340,10 +342,9 @@ function App() {
 
       setViewMode("list");
       setFieldErrors({});
-      setError("");
     } catch (err) {
       devError("保存失败:", err);
-      setError("保存认证条目失败");
+      window.WorkTools.toast.error("保存认证条目失败");
     }
   };
 
@@ -362,7 +363,7 @@ function App() {
       setViewMode("list");
     } catch (err) {
       devError("删除失败:", err);
-      setError("删除认证条目失败");
+      window.WorkTools.toast.error("删除认证条目失败");
     }
   };
 
@@ -387,7 +388,6 @@ function App() {
     });
     setFieldErrors({});
     setViewMode("add");
-    setError("");
   };
 
   // 生成随机密钥
@@ -417,7 +417,7 @@ function App() {
         <div className="auth-list-container">
           <div className="auth-plugin-header">
             <h2>双因素认证</h2>
-            <button className="btn-primary" onClick={addNew}>
+            <button className="wt-btn wt-btn--primary" onClick={addNew}>
               + 添加
             </button>
           </div>
@@ -442,28 +442,28 @@ function App() {
 
                   <div className="auth-item-actions">
                     <button
-                      className="btn-icon"
+                      className="wt-btn wt-btn--ghost wt-btn--sm"
                       onClick={() => copyCode(totpMap[entry.id]?.code || "")}
                       title="复制验证码"
                     >
                       📋
                     </button>
                     <button
-                      className="btn-icon"
+                      className="wt-btn wt-btn--ghost wt-btn--sm"
                       onClick={() => generateTotp(entry, true)}
                       title="刷新验证码"
                     >
                       🔄
                     </button>
                     <button
-                      className="btn-icon"
+                      className="wt-btn wt-btn--ghost wt-btn--sm"
                       onClick={() => editEntry(entry)}
                       title="编辑"
                     >
                       ✏️
                     </button>
                     <button
-                      className="btn-icon btn-danger"
+                      className="wt-btn wt-btn--ghost wt-btn--sm wt-btn--danger"
                       onClick={() => {
                         setSelectedEntry(entry);
                         setShowDeleteConfirm(true);
@@ -482,21 +482,6 @@ function App() {
         </div>
       )}
 
-      {/* Toast 提示 */}
-      {error && (
-        <div
-          className={`error-message${
-            String(error).startsWith("✓") ? " success" : ""
-          }${
-            String(error).startsWith("⏳") ? " info" : ""
-          }${
-            String(error).startsWith("⚠️") ? " warning" : ""
-          }`}
-        >
-          {String(error)}
-        </div>
-      )}
-
       {/* 表单视图 */}
       {(viewMode === "add" || viewMode === "edit") && (
         <div className="auth-form-container">
@@ -505,7 +490,7 @@ function App() {
             <div className="auth-form-header">
               <h2>{viewMode === "add" ? "添加认证" : "编辑认证"}</h2>
               <button
-                className="btn-secondary"
+                className="wt-btn wt-btn--secondary"
                 onClick={() => setViewMode("list")}
               >
                 <span style={{ fontSize: 18, lineHeight: 1 }}>×</span> 返回列表
@@ -529,10 +514,10 @@ function App() {
                   });
                 }}
                 placeholder="例如: Google"
-                className={fieldErrors.issuer ? "input-error" : ""}
+                className={fieldErrors.issuer ? "wt-form-input--error" : ""}
               />
               {fieldErrors.issuer && (
-                <div className="field-error">{fieldErrors.issuer}</div>
+                <div className="wt-field-error">{fieldErrors.issuer}</div>
               )}
             </div>
 
@@ -553,10 +538,10 @@ function App() {
                   });
                 }}
                 placeholder="例如: user@example.com"
-                className={fieldErrors.name ? "input-error" : ""}
+                className={fieldErrors.name ? "wt-form-input--error" : ""}
               />
               {fieldErrors.name && (
-                <div className="field-error">{fieldErrors.name}</div>
+                <div className="wt-field-error">{fieldErrors.name}</div>
               )}
             </div>
 
@@ -578,14 +563,14 @@ function App() {
                     });
                   }}
                   placeholder="输入或生成密钥"
-                  className={fieldErrors.secret ? "input-error" : ""}
+                  className={fieldErrors.secret ? "wt-form-input--error" : ""}
                 />
-                <button className="btn-secondary" onClick={generateSecret}>
+                <button className="wt-btn wt-btn--secondary" onClick={generateSecret}>
                   生成
                 </button>
               </div>
               {fieldErrors.secret && (
-                <div className="field-error">{fieldErrors.secret}</div>
+                <div className="wt-field-error">{fieldErrors.secret}</div>
               )}
             </div>
 
@@ -643,7 +628,7 @@ function App() {
 
             <div className="form-actions">
               <button
-                className="btn-primary"
+                className="wt-btn wt-btn--primary"
                 onClick={saveEntry}
                 disabled={!isFormValid}
                 style={
@@ -653,7 +638,7 @@ function App() {
                 {viewMode === "add" ? "添加" : "保存"}
               </button>
               <button
-                className="btn-secondary"
+                className="wt-btn wt-btn--secondary"
                 onClick={() => setViewMode("list")}
               >
                 取消
@@ -665,16 +650,16 @@ function App() {
 
       {/* 删除确认对话框 */}
       {showDeleteConfirm && (
-        <div className="modal-overlay">
-          <div className="modal">
+        <div className="wt-modal-overlay">
+          <div className="wt-modal">
             <h3>确认删除</h3>
             <p>确定要删除这个认证条目吗?</p>
-            <div className="modal-actions">
-              <button className="btn-danger" onClick={deleteEntry}>
+            <div className="wt-modal-footer">
+              <button className="wt-btn wt-btn--danger" onClick={deleteEntry}>
                 删除
               </button>
               <button
-                className="btn-secondary"
+                className="wt-btn wt-btn--secondary"
                 onClick={() => setShowDeleteConfirm(false)}
               >
                 取消
