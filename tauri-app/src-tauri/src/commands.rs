@@ -29,7 +29,7 @@ use serde::Deserialize;
 use serde_json::Value;
 use std::fs;
 use std::sync::Arc;
-use tauri::{Manager, State, window::Color};
+use tauri::{Manager, State};
 
 /// 插件管理器状态的类型别名
 /// `State<'_, PluginManagerState>` 比 `State<'_, Arc<PluginManager>>` 更简洁
@@ -610,8 +610,8 @@ pub async fn set_window_theme(theme: String, app: tauri::AppHandle) -> Result<()
         #[cfg(target_os = "macos")]
         {
             let color = match theme.as_str() {
-                "dark" => Color(26, 27, 30, 255),   // matches --bg-primary: #1a1b1e
-                _ => Color(248, 249, 250, 255),      // matches --bg-secondary: #f8f9fa
+                "dark" => tauri::window::Color(26, 27, 30, 255),   // matches --bg-primary: #1a1b1e
+                _ => tauri::window::Color(248, 249, 250, 255),      // matches --bg-secondary: #f8f9fa
             };
             w.set_background_color(Some(color))
                 .map_err(|e| e.to_string())?;
