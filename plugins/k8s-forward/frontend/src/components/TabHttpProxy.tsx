@@ -1,6 +1,10 @@
 import { useState, useEffect, useCallback } from "react";
 import type { ProxyStatus, ProxyMapping } from "../types";
 
+declare global {
+  interface Window { WorkTools: { toast: { success(m:string):void; error(m:string):void; info(m:string):void; warning(m:string):void }; FieldError: { show(el:HTMLElement, m:string):void; clear(el:HTMLElement):void; clearAll(f:HTMLElement):void } } }
+}
+
 const PLUGIN_ID = "k8s-forward";
 
 interface MappingGroup {
@@ -15,16 +19,10 @@ export default function TabHttpProxy() {
   const [mappings, setMappings] = useState<ProxyMapping[]>([]);
   const [port, setPort] = useState(80);
   const [editing, setEditing] = useState<{ rule_id: string; domain: string; target: string } | null>(null);
-  const [toast, setToast] = useState<string | null>(null);
 
   const call = useCallback(async (method: string, params?: unknown) => {
     return await window.pluginAPI.call(PLUGIN_ID, method, (params ?? {}) as Record<string, unknown>);
   }, []);
-
-  const showToast = (msg: string, isErr = false) => {
-    setToast(msg);
-    setTimeout(() => setToast(null), 3000);
-  };
 
   const refresh = async () => {
     const s = await call("proxy_status") as ProxyStatus;
@@ -38,16 +36,21 @@ export default function TabHttpProxy() {
   useEffect(() => { try { refresh(); } catch { /* ignore */ } }, []);
 
   const handleStart = async () => {
+    const portInput = document.querySelector(".proxy-port-input") as HTMLInputElement;
+    if (!port || port < 1 || port > 65535) {
+      window.WorkTools.FieldError.show(portInput, "请输入有效的端口号 (1-65535)");
+      return;
+    }
     try {
       await call("proxy_start", { port });
-      showToast(`代理已启动: 127.0.0.1:${port}`);
+      window.WorkTools.toast.success(`代理已启动: 127.0.0.1:${port}`);
       refresh();
-    } catch (e: unknown) { showToast(`启动失败: ${e}`, true); }
+    } catch (e: unknown) { window.WorkTools.toast.error(`启动失败: ${e}`); }
   };
 
   const handleStop = async () => {
     await call("proxy_stop");
-    showToast("代理已停止");
+    window.WorkTools.toast.info("代理已停止");
     refresh();
   };
 
@@ -55,10 +58,15 @@ export default function TabHttpProxy() {
     if (!editing) return;
     try {
       await call("update_proxy_mapping", { rule_id: editing.rule_id, domain: editing.domain });
-      showToast("Pod地址已更新");
+      window.WorkTools.toast.success("Pod地址已更新");
       setEditing(null);
       refresh();
-    } catch (e: unknown) { showToast(`更新失败: ${e}`, true); }
+    } catch (e: unknown) { window.WorkTools.toast.error(`更新失败: ${e}`); }
+  };
+
+  const clearPortError = () => {
+    const portInput = document.querySelector(".proxy-port-input") as HTMLInputElement;
+    if (portInput) window.WorkTools.FieldError.clear(portInput);
   };
 
   // 按 rule_id 分组：每个转发有一条 pod 名（别名）和一条 pod 地址
@@ -76,14 +84,12 @@ export default function TabHttpProxy() {
 
   return (
     <div>
-      {toast && <div className="toast toast-info">{toast}</div>}
-
       <div className="card">
         <div className="card-header">HTTP 代理服务器</div>
         <div className="form-row">
           <div className="form-group">
             <label>代理端口</label>
-            <input type="number" value={port} onChange={e => setPort(+e.target.value)} disabled={status.running} style={{width:80}} />
+            <input className="proxy-port-input" type="number" value={port} onChange={e => { setPort(+e.target.value); clearPortError(); }} disabled={status.running} style={{width:80}} />
           </div>
           {status.running
             ? <button className="btn btn-danger" onClick={handleStop}>停止</button>
@@ -112,7 +118,7 @@ export default function TabHttpProxy() {
                   </td>
                 </tr>
               ))}
-              {Object.keys(groups).length === 0 && <tr><td colSpan={4} style={{textAlign:"center",color:"#666",padding:20}}>暂无映射</td></tr>}
+              {Object.keys(groups).length === 0 && <tr><td colSpan={4} style={{textAlign:"center",color:"var(--text-tertiary)",padding:20}}>暂无映射</td></tr>}
             </tbody>
           </table>
         </div>
@@ -123,7 +129,7 @@ export default function TabHttpProxy() {
           <div className="modal" onClick={e => e.stopPropagation()}>
             <h3>编辑 Pod 地址</h3>
             <div className="form-group"><label>Pod地址</label><input value={editing.domain} onChange={e => setEditing({...editing, domain: e.target.value})} /></div>
-            <div style={{marginTop:8,fontSize:11,color:"#888"}}>目标: {editing.target}</div>
+            <div style={{marginTop:8,fontSize:11,color:"var(--text-tertiary)"}}>目标: {editing.target}</div>
             <div className="modal-actions">
               <button className="btn btn-secondary" onClick={() => setEditing(null)}>取消</button>
               <button className="btn btn-primary" onClick={handleUpdate}>保存</button>

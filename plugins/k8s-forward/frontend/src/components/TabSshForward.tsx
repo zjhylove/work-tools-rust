@@ -1,6 +1,10 @@
 import { useState, useEffect, useCallback } from "react";
 import type { ForwardRule, SshStatus } from "../types";
 
+declare global {
+  interface Window { WorkTools: { toast: { success(m:string):void; error(m:string):void; info(m:string):void; warning(m:string):void }; FieldError: { show(el:HTMLElement, m:string):void; clear(el:HTMLElement):void; clearAll(f:HTMLElement):void } } }
+}
+
 const PLUGIN_ID = "k8s-forward";
 
 export default function TabSshForward() {
@@ -9,16 +13,10 @@ export default function TabSshForward() {
   const [form, setForm] = useState({ host: "", port: 22, username: "", password: "" });
   const [editing, setEditing] = useState<ForwardRule | null>(null);
   const [isNewRule, setIsNewRule] = useState(false);
-  const [toast, setToast] = useState<string | null>(null);
 
   const call = useCallback(async (method: string, params?: unknown) => {
     return await window.pluginAPI.call(PLUGIN_ID, method, (params ?? {}) as Record<string, unknown>);
   }, []);
-
-  const showToast = (msg: string, isErr = false) => {
-    setToast(msg);
-    setTimeout(() => setToast(null), 3000);
-  };
 
   const loadStatus = async () => {
     const s = await call("ssh_status") as SshStatus;
@@ -51,17 +49,22 @@ export default function TabSshForward() {
   }, []);
 
   const handleConnect = async () => {
+    const hostInput = document.querySelector(".ssh-host-input") as HTMLInputElement;
+    if (!form.host.trim()) {
+      window.WorkTools.FieldError.show(hostInput, "SSH 主机地址不能为空");
+      return;
+    }
     try {
       await call("ssh_connect", form);
-      showToast("SSH 连接成功");
+      window.WorkTools.toast.success("SSH 连接成功");
       loadStatus();
-    } catch (e: unknown) { showToast(`连接失败: ${e}`, true); }
+    } catch (e: unknown) { window.WorkTools.toast.error(`连接失败: ${e}`); }
   };
 
   const handleDisconnect = async () => {
     await call("ssh_disconnect");
     setSshStatus({ connected: false });
-    showToast("已断开");
+    window.WorkTools.toast.info("已断开");
   };
 
   const handleAdd = () => {
@@ -86,19 +89,19 @@ export default function TabSshForward() {
       } else {
         await call("update_forward_rule", editing);
       }
-      showToast(isNewRule ? "规则已添加" : "已保存");
+      window.WorkTools.toast.success(isNewRule ? "规则已添加" : "已保存");
       setEditing(null);
       setIsNewRule(false);
       loadRules();
-    } catch (e: unknown) { showToast(`保存失败: ${e}`, true); }
+    } catch (e: unknown) { window.WorkTools.toast.error(`保存失败: ${e}`); }
   };
 
   const handleDelete = async (id: string) => {
     try {
       await call("remove_forward_rule", { id });
-      showToast("已删除");
+      window.WorkTools.toast.success("已删除");
       loadRules();
-    } catch (e: unknown) { showToast(`删除失败: ${e}`, true); }
+    } catch (e: unknown) { window.WorkTools.toast.error(`删除失败: ${e}`); }
   };
 
   const handleImport = () => {
@@ -113,9 +116,9 @@ export default function TabSshForward() {
         const parsed = JSON.parse(text);
         const arr = Array.isArray(parsed) ? parsed : parsed.rules || [];
         await call("import_rules", { rules: arr });
-        showToast(`已导入 ${arr.length} 条规则`);
+        window.WorkTools.toast.success(`已导入 ${arr.length} 条规则`);
         loadRules();
-      } catch { showToast("导入失败: 格式错误", true); }
+      } catch { window.WorkTools.toast.error("导入失败: 格式错误"); }
     };
     input.click();
   };
@@ -129,18 +132,21 @@ export default function TabSshForward() {
       const filename = `k8s-forward-rules-${new Date().toISOString().split("T")[0]}.json`;
       const filePath = `${dir.replace(/\\/g, "/")}/${filename}`;
       await window.pluginAPI.write_file(filePath, json);
-      showToast(`已导出到 ${filePath}`);
-    } catch (e: unknown) { showToast(`导出失败: ${e}`, true); }
+      window.WorkTools.toast.success(`已导出到 ${filePath}`);
+    } catch (e: unknown) { window.WorkTools.toast.error(`导出失败: ${e}`); }
+  };
+
+  const clearHostError = () => {
+    const hostInput = document.querySelector(".ssh-host-input") as HTMLInputElement;
+    if (hostInput) window.WorkTools.FieldError.clear(hostInput);
   };
 
   return (
     <div>
-      {toast && <div className="toast toast-info">{toast}</div>}
-
       <div className="card">
         <div className="card-header">SSH 连接配置</div>
         <div className="form-row">
-          <div className="form-group"><label>主机地址</label><input value={form.host} onChange={e => setForm({...form, host: e.target.value})} placeholder="10.73.x.x" /></div>
+          <div className="form-group"><label>主机地址</label><input className="ssh-host-input" value={form.host} onChange={e => { setForm({...form, host: e.target.value}); clearHostError(); }} placeholder="10.73.x.x" /></div>
           <div className="form-group"><label>端口</label><input type="number" value={form.port} onChange={e => setForm({...form, port: +e.target.value})} /></div>
           <div className="form-group"><label>用户名</label><input value={form.username} onChange={e => setForm({...form, username: e.target.value})} /></div>
           <div className="form-group"><label>密码</label><input type="password" value={form.password} onChange={e => setForm({...form, password: e.target.value})} /></div>
@@ -180,7 +186,7 @@ export default function TabSshForward() {
                 </td>
               </tr>
             ))}
-            {rules.length === 0 && <tr><td colSpan={6} style={{textAlign:"center",color:"#666",padding:20}}>暂无规则</td></tr>}
+            {rules.length === 0 && <tr><td colSpan={6} style={{textAlign:"center",color:"var(--text-tertiary)",padding:20}}>暂无规则</td></tr>}
           </tbody>
         </table>
       </div>

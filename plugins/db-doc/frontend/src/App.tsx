@@ -2,12 +2,6 @@ import { useState, useEffect, useMemo } from 'react'
 import './App.css'
 
 // 类型定义
-interface ToastMessage {
-  id: number
-  type: 'success' | 'error' | 'info'
-  message: string
-}
-
 interface ConnectionConfig {
   id: string
   name: string
@@ -53,7 +47,12 @@ declare global {
       call: (pluginId: string, method: string, params?: Record<string, unknown>) => Promise<unknown>
       open_folder_dialog: (title?: string) => Promise<string | null>
     }
+    WorkTools: {
+      toast: { success(m: string): void; error(m: string): void; info(m: string): void; warning(m: string): void }
+      FieldError: { show(el: HTMLElement, m: string): void; clear(el: HTMLElement): void; clearAll(f: HTMLElement): void }
+    }
   }
+  var WorkTools: Window['WorkTools']
 }
 
 type ViewMode = 'connections' | 'select'
@@ -67,7 +66,6 @@ function App() {
   const [viewMode, setViewMode] = useState<ViewMode>('connections')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [toasts, setToasts] = useState<ToastMessage[]>([])
   const [connectionSearch, setConnectionSearch] = useState('')
   const [testingConnection, setTestingConnection] = useState(false)
   const [testResult, setTestResult] = useState<{ id: string; success: boolean; message?: string } | null>(null)
@@ -105,12 +103,6 @@ function App() {
     setSelectedTables(newSelected)
   }
 
-  const showToast = (type: ToastMessage['type'], message: string) => {
-    const id = Date.now()
-    setToasts(prev => [...prev, { id, type, message }])
-    setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 3000)
-  }
-
   const callAPI = async <T,>(method: string, params?: Record<string, unknown>): Promise<T> => {
     try {
       setError(null)
@@ -118,7 +110,7 @@ function App() {
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e)
       setError(message)
-      showToast('error', message)
+      WorkTools.toast.error(message)
       throw e
     }
   }
@@ -152,9 +144,9 @@ function App() {
       const result = await callAPI<{ success: boolean; message: string }>('test_connection', config as Record<string, unknown>)
       setTestResult({ id: config.id || '', success: result.success, message: result.message })
       if (result.success) {
-        showToast('success', '连接成功')
+        WorkTools.toast.success('连接成功')
       } else {
-        showToast('error', '连接失败: ' + result.message)
+        WorkTools.toast.error('连接失败: ' + result.message)
       }
     } catch (e) {
       setTestResult({ id: config.id || '', success: false, message: e instanceof Error ? e.message : '未知错误' })
@@ -183,7 +175,7 @@ function App() {
   const handleDeleteConnection = async (connId: string) => {
     try {
       await callAPI('delete_connection', { id: connId })
-      showToast('success', '连接已删除')
+      WorkTools.toast.success('连接已删除')
       loadConnections()
       if (selectedConnection?.id === connId) {
         setSelectedConnection(null)
@@ -269,13 +261,13 @@ function App() {
           format: fmt
         })
         if (result.success) {
-          showToast('success', `${fmt.toUpperCase()} 导出成功`)
+          WorkTools.toast.success(`${fmt.toUpperCase()} 导出成功`)
         } else {
-          showToast('error', `${fmt.toUpperCase()} 导出失败: ` + (result.message || '未知错误'))
+          WorkTools.toast.error(`${fmt.toUpperCase()} 导出失败: ` + (result.message || '未知错误'))
         }
       }
     } catch (e) {
-      showToast('error', '导出失败: ' + (e instanceof Error ? e.message : '未知错误'))
+      WorkTools.toast.error('导出失败: ' + (e instanceof Error ? e.message : '未知错误'))
     } finally {
       setExporting(false)
     }
@@ -317,7 +309,7 @@ function App() {
         <div className="view-container view-container--split">
           <div className="panel panel--left">
             <div className="panel-header">
-              <button className="btn-back" onClick={() => setViewMode('connections')}>
+              <button className="wt-btn wt-btn--ghost wt-btn--sm" onClick={() => setViewMode('connections')}>
                 <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
                   <path d="M10 12L6 8L10 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
                 </svg>
@@ -376,7 +368,7 @@ function App() {
 
             <div className="panel-footer">
               <button
-                className="btn-primary"
+                className="wt-btn wt-btn--primary"
                 disabled={selectedTables.size === 0}
                 onClick={handleLoadPreview}
               >
@@ -446,10 +438,11 @@ function App() {
                   </div>
 
                   <button
-                    className="btn-primary export-btn"
+                    className="wt-btn wt-btn--primary export-btn"
                     disabled={exporting || !outputDir || exportFormats.size === 0 || selectedTables.size === 0}
                     onClick={handleExport}
                   >
+                    {exporting && <span className="wt-spinner" />}
                     {exporting ? '导出中...' : `导出 ${selectedTables.size} 张表`}
                   </button>
                 </div>
@@ -459,17 +452,6 @@ function App() {
         </div>
       )}
 
-      {toasts.length > 0 && (
-        <div className="toast-container">
-          {toasts.map(toast => (
-            <div key={toast.id} className={`toast toast--${toast.type}`}>
-              {toast.type === 'success' && '✓ '}
-              {toast.type === 'error' && '✗ '}
-              {toast.message}
-            </div>
-          ))}
-        </div>
-      )}
     </div>
   )
 }
@@ -558,7 +540,7 @@ function ConnectionView({
                   <button onClick={() => onTest(conn)} disabled={testing}>
                     {testing && testResult?.id === conn.id ? '测试中...' : '测试'}
                   </button>
-                  <button className="btn-danger" onClick={() => onDelete(conn.id)}>删除</button>
+                  <button className="wt-btn wt-btn--danger" onClick={() => onDelete(conn.id)}>删除</button>
                 </div>
               </li>
             ))}
@@ -608,27 +590,43 @@ function ConnectionForm({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    // Validate required fields inline
+    let valid = true
+    if (!config.name?.trim()) {
+      const el = (e.target as HTMLFormElement).querySelector('[name="name"]') as HTMLInputElement
+      if (el) WorkTools.FieldError.show(el, '连接名称不能为空')
+      valid = false
+    }
+    if (!config.database?.trim()) {
+      const el = (e.target as HTMLFormElement).querySelector('[name="database"]') as HTMLInputElement
+      if (el) WorkTools.FieldError.show(el, '数据库名不能为空')
+      valid = false
+    }
+    if (!valid) return
+
     setSaving(true)
     try { await onSave(config) } finally { setSaving(false) }
   }
 
   return (
     <form onSubmit={handleSubmit} className="form">
-      <div className="form-group">
-        <label className="form-label">连接名称</label>
+      <div className="wt-form-group">
+        <label className="wt-form-label">连接名称</label>
         <input
-          className="form-input"
+          className="wt-form-input"
+          name="name"
           value={config.name}
           onChange={(e) => setConfig({ ...config, name: e.target.value })}
+          onInput={(e) => WorkTools.FieldError.clear(e.target as HTMLInputElement)}
           placeholder="例如: 生产环境"
           required
         />
       </div>
 
-      <div className="form-group">
-        <label className="form-label">数据库类型</label>
+      <div className="wt-form-group">
+        <label className="wt-form-label">数据库类型</label>
         <select
-          className="form-input"
+          className="wt-form-input"
           value={config.db_type}
           onChange={(e) => setConfig({
             ...config,
@@ -642,19 +640,19 @@ function ConnectionForm({
       </div>
 
       <div className="form-row">
-        <div className="form-group">
-          <label className="form-label">主机</label>
+        <div className="wt-form-group">
+          <label className="wt-form-label">主机</label>
           <input
-            className="form-input"
+            className="wt-form-input"
             value={config.host}
             onChange={(e) => setConfig({ ...config, host: e.target.value })}
             placeholder="localhost"
           />
         </div>
-        <div className="form-group">
-          <label className="form-label">端口</label>
+        <div className="wt-form-group">
+          <label className="wt-form-label">端口</label>
           <input
-            className="form-input"
+            className="wt-form-input"
             type="number"
             value={config.port}
             onChange={(e) => setConfig({ ...config, port: parseInt(e.target.value) })}
@@ -662,31 +660,33 @@ function ConnectionForm({
         </div>
       </div>
 
-      <div className="form-group">
-        <label className="form-label">数据库名</label>
+      <div className="wt-form-group">
+        <label className="wt-form-label">数据库名</label>
         <input
-          className="form-input"
+          className="wt-form-input"
+          name="database"
           value={config.database}
           onChange={(e) => setConfig({ ...config, database: e.target.value })}
+          onInput={(e) => WorkTools.FieldError.clear(e.target as HTMLInputElement)}
           placeholder="database_name"
           required
         />
       </div>
 
-      <div className="form-group">
-        <label className="form-label">用户名</label>
+      <div className="wt-form-group">
+        <label className="wt-form-label">用户名</label>
         <input
-          className="form-input"
+          className="wt-form-input"
           value={config.username}
           onChange={(e) => setConfig({ ...config, username: e.target.value })}
           placeholder="root"
         />
       </div>
 
-      <div className="form-group">
-        <label className="form-label">密码</label>
+      <div className="wt-form-group">
+        <label className="wt-form-label">密码</label>
         <input
-          className="form-input"
+          className="wt-form-input"
           type="password"
           value={config.password}
           onChange={(e) => setConfig({ ...config, password: e.target.value })}
@@ -695,8 +695,8 @@ function ConnectionForm({
       </div>
 
       <div className="form-actions">
-        <button type="button" className="btn-secondary" onClick={() => onTest(config)}>测试连接</button>
-        <button type="submit" className="btn-primary" disabled={saving}>
+        <button type="button" className="wt-btn wt-btn--secondary" onClick={() => onTest(config)}>测试连接</button>
+        <button type="submit" className="wt-btn wt-btn--primary" disabled={saving}>
           {saving ? '保存中...' : '保存'}
         </button>
       </div>

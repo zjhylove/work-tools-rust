@@ -1,6 +1,10 @@
 import { useState, useEffect, useCallback } from "react";
 import type { KuboardStatus, PodInfo, K8sForwardInfo, ForwardRule, ProxyMapping, LoginResult } from "../types";
 
+declare global {
+  interface Window { WorkTools: { toast: { success(m:string):void; error(m:string):void; info(m:string):void; warning(m:string):void }; FieldError: { show(el:HTMLElement, m:string):void; clear(el:HTMLElement):void; clearAll(f:HTMLElement):void } } }
+}
+
 const PLUGIN_ID = "k8s-forward";
 
 export default function TabK8sForward() {
@@ -15,24 +19,18 @@ export default function TabK8sForward() {
   const [pods, setPods] = useState<PodInfo[]>([]);
   const [search, setSearch] = useState("");
   const [forwards, setForwards] = useState<K8sForwardInfo>({ rules: [], mappings: [] });
-  const [toast, setToast] = useState<string | null>(null);
   const [editingForward, setEditingForward] = useState<{ rule_id: string; domain: string; local_port: number; pod_name: string; remote_host: string; remote_port: number; local_host: string } | null>(null);
 
   const call = useCallback(async (method: string, params?: unknown) => {
     return await window.pluginAPI.call(PLUGIN_ID, method, (params ?? {}) as Record<string, unknown>);
   }, []);
 
-  const showToast = (msg: string, isErr = false) => {
-    setToast(msg);
-    setTimeout(() => setToast(null), 3000);
-  };
-
   const loadStatus = async () => { setKstatus(await call("kuboard_status") as KuboardStatus); };
   const loadForwards = async () => { setForwards(await call("list_k8s_forwards") as K8sForwardInfo); };
   const validateForwards = async () => {
     try {
       const result = await call("validate_k8s_forwards") as { removed: number };
-      if (result.removed > 0) showToast(`已清理 ${result.removed} 个无效转发`);
+      if (result.removed > 0) window.WorkTools.toast.info(`已清理 ${result.removed} 个无效转发`);
     } catch { /* Kuboard 未登录时忽略 */ }
   };
 
@@ -56,28 +54,33 @@ export default function TabK8sForward() {
   }, []);
 
   const handleLogin = async () => {
+    const urlInput = document.querySelector(".kuboard-url-input") as HTMLInputElement;
+    if (!loginForm.url.trim()) {
+      window.WorkTools.FieldError.show(urlInput, "Kuboard 地址不能为空");
+      return;
+    }
     try {
       const r = await call("kuboard_login", loginForm) as LoginResult;
-      if (r.mfa_required) { setMfaRequired(true); showToast("请输入 MFA 验证码"); }
+      if (r.mfa_required) { setMfaRequired(true); window.WorkTools.toast.info("请输入 MFA 验证码"); }
       else if (r.success) {
-        showToast("登录成功");
+        window.WorkTools.toast.success("登录成功");
         await Promise.allSettled([loadStatus(), loadClusters()]);
         await validateForwards();
         loadForwards();
       }
-      else { showToast(r.message || "登录失败", true); }
-    } catch (e: unknown) { showToast(`登录失败: ${e}`, true); }
+      else { window.WorkTools.toast.error(r.message || "登录失败"); }
+    } catch (e: unknown) { window.WorkTools.toast.error(`登录失败: ${e}`); }
   };
 
   const handleMfa = async () => {
     try {
       await call("kuboard_mfa", { passcode });
       setMfaRequired(false); setPasscode("");
-      showToast("登录成功");
+      window.WorkTools.toast.success("登录成功");
       await Promise.allSettled([loadStatus(), loadClusters()]);
       await validateForwards();
       loadForwards();
-    } catch (e: unknown) { showToast(`MFA 验证失败: ${e}`, true); }
+    } catch (e: unknown) { window.WorkTools.toast.error(`MFA 验证失败: ${e}`); }
   };
 
   const handleLogout = async () => {
@@ -91,7 +94,7 @@ export default function TabK8sForward() {
       const c = await call("list_clusters") as string[];
       setClusters(c);
       if (c.length > 0) { setSelCluster(c[0]); loadNamespaces(c[0]); }
-    } catch (e: unknown) { showToast(`获取集群失败: ${e}`, true); }
+    } catch (e: unknown) { window.WorkTools.toast.error(`获取集群失败: ${e}`); }
   };
 
   const loadNamespaces = async (cluster: string) => {
@@ -99,30 +102,30 @@ export default function TabK8sForward() {
       const ns = await call("list_namespaces", { cluster }) as string[];
       setNamespaces(ns);
       if (ns.length > 0) { setSelNs(ns[0]); loadPods(cluster, ns[0]); }
-    } catch (e: unknown) { showToast(`获取命名空间失败: ${e}`, true); }
+    } catch (e: unknown) { window.WorkTools.toast.error(`获取命名空间失败: ${e}`); }
   };
 
   const loadPods = async (cluster: string, ns: string) => {
     try {
       const p = await call("list_pods", { cluster, namespace: ns }) as PodInfo[];
       setPods(p);
-    } catch (e: unknown) { showToast(`获取 Pod 失败: ${e}`, true); }
+    } catch (e: unknown) { window.WorkTools.toast.error(`获取 Pod 失败: ${e}`); }
   };
 
   const handleForward = async (podName: string, containerName: string, containerPort: number) => {
     try {
       await call("forward_pod", { cluster: selCluster, namespace: selNs, pod_name: podName, container_name: containerName, container_port: containerPort });
-      showToast(`已转发 ${podName}/${containerName}:${containerPort}`);
+      window.WorkTools.toast.success(`已转发 ${podName}/${containerName}:${containerPort}`);
       loadForwards();
-    } catch (e: unknown) { showToast(`转发失败: ${e}`, true); }
+    } catch (e: unknown) { window.WorkTools.toast.error(`转发失败: ${e}`); }
   };
 
   const handleUnforward = async (ruleId: string) => {
     try {
       await call("unforward_pod", { rule_id: ruleId });
-      showToast("已取消转发");
+      window.WorkTools.toast.success("已取消转发");
       loadForwards();
-    } catch (e: unknown) { showToast(`取消失败: ${e}`, true); }
+    } catch (e: unknown) { window.WorkTools.toast.error(`取消失败: ${e}`); }
   };
 
   const handleUpdateForward = async () => {
@@ -142,10 +145,15 @@ export default function TabK8sForward() {
         cluster: "",
         namespace: "",
       });
-      showToast("已更新");
+      window.WorkTools.toast.success("已更新");
       setEditingForward(null);
       loadForwards();
-    } catch (e: unknown) { showToast(`更新失败: ${e}`, true); }
+    } catch (e: unknown) { window.WorkTools.toast.error(`更新失败: ${e}`); }
+  };
+
+  const clearUrlError = () => {
+    const urlInput = document.querySelector(".kuboard-url-input") as HTMLInputElement;
+    if (urlInput) window.WorkTools.FieldError.clear(urlInput);
   };
 
   const filteredPods = pods.filter(p => p.status === "Running" && p.name.toLowerCase().includes(search.toLowerCase()));
@@ -162,12 +170,10 @@ export default function TabK8sForward() {
 
   return (
     <div>
-      {toast && <div className="toast toast-info">{toast}</div>}
-
       <div className="card">
         <div className="card-header">Kuboard 连接</div>
         <div className="form-row">
-          <div className="form-group"><label>Kuboard 地址</label><input value={loginForm.url} onChange={e => setLoginForm({...loginForm, url: e.target.value})} style={{minWidth:220}} /></div>
+          <div className="form-group"><label>Kuboard 地址</label><input className="kuboard-url-input" value={loginForm.url} onChange={e => { setLoginForm({...loginForm, url: e.target.value}); clearUrlError(); }} style={{minWidth:220}} /></div>
           <div className="form-group"><label>用户名</label><input value={loginForm.username} onChange={e => setLoginForm({...loginForm, username: e.target.value})} /></div>
           <div className="form-group"><label>密码</label><input type="password" value={loginForm.password} onChange={e => setLoginForm({...loginForm, password: e.target.value})} /></div>
           {kstatus.logged_in
@@ -247,7 +253,7 @@ export default function TabK8sForward() {
                       })
                     ))
                   ))}
-                  {filteredPods.length === 0 && <tr><td colSpan={6} style={{textAlign:"center",color:"#666",padding:20}}>无 Pod</td></tr>}
+                  {filteredPods.length === 0 && <tr><td colSpan={6} style={{textAlign:"center",color:"var(--text-tertiary)",padding:20}}>无 Pod</td></tr>}
                 </tbody>
               </table>
             </div>
