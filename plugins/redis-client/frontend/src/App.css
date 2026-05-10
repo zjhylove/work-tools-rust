@@ -4,17 +4,19 @@
 
 .redis-client {
   flex: 1;
+  min-height: 0;
   height: 100%;
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
-  overflow: hidden;
+  position: relative;
   background: var(--bg-primary);
 }
 
 /* ═══ Main Layout ═══ */
 .main-layout {
   flex: 1;
+  min-height: 0;
   display: flex;
   overflow: hidden;
 }
@@ -218,22 +220,6 @@
   border-radius: var(--radius-xs);
   background: var(--accent-light);
   color: var(--accent);
-}
-
-.conn-password {
-  width: 100px;
-  padding: 4px 8px;
-  border: none;
-  border-left: 1px solid var(--border-color);
-  border-radius: 0;
-  font-size: var(--font-size-sm);
-  background: var(--bg-primary);
-  color: var(--text-primary);
-}
-
-.conn-password:focus {
-  outline: none;
-  border-left-color: var(--accent);
 }
 
 /* ═══ Connection Bar ═══ */
@@ -899,6 +885,47 @@
   background: var(--error-light) !important;
 }
 
+.btn-danger {
+  padding: 8px 16px;
+  background: var(--error);
+  color: var(--text-inverse);
+  border: none;
+  border-radius: var(--radius-sm);
+  font-family: var(--font-sans);
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  cursor: pointer;
+  transition: background var(--transition-fast);
+}
+
+.btn-danger:hover {
+  opacity: 0.9;
+}
+
+/* ── Delete Confirm Modal ── */
+.delete-confirm-body {
+  text-align: center;
+  padding: 24px 20px !important;
+}
+
+.delete-warning-icon {
+  font-size: 36px;
+  color: var(--warning, #f59e0b);
+  margin-bottom: 12px;
+}
+
+.delete-confirm-body p {
+  font-family: var(--font-sans);
+  font-size: var(--font-size-base);
+  color: var(--text-primary);
+  margin: 0 0 4px;
+}
+
+.delete-warning-hint {
+  font-size: var(--font-size-xs) !important;
+  color: var(--text-tertiary) !important;
+}
+
 /* ═══ Spinner ═══ */
 .spinner {
   display: inline-block;
@@ -917,6 +944,7 @@
 /* ═══ Connection Manager ═══ */
 .connection-manager {
   flex: 1;
+  min-height: 0;
   padding: 24px;
   overflow: auto;
   background: var(--bg-primary);
@@ -1225,27 +1253,51 @@
   border-radius: var(--radius-md);
 }
 
-/* ═══ Error Toast ═══ */
-.error-toast {
+/* ═══ Toast Notifications ═══ */
+.toast-container {
   position: fixed;
   bottom: 16px;
   left: 50%;
   transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  z-index: 1000;
+  pointer-events: none;
+}
+
+.error-toast {
   padding: 10px 20px;
-  background: var(--error-light);
-  border: 1px solid var(--error-border);
   border-radius: var(--radius-md);
-  color: var(--error-text);
   font-family: var(--font-sans);
   font-size: var(--font-size-sm);
-  z-index: 1000;
   cursor: pointer;
+  pointer-events: auto;
   animation: toastUp 0.3s var(--ease-out);
+  white-space: nowrap;
+}
+
+.toast-error {
+  background: var(--error-light);
+  border: 1px solid var(--error-border);
+  color: var(--error-text);
+}
+
+.toast-success {
+  background: var(--success-light);
+  border: 1px solid var(--success);
+  color: var(--success-text);
+}
+
+.toast-info {
+  background: var(--accent-light);
+  border: 1px solid var(--accent);
+  color: var(--accent);
 }
 
 @keyframes toastUp {
-  from { opacity: 0; transform: translateX(-50%) translateY(10px); }
-  to { opacity: 1; transform: translateX(-50%) translateY(0); }
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
 .search-info {
@@ -1253,4 +1305,37 @@
   font-size: var(--font-size-xs);
   color: var(--text-tertiary);
   margin-top: 8px;
+}
+
+/* ═══ Context Menu ═══ */
+.context-menu {
+  position: fixed;
+  z-index: 200;
+  min-width: 160px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-xl);
+  padding: 4px 0;
+}
+
+.context-menu-item {
+  padding: 7px 14px;
+  font-family: var(--font-sans);
+  font-size: var(--font-size-sm);
+  color: var(--text-primary);
+  cursor: pointer;
+  transition: background var(--transition-fast);
+}
+
+.context-menu-item:hover {
+  background: var(--hover-bg);
+}
+
+.context-menu-danger {
+  color: var(--error);
+}
+
+.context-menu-danger:hover {
+  background: var(--error-light);
 }
