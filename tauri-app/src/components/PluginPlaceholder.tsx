@@ -62,6 +62,12 @@ const INJECTED_TOKENS = `
     --transition-fast: 0.12s ease;
     --transition-base: 0.2s ease;
     --transition-slow: 0.3s ease;
+    --wt-modal-overlay-bg: rgba(0, 0, 0, 0.5);
+    --wt-syntax-key: #d32f2f;
+    --wt-syntax-string: #2e7d32;
+    --wt-syntax-number: #1565c0;
+    --wt-syntax-boolean: #c62828;
+    --wt-syntax-null: #7f8c8d;
   }
   [data-theme="dark"] {
     --accent: #3b82f6;
@@ -94,6 +100,12 @@ const INJECTED_TOKENS = `
     --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.3);
     --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.4);
     --shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.5);
+    --wt-modal-overlay-bg: rgba(0, 0, 0, 0.65);
+    --wt-syntax-key: #ff6b6b;
+    --wt-syntax-string: #69db7c;
+    --wt-syntax-number: #74b9ff;
+    --wt-syntax-boolean: #ff6b6b;
+    --wt-syntax-null: #adb5bd;
   }
   html, body, #app {
     height: 100%;
@@ -115,11 +127,102 @@ const INJECTED_TOKENS = `
   ::-webkit-scrollbar-thumb { background: var(--border-color); border-radius: 3px; }
   ::-webkit-scrollbar-thumb:hover { background: var(--text-tertiary); }
 
+/* ── Toast ─────────────────────────── */
+@keyframes wt-toast-slide-in {
+  from { opacity: 0; transform: translateX(100%); }
+  to { opacity: 1; transform: translateX(0); }
+}
+.wt-toast-container {
+  position: fixed; top: 16px; right: 16px; z-index: 9999;
+  display: flex; flex-direction: column; gap: 8px;
+  pointer-events: none;
+}
+.wt-toast {
+  pointer-events: auto;
+  padding: 10px 16px; border-radius: var(--radius-md);
+  font-size: var(--font-size-base); font-weight: 500;
+  box-shadow: var(--shadow-md); cursor: pointer;
+  animation: wt-toast-slide-in 0.25s ease-out;
+  max-width: 360px; word-break: break-word;
+  display: flex; align-items: center; gap: 8px;
+}
+.wt-toast--success { background: var(--success-light); border: 1px solid var(--success-border); color: var(--success-text); }
+.wt-toast--error   { background: var(--error-light); border: 1px solid var(--error-border); color: var(--error-text); }
+.wt-toast--info    { background: var(--accent-light); border: 1px solid var(--accent-ring); color: var(--accent); }
+.wt-toast--warning { background: var(--warning-light); border: 1px solid var(--warning-border); color: var(--warning-text); }
+
+/* ── Buttons ───────────────────────── */
+.wt-btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  padding: 7px 14px; border-radius: var(--radius-sm); border: 1px solid transparent;
+  font-size: var(--font-size-base); font-family: var(--font-sans); font-weight: 500;
+  cursor: pointer; transition: background var(--transition-fast), box-shadow var(--transition-fast);
+  outline: none; line-height: 1.4;
+}
+.wt-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.wt-btn--primary   { background: var(--accent); color: var(--text-inverse); }
+.wt-btn--primary:hover:not(:disabled) { background: var(--accent-hover); }
+.wt-btn--secondary { background: var(--bg-secondary); color: var(--text-primary); border-color: var(--border-color); }
+.wt-btn--secondary:hover:not(:disabled) { background: var(--bg-tertiary); }
+.wt-btn--danger    { background: var(--error); color: var(--text-inverse); }
+.wt-btn--danger:hover:not(:disabled) { background: var(--error-text); }
+.wt-btn--ghost     { background: transparent; color: var(--text-secondary); }
+.wt-btn--ghost:hover:not(:disabled) { background: var(--hover-bg); color: var(--text-primary); }
+.wt-btn--sm        { padding: 4px 10px; font-size: var(--font-size-sm); }
+
+/* ── Forms ─────────────────────────── */
+.wt-form-group { margin-bottom: var(--space-md); }
+.wt-form-label { display: block; font-size: var(--font-size-sm); font-weight: 500; color: var(--text-secondary); margin-bottom: 4px; }
+.wt-form-input {
+  width: 100%; padding: 7px 10px; border-radius: var(--radius-sm);
+  border: 1px solid var(--border-color); background: var(--bg-primary);
+  color: var(--text-primary); font-size: var(--font-size-base); font-family: var(--font-sans);
+  transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+  outline: none;
+}
+.wt-form-input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-ring); }
+.wt-form-input--error { border-color: var(--error); }
+.wt-form-input--error:focus { box-shadow: 0 0 0 3px var(--error-light); }
+.wt-field-error { font-size: var(--font-size-xs); color: var(--error-text); margin-top: 4px; }
+
+/* ── Modal ─────────────────────────── */
+.wt-modal-overlay {
+  position: fixed; inset: 0; z-index: 10000;
+  background: var(--wt-modal-overlay-bg);
+  display: flex; align-items: center; justify-content: center;
+}
+.wt-modal {
+  background: var(--bg-primary); border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg); max-width: 440px; width: 90%;
+  max-height: 80vh; display: flex; flex-direction: column;
+}
+.wt-modal-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: var(--space-lg) var(--space-lg) var(--space-sm);
+}
+.wt-modal-header h3 { margin: 0; font-size: var(--font-size-lg); }
+.wt-modal-body { padding: var(--space-sm) var(--space-lg) var(--space-lg); overflow-y: auto; color: var(--text-secondary); font-size: var(--font-size-base); }
+.wt-modal-footer { display: flex; justify-content: flex-end; gap: var(--space-sm); padding: 0 var(--space-lg) var(--space-lg); }
+
+/* ── Misc ──────────────────────────── */
+@keyframes wt-spin { to { transform: rotate(360deg); } }
+.wt-spinner {
+  width: 16px; height: 16px; border: 2px solid var(--border-color);
+  border-top-color: var(--accent); border-radius: 50%;
+  animation: wt-spin 0.6s linear infinite; display: inline-block;
+}
+.wt-empty-state { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: var(--space-2xl); color: var(--text-tertiary); gap: var(--space-sm); font-size: var(--font-size-base); }
+.wt-badge { display: inline-block; padding: 2px 8px; border-radius: var(--radius-xs); font-size: var(--font-size-xs); font-weight: 600; }
+.wt-status-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+.wt-status-dot--online { background: var(--success); }
+.wt-status-dot--offline { background: var(--text-tertiary); }
+
   @keyframes slideDown {
     from { opacity: 0; transform: translateX(-50%) translateY(-20px); }
     to { opacity: 1; transform: translateX(-50%) translateY(0); }
   }
 
+  /* deprecated: kept for plugins not yet migrated */
   .error-message {
     position: fixed;
     top: 20px;
@@ -152,6 +255,72 @@ const INJECTED_TOKENS = `
     color: var(--accent);
   }
 `;
+
+const INJECTED_SCRIPTS = `
+<script>
+(function() {
+  var container = null;
+
+  function getContainer() {
+    if (!container || !document.body.contains(container)) {
+      container = document.createElement('div');
+      container.className = 'wt-toast-container';
+      document.body.appendChild(container);
+    }
+    return container;
+  }
+
+  function showToast(type, message) {
+    var el = document.createElement('div');
+    el.className = 'wt-toast wt-toast--' + type;
+    var icons = { success: '✓ ', error: '✗ ', info: 'ℹ ', warning: '⚠ ' };
+    el.textContent = (icons[type] || '') + message;
+    el.addEventListener('click', function() { el.remove(); });
+    getContainer().appendChild(el);
+    setTimeout(function() {
+      if (el.parentNode) el.remove();
+      if (container && container.children.length === 0) { container.remove(); container = null; }
+    }, 3000);
+  }
+
+  window.WorkTools = {
+    toast: {
+      success: function(m) { showToast('success', m); },
+      error: function(m)   { showToast('error', m); },
+      info: function(m)    { showToast('info', m); },
+      warning: function(m) { showToast('warning', m); }
+    },
+    FieldError: {
+      show: function(inputEl, message) {
+        this.clear(inputEl);
+        inputEl.classList.add('wt-form-input--error');
+        var err = document.createElement('div');
+        err.className = 'wt-field-error';
+        err.textContent = message;
+        inputEl.parentNode.appendChild(err);
+      },
+      clear: function(inputEl) {
+        inputEl.classList.remove('wt-form-input--error');
+        var next = inputEl.nextElementSibling;
+        if (next && next.classList.contains('wt-field-error')) next.remove();
+        var parent = inputEl.parentNode;
+        if (parent) {
+          var err = parent.querySelector('.wt-field-error');
+          if (err) err.remove();
+        }
+      },
+      clearAll: function(formEl) {
+        formEl.querySelectorAll('.wt-form-input--error').forEach(function(el) {
+          el.classList.remove('wt-form-input--error');
+        });
+        formEl.querySelectorAll('.wt-field-error').forEach(function(el) {
+          el.remove();
+        });
+      }
+    }
+  };
+})();
+</script>`;
 
 export default function PluginPlaceholder({
   pluginId,
@@ -215,7 +384,7 @@ export default function PluginPlaceholder({
         const themeScript = `<script>document.documentElement.dataset.theme="${theme}";window.addEventListener("message",function(e){if(e.data&&e.data.type==="theme"){document.documentElement.dataset.theme=e.data.theme}});</script>`;
         const fullHtml =
           parts[0] +
-          `<style>${styles}${INJECTED_TOKENS}</style>${themeScript}<script type="module">${mainJs}</script>` +
+          `<style>${styles}${INJECTED_TOKENS}</style>${themeScript}${INJECTED_SCRIPTS}<script type="module">${mainJs}</script>` +
           parts
             .slice(1)
             .join(
