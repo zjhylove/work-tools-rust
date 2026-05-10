@@ -1,6 +1,25 @@
 import { useState, useEffect, useMemo } from "react";
 import "./App.css";
 
+declare global {
+  interface Window {
+    WorkTools: {
+      toast: {
+        success: (message: string) => void;
+        error: (message: string) => void;
+        info: (message: string) => void;
+        warning: (message: string) => void;
+      };
+      FieldError: {
+        show: (inputEl: HTMLElement, message: string) => void;
+        clear: (inputEl: HTMLElement) => void;
+        clearAll: (formEl: HTMLElement) => void;
+      };
+    };
+  }
+}
+const WorkTools = window.WorkTools;
+
 interface PasswordEntry {
   id: string;
   url: string | null;
@@ -51,7 +70,6 @@ function App() {
   const [isLoading, setIsLoading] = useState(false);
   const [formData, setFormData] = useState<Record<string, string>>({});
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
-  const [error, setError] = useState("");
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   // 定义密码管理器的表单字段
@@ -107,11 +125,10 @@ function App() {
       )) as PasswordEntry[];
       devLog("密码列表加载成功,条目数:", result.length);
       setEntries(result || []);
-      setError("");
       return true;
     } catch (err) {
       devError("加载密码失败:", err);
-      setError("加载密码列表失败");
+      WorkTools.toast.error("加载密码列表失败");
       return false;
     } finally {
       setIsLoading(false);
@@ -172,10 +189,9 @@ function App() {
         id,
       });
       await loadPasswords();
-      setError("");
     } catch (err) {
       devError("删除密码失败:", err);
-      setError("删除密码失败");
+      WorkTools.toast.error("删除密码失败");
     }
   };
 
@@ -211,11 +227,10 @@ function App() {
           throw new Error("execCommand failed");
         }
       }
-      setError("✓ 密码已复制");
-      setTimeout(() => setError(""), 1500);
+      WorkTools.toast.success("密码已复制");
     } catch (err) {
       devError("复制失败:", err);
-      setError("复制失败,请手动复制");
+      WorkTools.toast.error("复制失败,请手动复制");
     }
   };
 
@@ -301,7 +316,7 @@ function App() {
 
         // 安全检查:确保必要的字段存在
         if (!data.service || !data.username || !data.password) {
-          setError("请填写所有必填字段");
+          WorkTools.toast.warning("请填写所有必填字段");
           return;
         }
 
@@ -343,10 +358,9 @@ function App() {
         setIsEditMode(false);
         setFormData({});
         setFormErrors({});
-        setError("");
       } catch (err) {
         devError("保存密码失败:", err);
-        setError("保存密码失败");
+        WorkTools.toast.error("保存密码失败");
       }
     }
   };
@@ -374,11 +388,9 @@ function App() {
       const filePath = `${dir.replace(/\\/g, "/")}/${filename}`;
       await window.pluginAPI.write_file(filePath, result.data);
 
-      setError(`✅ 密码已导出到 ${filePath}`);
-      setTimeout(() => setError(""), 1500);
+      WorkTools.toast.success(`密码已导出到 ${filePath}`);
     } catch (err) {
-      setError("❌ 导出失败: " + (err as Error).message);
-      setTimeout(() => setError(""), 1500);
+      WorkTools.toast.error("导出失败: " + (err as Error).message);
     }
   };
 
@@ -412,13 +424,13 @@ function App() {
         }
 
         try {
-          setError("⏳ 正在读取文件...");
+          WorkTools.toast.info("正在读取文件...");
           const text = await file.text();
 
           // 预览导入内容
           let preview;
           try {
-            setError("⏳ 正在解析文件格式...");
+            WorkTools.toast.info("正在解析文件格式...");
             const parsed = JSON.parse(text);
 
             // 支持两种格式：
@@ -432,8 +444,7 @@ function App() {
               throw new Error("无效的格式");
             }
           } catch (err) {
-            setError("❌ 导入失败: 文件格式不正确 - " + (err as Error).message);
-            setTimeout(() => setError(""), 1500);
+            WorkTools.toast.error("导入失败: 文件格式不正确 - " + (err as Error).message);
             safeRemoveChild(input);
             return;
           }
@@ -441,13 +452,12 @@ function App() {
           const count = preview.length;
 
           if (count === 0) {
-            setError("⚠️ 文件中没有密码条目");
-            setTimeout(() => setError(""), 1500);
+            WorkTools.toast.warning("文件中没有密码条目");
             safeRemoveChild(input);
             return;
           }
 
-          setError(`⏳ 找到 ${count} 个密码，正在导入...`);
+          WorkTools.toast.info(`找到 ${count} 个密码，正在导入...`);
 
           // 直接导入，不使用 confirm
           try {
@@ -455,11 +465,9 @@ function App() {
               data: text,
             });
             await loadPasswords();
-            setError(`✅ 已成功导入 ${count} 个密码`);
-            setTimeout(() => setError(""), 1500);
+            WorkTools.toast.success(`已成功导入 ${count} 个密码`);
           } catch (err) {
-            setError("❌ 导入失败: " + (err as Error).message);
-            setTimeout(() => setError(""), 1500);
+            WorkTools.toast.error("导入失败: " + (err as Error).message);
           }
         } finally {
           // 安全清理 DOM 元素
@@ -471,8 +479,7 @@ function App() {
       input.click();
     } catch (err) {
       devError("导入失败:", err);
-      setError("❌ 导入失败: " + (err as Error).message);
-      setTimeout(() => setError(""), 5000);
+      WorkTools.toast.error("导入失败: " + (err as Error).message);
     }
   };
 
@@ -485,21 +492,6 @@ function App() {
         </div>
       )}
 
-      {/* Toast 提示 */}
-      {error && (
-        <div
-          className={`error-message${
-            String(error).startsWith("✓") ? " success" : ""
-          }${
-            String(error).startsWith("⏳") ? " info" : ""
-          }${
-            String(error).startsWith("⚠️") ? " warning" : ""
-          }`}
-        >
-          {String(error)}
-        </div>
-      )}
-
       {/* 列表视图 */}
       {viewMode === "list" && (
         <div className="password-list-container">
@@ -507,7 +499,7 @@ function App() {
           <div className="toolbar">
             <div className="toolbar-actions">
               <button
-                className="btn-primary"
+                className="wt-btn wt-btn--primary"
                 onClick={(e) => {
                   e.preventDefault();
                   e.stopPropagation();
@@ -517,7 +509,7 @@ function App() {
                 ➕ 新建
               </button>
               <button
-                className="btn-secondary"
+                className="wt-btn wt-btn--secondary"
                 onClick={(e) => {
                   e.preventDefault();
                   e.stopPropagation();
@@ -527,7 +519,7 @@ function App() {
                 📥 导入
               </button>
               <button
-                className="btn-secondary"
+                className="wt-btn wt-btn--secondary"
                 onClick={(e) => {
                   e.preventDefault();
                   e.stopPropagation();
@@ -571,7 +563,7 @@ function App() {
                   </div>
                   <div className="password-item-actions">
                     <button
-                      className="btn-icon"
+                      className="wt-btn wt-btn--ghost wt-btn--sm"
                       onClick={(e) => {
                         e.preventDefault();
                         e.stopPropagation();
@@ -588,7 +580,7 @@ function App() {
                       {visiblePasswords[entry.id] ? "🙈" : "👁️"}
                     </button>
                     <button
-                      className="btn-icon"
+                      className="wt-btn wt-btn--ghost wt-btn--sm"
                       onClick={(e) => {
                         e.preventDefault();
                         e.stopPropagation();
@@ -602,7 +594,7 @@ function App() {
                     </button>
                     {entry.url && (
                       <button
-                        className="btn-icon"
+                        className="wt-btn wt-btn--ghost wt-btn--sm"
                         onClick={(e) => {
                           e.preventDefault();
                           e.stopPropagation();
@@ -618,7 +610,7 @@ function App() {
                       </button>
                     )}
                     <button
-                      className="btn-icon"
+                      className="wt-btn wt-btn--ghost wt-btn--sm"
                       onClick={(e) => {
                         e.preventDefault();
                         e.stopPropagation();
@@ -631,7 +623,7 @@ function App() {
                       ✏️
                     </button>
                     <button
-                      className="btn-icon btn-danger"
+                      className="wt-btn wt-btn--danger wt-btn--sm"
                       onClick={(e) => {
                         e.preventDefault();
                         e.stopPropagation();
@@ -666,7 +658,7 @@ function App() {
           <div className="form-header">
             <h2>{isEditMode ? "编辑密码" : "新建密码"}</h2>
             <button
-              className="btn-secondary"
+              className="wt-btn wt-btn--secondary"
               onClick={(e) => {
                 e.preventDefault();
                 e.stopPropagation();
@@ -685,12 +677,12 @@ function App() {
             <div key={field.key} className="form-field">
               {field.type === "input" && (
                 <div>
-                  <label className="field-label">{field.label}</label>
+                  <label className="wt-form-label">{field.label}</label>
                   <input
                     type={field.inputType || "text"}
                     placeholder={field.placeholder}
                     value={formData[field.key] || ""}
-                    className={`field-input ${formErrors[field.key] ? "field-input-error" : ""}`}
+                    className={`wt-form-input ${formErrors[field.key] ? "wt-form-input--error" : ""}`}
                     onInput={(e) =>
                       handleFieldChange(
                         field.key,
@@ -700,13 +692,13 @@ function App() {
                     }
                   />
                   {formErrors[field.key] && (
-                    <div className="field-error">{formErrors[field.key]}</div>
+                    <div className="wt-field-error">{formErrors[field.key]}</div>
                   )}
                 </div>
               )}
               {field.type === "button" && (
                 <button
-                  className={`btn-submit${!isFormValid() ? " disabled" : ""}`}
+                  className="wt-btn wt-btn--primary"
                   disabled={!isFormValid()}
                   onClick={(e) => {
                     e.preventDefault();
@@ -733,13 +725,13 @@ function App() {
 
       {/* 删除确认对话框 */}
       {showDeleteConfirm && selectedEntry && (
-        <div className="modal-overlay">
-          <div className="modal">
+        <div className="wt-modal-overlay">
+          <div className="wt-modal">
             <h3>确认删除</h3>
             <p>确定要删除 "{selectedEntry.service}" 的密码吗?</p>
-            <div className="modal-actions">
+            <div className="wt-modal-footer">
               <button
-                className="btn-danger"
+                className="wt-btn wt-btn--danger"
                 onClick={async (e) => {
                   e.preventDefault();
                   e.stopPropagation();
@@ -751,7 +743,7 @@ function App() {
                 删除
               </button>
               <button
-                className="btn-secondary"
+                className="wt-btn wt-btn--secondary"
                 onClick={(e) => {
                   e.preventDefault();
                   e.stopPropagation();
