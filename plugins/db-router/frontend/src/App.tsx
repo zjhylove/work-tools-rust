@@ -1,6 +1,16 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
 import "./App.css";
 
+declare global {
+  interface Window {
+    WorkTools: {
+      toast: { success(m: string): void; error(m: string): void; info(m: string): void; warning(m: string): void };
+      FieldError: { show(el: HTMLElement, m: string): void; clear(el: HTMLElement): void; clearAll(f: HTMLElement): void };
+    };
+  }
+  var WorkTools: Window['WorkTools'];
+}
+
 // --- Types ---
 
 interface RouteRule {
@@ -23,12 +33,6 @@ interface RouteResult {
 
 interface RouteData {
   rules: RouteRule[];
-}
-
-interface Toast {
-  id: number;
-  message: string;
-  type: "success" | "error" | "info";
 }
 
 // --- SVG Icons ---
@@ -180,7 +184,6 @@ function App() {
   const [code, setCode] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [result, setResult] = useState<RouteResult | null>(null);
-  const [toasts, setToasts] = useState<Toast[]>([]);
 
   const [showModal, setShowModal] = useState(false);
   const [editingRule, setEditingRule] = useState<RouteRule | null>(null);
@@ -195,20 +198,14 @@ function App() {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<string | null>(null);
   const [templates, setTemplates] = useState<RouteRule[]>([]);
 
-  const addToast = useCallback((message: string, type: Toast["type"] = "info") => {
-    const id = Date.now();
-    setToasts((prev) => [...prev, { message, type, id }]);
-    setTimeout(() => setToasts((prev) => prev.filter((t) => t.id !== id)), 3000);
-  }, []);
-
   const loadRules = useCallback(async () => {
     try {
       const data = (await call("list_rules")) as RouteData;
       setRules(data?.rules || []);
     } catch {
-      addToast("加载规则失败", "error");
+      WorkTools.toast.error("加载规则失败");
     }
-  }, [addToast]);
+  }, []);
 
   const loadTemplates = useCallback(async () => {
     try {
@@ -256,7 +253,7 @@ function App() {
 
   const handleParse = async (ruleId: string) => {
     if (!code.trim()) {
-      addToast("请输入编号", "error");
+      WorkTools.toast.error("请输入编号");
       return;
     }
     try {
@@ -264,7 +261,7 @@ function App() {
       setResult(res);
     } catch (err) {
       setResult(null);
-      addToast(`解析失败: ${(err as Error).message}`, "error");
+      WorkTools.toast.error(`解析失败: ${(err as Error).message}`);
     }
   };
 
@@ -289,11 +286,13 @@ function App() {
 
   const handleSave = async () => {
     if (!formData.name.trim()) {
-      addToast("规则名称不能为空", "error");
+      const nameInput = document.querySelector('.rule-name-input') as HTMLInputElement;
+      if (nameInput) WorkTools.FieldError.show(nameInput, '规则名称不能为空');
       return;
     }
     if (!formData.route_script.trim()) {
-      addToast("解析脚本不能为空", "error");
+      const scriptInput = document.querySelector('.script-input') as HTMLInputElement;
+      if (scriptInput) WorkTools.FieldError.show(scriptInput, '解析脚本不能为空');
       return;
     }
 
@@ -314,9 +313,9 @@ function App() {
       await call("save_rule", { rule });
       await loadRules();
       setShowModal(false);
-      addToast(editingRule ? "规则已更新" : "规则已创建", "success");
+      WorkTools.toast.success(editingRule ? "规则已更新" : "规则已创建");
     } catch (err) {
-      addToast(`保存失败: ${(err as Error).message}`, "error");
+      WorkTools.toast.error(`保存失败: ${(err as Error).message}`);
     }
   };
 
@@ -328,9 +327,9 @@ function App() {
       if (result && result.rule_name === rules.find((r) => r.id === id)?.name) {
         setResult(null);
       }
-      addToast("规则已删除", "success");
+      WorkTools.toast.success("规则已删除");
     } catch (err) {
-      addToast(`删除失败: ${(err as Error).message}`, "error");
+      WorkTools.toast.error(`删除失败: ${(err as Error).message}`);
     }
   };
 
@@ -356,9 +355,9 @@ function App() {
           const rulesArr = Array.isArray(parsed) ? parsed : parsed.rules || [];
           await call("import_rules", { rules: rulesArr });
           await loadRules();
-          addToast(`已导入 ${rulesArr.length} 条规则`, "success");
+          WorkTools.toast.success(`已导入 ${rulesArr.length} 条规则`);
         } catch {
-          addToast("导入失败: 文件格式不正确", "error");
+          WorkTools.toast.error("导入失败: 文件格式不正确");
         }
       };
 
@@ -372,7 +371,7 @@ function App() {
       document.body.appendChild(input);
       input.click();
     } catch {
-      addToast("导入失败", "error");
+      WorkTools.toast.error("导入失败");
     }
   };
 
@@ -387,17 +386,17 @@ function App() {
       const filename = `db-router-rules-${new Date().toISOString().split("T")[0]}.json`;
       const filePath = `${dir.replace(/\\/g, "/")}/${filename}`;
       await window.pluginAPI!.write_file(filePath, json);
-      addToast(`规则已导出到 ${filePath}`, "success");
+      WorkTools.toast.success(`规则已导出到 ${filePath}`);
     } catch (err) {
       if ((err as Error).name !== "AbortError") {
-        addToast("导出失败", "error");
+        WorkTools.toast.error("导出失败");
       }
     }
   };
 
   const handleCopyText = async (text: string, label: string) => {
     await copyToClipboard(text);
-    addToast(`${label}已复制`, "success");
+    WorkTools.toast.success(`${label}已复制`);
   };
 
   const handleLoadTemplate = (templateName: string) => {
@@ -407,27 +406,8 @@ function App() {
     }
   };
 
-  const toastIcon = (type: Toast["type"]) => {
-    switch (type) {
-      case "success":
-        return Icons.check;
-      case "error":
-        return Icons.x;
-      default:
-        return Icons.lightbulb;
-    }
-  };
-
   return (
     <div className="db-router">
-      {/* Toasts */}
-      {toasts.map((t) => (
-        <div key={t.id} className={`toast toast-${t.type}`}>
-          {toastIcon(t.type)}
-          {t.message}
-        </div>
-      ))}
-
       {/* Toolbar */}
       <div className="toolbar">
         <div className="toolbar-title">
@@ -651,9 +631,13 @@ function App() {
                 </label>
                 <input
                   type="text"
+                  className="wt-form-input rule-name-input"
                   placeholder="输入规则名称"
                   value={formData.name}
-                  onInput={(e) => setFormData((p) => ({ ...p, name: (e.target as HTMLInputElement).value }))}
+                  onInput={(e) => {
+                    setFormData((p) => ({ ...p, name: (e.target as HTMLInputElement).value }));
+                    WorkTools.FieldError.clear(e.target as HTMLInputElement);
+                  }}
                 />
               </div>
               <div className="form-group">
@@ -726,7 +710,10 @@ function App() {
                   rows={8}
                   placeholder={"Rhai 脚本，设置 database 和 table_suffix 变量\n例：\nlet database = \"db_\" + code[3..7];\nlet table_suffix = \"_\" + code[7..10];"}
                   value={formData.route_script}
-                  onInput={(e) => setFormData((p) => ({ ...p, route_script: (e.target as HTMLInputElement).value }))}
+                  onInput={(e) => {
+                    setFormData((p) => ({ ...p, route_script: (e.target as HTMLInputElement).value }));
+                    WorkTools.FieldError.clear(e.target as HTMLInputElement);
+                  }}
                 />
               </div>
             </div>
