@@ -100,7 +100,6 @@ function App() {
 
   return (
     <div className="ts-converter">
-      {/* Hero Clock */}
       <div className="hero-clock">
         <div className="clock-display">
           <span className={`clock-datetime ${pulse ? 'pulse' : ''}`}>{currentTime.datetime}</span>
@@ -118,7 +117,6 @@ function App() {
         </div>
       </div>
 
-      {/* Tab Bar */}
       <nav className="tab-bar">
         <button
           className={`tab ${activeTab === 'ts2dt' ? 'active' : ''}`}
@@ -144,7 +142,6 @@ function App() {
         <div className="tab-indicator" style={{ '--tab-index': activeTab === 'ts2dt' ? 0 : activeTab === 'dt2ts' ? 1 : 2 } as React.CSSProperties} />
       </nav>
 
-      {/* Content */}
       <div className="tab-content">
         {activeTab === 'ts2dt' && (
           <div className="convert-panel">

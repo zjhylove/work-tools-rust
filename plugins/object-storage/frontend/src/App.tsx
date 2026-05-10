@@ -35,6 +35,7 @@ function App() {
   const [editingConnId, setEditingConnId] = useState<string | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState('');
+  const [showDeleteConnConfirm, setShowDeleteConnConfirm] = useState(false);
 
   const [connForm, setConnForm] = useState(EMPTY_FORM);
 
@@ -189,8 +190,13 @@ function App() {
     } catch (e) { WorkTools.toast.error((editingConnId ? '更新' : '添加') + '连接失败: ' + (e as Error).message); } finally { setLoading(false); }
   };
 
-  const handleDeleteConn = async () => {
-    if (!selectedConnId || !confirm('确认删除此连接?')) return;
+  const handleDeleteConn = () => {
+    setShowDeleteConnConfirm(true);
+  };
+
+  const handleConfirmDeleteConn = async () => {
+    if (!selectedConnId) return;
+    setShowDeleteConnConfirm(false);
     try {
       await api('delete_connection', { id: selectedConnId });
       setSelectedConnId(''); setObjects([]);
@@ -229,6 +235,23 @@ function App() {
         </div>
       )}
 
+      {showDeleteConnConfirm && (
+        <div className="wt-modal-overlay" onClick={() => setShowDeleteConnConfirm(false)}>
+          <div className="wt-modal" onClick={e => e.stopPropagation()}>
+            <div className="wt-modal-header">
+              <h3>确认删除连接</h3>
+            </div>
+            <div className="wt-modal-body">
+              确定要删除此连接吗？此操作不可撤销。
+            </div>
+            <div className="wt-modal-footer">
+              <button className="wt-btn wt-btn--secondary" onClick={() => setShowDeleteConnConfirm(false)}>取消</button>
+              <button className="wt-btn wt-btn--danger" onClick={handleConfirmDeleteConn}>删除</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="toolbar">
         <select value={selectedConnId} onChange={(e) => handleSelectConn(e.target.value)}>
           <option value="">-- 选择连接 --</option>
@@ -252,9 +275,9 @@ function App() {
       {showForm && (
         <div className="conn-form">
           <h3>{editingConnId ? '编辑连接' : '添加云服务连接'}</h3>
-          <div className="form-row"><label>名称</label><input className="conn-name-input" value={connForm.name} onChange={(e) => setConnForm({ ...connForm, name: e.target.value })} onInput={() => { const el = document.querySelector('.conn-name-input') as HTMLInputElement; if (el) WorkTools.FieldError.clear(el); }} placeholder="我的阿里云" /></div>
+          <div className="form-row"><label>名称</label><input className="conn-name-input" value={connForm.name} onChange={(e) => setConnForm({ ...connForm, name: e.target.value })} onInput={(e) => WorkTools.FieldError.clear(e.currentTarget as HTMLInputElement)} placeholder="我的阿里云" /></div>
           <div className="form-row"><label>服务商</label><select value={connForm.provider} onChange={(e) => setConnForm({ ...connForm, provider: e.target.value })}><option value="aliyun">阿里云 OSS</option><option value="tencent">腾讯云 COS</option></select></div>
-          <div className="form-row"><label>AccessKey</label><input className="conn-ak-input" value={connForm.access_key} onChange={(e) => setConnForm({ ...connForm, access_key: e.target.value })} onInput={() => { const el = document.querySelector('.conn-ak-input') as HTMLInputElement; if (el) WorkTools.FieldError.clear(el); }} placeholder="AccessKey ID" /></div>
+          <div className="form-row"><label>AccessKey</label><input className="conn-ak-input" value={connForm.access_key} onChange={(e) => setConnForm({ ...connForm, access_key: e.target.value })} onInput={(e) => WorkTools.FieldError.clear(e.currentTarget as HTMLInputElement)} placeholder="AccessKey ID" /></div>
           <div className="form-row"><label>SecretKey</label><input type="password" value={connForm.secret_key} onChange={(e) => setConnForm({ ...connForm, secret_key: e.target.value })} placeholder="AccessKey Secret" /></div>
           <div className="form-row"><label>Region</label><input value={connForm.region} onChange={(e) => setConnForm({ ...connForm, region: e.target.value })} placeholder="oss-cn-hangzhou" /></div>
           <div className="form-row"><label>Bucket</label><input value={connForm.bucket} onChange={(e) => setConnForm({ ...connForm, bucket: e.target.value })} placeholder="my-bucket" /></div>
