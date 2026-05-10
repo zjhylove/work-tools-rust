@@ -117,7 +117,11 @@ impl JarParser {
         }
 
         controllers.sort_by(|a, b| a.class_name.cmp(&b.class_name));
-        info!(total_classes = self.classes.len(), controller_count = controllers.len(), "Controller 扫描完成");
+        info!(
+            total_classes = self.classes.len(),
+            controller_count = controllers.len(),
+            "Controller 扫描完成"
+        );
         Ok(controllers)
     }
 
@@ -180,11 +184,29 @@ impl JarParser {
             let (business_module, version) = extract_path_segments(&full_path);
 
             // 获取请求参数和返回类型
-            let (req_fields, resp_nodes) = self.with_class(class_name, |class_file| {
-                self.extract_method_fields(class_file, method_name, &mut visited)
-            })?;
+            let (req_fields, mut req_nodes, resp_nodes) = self
+                .with_class(class_name, |class_file| {
+                    self.extract_method_fields(class_file, method_name, &mut visited)
+                })?;
 
-            let req_example = mock::generate_req_mock_json(&req_fields);
+            // 动态设置 HrmsAppApi 节点的 d/c/m/v 示例值
+            let api_path_method = full_path.rsplit('/').next().unwrap_or("").to_string();
+            let api_version_num = version.trim_start_matches('v').to_string();
+            for node in &mut req_nodes {
+                if node.node_name == "HrmsAppApi" {
+                    for f in &mut node.resp_fields {
+                        match f.field_name.as_str() {
+                            "d" => f.example_value = service_name.to_string(),
+                            "c" => f.example_value = business_module.clone(),
+                            "m" => f.example_value = api_path_method.clone(),
+                            "v" => f.example_value = api_version_num.clone(),
+                            _ => {}
+                        }
+                    }
+                }
+            }
+
+            let req_example = mock::generate_req_mock_json(&req_fields, &req_nodes);
             let resp_example = mock::generate_resp_mock_json(&resp_nodes);
 
             let api_name = if method_info.api_name.is_empty() {
@@ -202,6 +224,7 @@ impl JarParser {
                 version,
                 full_path,
                 req_fields,
+                req_nodes,
                 req_example,
                 resp_nodes,
                 resp_example,
@@ -214,12 +237,17 @@ impl JarParser {
     }
 
     /// 从 class 文件提取方法的请求参数和返回类型
+    /// Returns (req_fields, req_nodes, resp_nodes)
     fn extract_method_fields(
         &self,
         class_file: &cafebabe::ClassFile,
         method_name: &str,
         visited: &mut HashSet<String>,
-    ) -> (Vec<crate::models::ApiField>, Vec<crate::models::NodeInfo>) {
+    ) -> (
+        Vec<crate::models::ApiField>,
+        Vec<crate::models::NodeInfo>,
+        Vec<crate::models::NodeInfo>,
+    ) {
         use cafebabe::attributes::AttributeData;
 
         for method in &class_file.methods {
@@ -228,6 +256,7 @@ impl JarParser {
             }
 
             let mut req_fields = Vec::new();
+            let mut req_nodes = Vec::new();
             let mut resp_nodes = Vec::new();
 
             // 获取方法的泛型签名
@@ -239,24 +268,115 @@ impl JarParser {
                 }
             });
 
-            // 1. 从签名或描述符解析返回类型，提取响应字段
-            let return_type = signature
-                .as_ref()
-                .and_then(|sig| type_resolver::extract_return_type_from_signature(sig))
-                .unwrap_or_else(|| {
-                    type_resolver::get_return_type_from_descriptor(&method.descriptor.to_string())
-                });
+            // ── 1. 解析响应结构 ──
 
-            if self.class_exists(&return_type)
-                && type_resolver::is_custom_type_private(&return_type)
-            {
-                let (_, nodes) =
-                    type_resolver::extract_dto_fields(&return_type, self, visited);
-                resp_nodes.extend(nodes);
+            // 从签名获取响应内层类型（用于替换 wrapper data 字段类型）
+            let inner_resp_type: Option<String> = signature
+                .as_ref()
+                .and_then(|sig| type_resolver::extract_return_type_from_signature(sig));
+
+            // 从签名获取响应 wrapper 类型
+            let resp_wrapper_type = signature
+                .as_ref()
+                .and_then(|sig| {
+                    let return_part = sig.split(')').nth(1)?;
+                    let chars: Vec<char> = return_part.chars().collect();
+                    if chars.first() == Some(&'L') {
+                        let end = chars.iter().position(|c| *c == '<' || *c == ';')?;
+                        let outer: String = chars[1..end].iter().collect();
+                        if !outer.starts_with("java/") {
+                            Some(outer.replace('/', "."))
+                        } else {
+                            None
+                        }
+                    } else {
+                        None
+                    }
+                })
+                .filter(|w| self.class_exists(w) && type_resolver::is_custom_type_private(w));
+
+            // 判断 inner_resp_type 是否与 wrapper 不同（如果相同说明没有 wrapper）
+            let has_distinct_inner = inner_resp_type
+                .as_ref()
+                .map(|inner| resp_wrapper_type.as_ref() != Some(inner))
+                .unwrap_or(false);
+
+            if let Some(ref wrapper) = resp_wrapper_type {
+                let mut wrapper_visited = visited.clone();
+                let (mut wrapper_fields, wrapper_nodes) =
+                    type_resolver::extract_dto_fields(wrapper, self, &mut wrapper_visited);
+
+                // 如果有内层类型，替换 data: Object 并解析内层类型
+                if has_distinct_inner {
+                    if let Some(ref inner) = inner_resp_type {
+                        if self.class_exists(inner) && type_resolver::is_custom_type_private(inner)
+                        {
+                            let inner_short = inner.rsplit('.').next().unwrap_or(inner);
+                            for f in &mut wrapper_fields {
+                                if f.field_name == "data" && f.field_type == "Object" {
+                                    f.field_type = inner_short.to_string();
+                                }
+                            }
+                            let mut inner_visited = visited.clone();
+                            let (inner_fields, inner_nodes) =
+                                type_resolver::extract_dto_fields(inner, self, &mut inner_visited);
+                            if !inner_fields.is_empty() {
+                                resp_nodes.push(crate::models::NodeInfo {
+                                    node_name: inner_short.to_string(),
+                                    node_desc: String::new(),
+                                    resp_fields: inner_fields,
+                                });
+                                resp_nodes.extend(inner_nodes);
+                            }
+                        }
+                    }
+                }
+
+                let wrapper_short = wrapper.rsplit('.').next().unwrap_or(wrapper).to_string();
+                resp_nodes.insert(
+                    0,
+                    crate::models::NodeInfo {
+                        node_name: wrapper_short,
+                        node_desc: String::new(),
+                        resp_fields: wrapper_fields,
+                    },
+                );
+                resp_nodes.extend(wrapper_nodes);
+            } else {
+                // 没有 wrapper，return_type 本身就是响应类型
+                let return_type = signature
+                    .as_ref()
+                    .and_then(|sig| type_resolver::extract_return_type_from_signature(sig))
+                    .unwrap_or_else(|| {
+                        type_resolver::get_return_type_from_descriptor(
+                            &method.descriptor.to_string(),
+                        )
+                    });
+
+                if self.class_exists(&return_type)
+                    && type_resolver::is_custom_type_private(&return_type)
+                {
+                    let (dto_fields, nodes) =
+                        type_resolver::extract_dto_fields(&return_type, self, visited);
+                    if !dto_fields.is_empty() {
+                        let short_name = return_type
+                            .rsplit('.')
+                            .next()
+                            .unwrap_or(&return_type)
+                            .to_string();
+                        resp_nodes.push(crate::models::NodeInfo {
+                            node_name: short_name,
+                            node_desc: String::new(),
+                            resp_fields: dto_fields,
+                        });
+                    }
+                    resp_nodes.extend(nodes);
+                }
             }
 
-            // 2. 从签名解析参数的实际类型，提取请求字段
-            // 优先从 Signature 属性获取真实类型（泛型擦除后 descriptor 中可能是 Object）
+            // ── 2. 解析请求结构 ──
+
+            // 收集所有参数类型（wrapper + inner）
             let param_types: Vec<String> = if let Some(ref sig) = signature {
                 type_resolver::extract_param_types_from_signature(sig)
                     .into_iter()
@@ -264,7 +384,6 @@ impl JarParser {
                     .map(|p| p.replace('/', "."))
                     .collect()
             } else {
-                // 回退到描述符
                 method
                     .descriptor
                     .parameters
@@ -274,20 +393,104 @@ impl JarParser {
                     .collect()
             };
 
-            for param_type in &param_types {
-                if self.class_exists(param_type) && type_resolver::is_custom_type_private(param_type)
-                {
-                    let (fields, nodes) =
-                        type_resolver::extract_dto_fields(param_type, self, visited);
-                    req_fields.extend(fields);
-                    resp_nodes.extend(nodes);
+            // 找 wrapper 类型中的 data: Object 字段，替换为内层类型
+            // wrapper 类型特点：有 api/common/data 字段
+            let param_inner_type = {
+                let mut inner = None;
+                let mut wrapper = None;
+                for pt in &param_types {
+                    if self.class_exists(pt) && type_resolver::is_custom_type_private(pt) {
+                        if let Some(data) = self.get_class_data(pt) {
+                            if let Ok(cf) = cafebabe::parse_class(data) {
+                                let has_data_object = cf.fields.iter().any(|f| {
+                                    f.name == "data"
+                                        && annotation::get_field_type_name(&f.descriptor)
+                                            == "Object"
+                                });
+                                if has_data_object {
+                                    wrapper = Some(pt.clone());
+                                } else {
+                                    inner = Some(pt.clone());
+                                }
+                            }
+                        }
+                    }
                 }
+                // 如果有一个 wrapper 和一个 inner，inner 就是 wrapper 中 data 的实际类型
+                if wrapper.is_some() {
+                    inner
+                } else {
+                    None
+                }
+            };
+
+            // 分离 wrapper 类型和内层类型，wrapper 先处理
+            let is_wrapper_type = |pt: &str| -> bool {
+                if let Some(data) = self.get_class_data(pt) {
+                    if let Ok(cf) = cafebabe::parse_class(data) {
+                        return cf.fields.iter().any(|f| {
+                            f.name == "data"
+                                && annotation::get_field_type_name(&f.descriptor) == "Object"
+                        });
+                    }
+                }
+                false
+            };
+
+            // Pass 1: 处理 wrapper 类型
+            for param_type in &param_types {
+                if !self.class_exists(param_type)
+                    || !type_resolver::is_custom_type_private(param_type)
+                    || !is_wrapper_type(param_type)
+                {
+                    continue;
+                }
+
+                let (fields, nodes) = type_resolver::extract_dto_fields(param_type, self, visited);
+
+                let mut processed_fields = fields.clone();
+                if let Some(ref inner) = param_inner_type {
+                    let inner_short = inner.rsplit('.').next().unwrap_or(inner);
+                    for f in &mut processed_fields {
+                        if f.field_name == "data" && f.field_type == "Object" {
+                            f.field_type = inner_short.to_string();
+                        }
+                    }
+                    // 先 extract 内层类型(此时 visited 中还没有它)，再 extract wrapper
+                    let (inner_fields, inner_nodes) =
+                        type_resolver::extract_dto_fields(inner, self, visited);
+                    if !inner_fields.is_empty() {
+                        req_nodes.push(crate::models::NodeInfo {
+                            node_name: inner_short.to_string(),
+                            node_desc: String::new(),
+                            resp_fields: inner_fields,
+                        });
+                        req_nodes.extend(inner_nodes);
+                    }
+                }
+                req_fields.extend(processed_fields);
+                req_nodes.extend(nodes);
             }
 
-            return (req_fields, resp_nodes);
+            // Pass 2: 处理非 wrapper 类型（跳过已 visited 的，即已在 wrapper 中处理过的内层类型）
+            for param_type in &param_types {
+                if !self.class_exists(param_type)
+                    || !type_resolver::is_custom_type_private(param_type)
+                    || is_wrapper_type(param_type)
+                    || visited.contains(param_type)
+                {
+                    continue;
+                }
+
+                let (fields, nodes) = type_resolver::extract_dto_fields(param_type, self, visited);
+                req_fields.extend(fields);
+                req_nodes.extend(nodes);
+            }
+
+            return (req_fields, req_nodes, resp_nodes);
         }
 
-        (Vec::new(), Vec::new())
+        (Vec::new(), Vec::new(), Vec::new())
     }
 }
 

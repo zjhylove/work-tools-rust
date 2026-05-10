@@ -6,10 +6,9 @@
 
 body {
   min-height: 100vh;
-  padding: 20px;
+  background: var(--bg-secondary);
 }
 
 #root {
-  max-width: 1200px;
-  margin: 0 auto;
+  min-height: 100vh;
 }

@@ -20,7 +20,6 @@ pub struct ApiDocConfig {
 /// 导出格式
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ExportFormat {
-    Word,
     Markdown,
     Html,
 }
@@ -31,7 +30,6 @@ impl Serialize for ExportFormat {
         S: serde::Serializer,
     {
         serializer.serialize_str(match self {
-            ExportFormat::Word => "word",
             ExportFormat::Markdown => "markdown",
             ExportFormat::Html => "html",
         })
@@ -45,7 +43,6 @@ impl<'de> Deserialize<'de> for ExportFormat {
     {
         let s = String::deserialize(deserializer)?;
         match s.as_str() {
-            "word" => Ok(ExportFormat::Word),
             "markdown" => Ok(ExportFormat::Markdown),
             "html" => Ok(ExportFormat::Html),
             _ => Ok(ExportFormat::Markdown),
@@ -56,7 +53,6 @@ impl<'de> Deserialize<'de> for ExportFormat {
 impl ExportFormat {
     pub fn extension(&self) -> &'static str {
         match self {
-            ExportFormat::Word => "docx",
             ExportFormat::Markdown => "md",
             ExportFormat::Html => "html",
         }
@@ -64,7 +60,6 @@ impl ExportFormat {
 
     pub fn display_name(&self) -> &'static str {
         match self {
-            ExportFormat::Word => "Word",
             ExportFormat::Markdown => "Markdown",
             ExportFormat::Html => "HTML",
         }

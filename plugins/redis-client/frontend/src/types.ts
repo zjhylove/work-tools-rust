@@ -1,7 +1,22 @@
+export const COLORS = ['#ef4444', '#f59e0b', '#10b981', '#3b82f6', '#8b5cf6', '#ec4899', '#06b6d4', '#6b7280'];
+
 export interface KeyInfo {
   key: string;
   type: string;
   ttl: number;
+}
+
+export interface SshInfo {
+  host: string;
+  port: number;
+  username: string;
+  auth_type: 'password' | 'key';
+  has_auth: boolean;
+  timeout_secs: number;
+}
+
+export interface ClusterInfo {
+  seed_nodes: string;
 }
 
 export interface SavedConnection {
@@ -14,6 +29,8 @@ export interface SavedConnection {
   has_password: boolean;
   has_ssh: boolean;
   has_cluster: boolean;
+  ssh?: SshInfo | null;
+  cluster?: ClusterInfo | null;
 }
 
 export interface ConnectionForm {
@@ -45,6 +62,7 @@ export interface ClusterForm {
 export interface TreeNode {
   name: string;
   fullKey: string | null;
+  prefix: string;
   keyInfo?: KeyInfo;
   children: TreeNode[];
 }

@@ -41,11 +41,13 @@ pub struct ApiInfo {
     pub version: String,
     /// 完整路径
     pub full_path: String,
-    /// 请求参数
+    /// 请求参数 (顶层字段)
     pub req_fields: Vec<ApiField>,
+    /// 请求嵌套节点 (wrapper 的嵌套类型如 HrmsAppApi, HrmsAppCommon)
+    pub req_nodes: Vec<NodeInfo>,
     /// 请求示例 JSON
     pub req_example: String,
-    /// 响应节点
+    /// 响应节点 (树形结构)
     pub resp_nodes: Vec<NodeInfo>,
     /// 响应示例 JSON
     pub resp_example: String,

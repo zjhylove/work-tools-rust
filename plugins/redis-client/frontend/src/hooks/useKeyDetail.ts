@@ -16,8 +16,14 @@ export function useKeyDetail() {
   const [valueData, setValueData] = useState<unknown>(null);
   const [detailLoading, setDetailLoading] = useState(false);
 
-  const selectKey = useCallback(async (key: string) => {
+  const selectKey = useCallback(async (key: string | null) => {
     setSelectedKey(key);
+    if (!key) {
+      setKeyDetail(null);
+      setValueData(null);
+      setDetailLoading(false);
+      return;
+    }
     setDetailLoading(true);
     setValueData(null);
 

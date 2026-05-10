@@ -2,8 +2,8 @@ use anyhow::Result;
 use std::fs;
 use std::path::Path;
 
-use crate::exporter::DocumentExporter;
 use crate::exporter::sanitize_filename;
+use crate::exporter::DocumentExporter;
 use crate::models::ApiInfo;
 
 pub struct MarkdownExporter;
@@ -68,6 +68,27 @@ impl DocumentExporter for MarkdownExporter {
                     ));
                 }
                 summary.push('\n');
+
+                // 请求嵌套节点
+                for node in &api.req_nodes {
+                    if !node.node_desc.is_empty() {
+                        summary
+                            .push_str(&format!("#### {} ({})\n\n", node.node_name, node.node_desc));
+                    } else {
+                        summary.push_str(&format!("#### {}\n\n", node.node_name));
+                    }
+                    if !node.resp_fields.is_empty() {
+                        summary.push_str("| 字段名 | 类型 | 必填 | 注释 |\n");
+                        summary.push_str("|--------|------|------|------|\n");
+                        for field in &node.resp_fields {
+                            summary.push_str(&format!(
+                                "| {} | {} | {} | {} |\n",
+                                field.field_name, field.field_type, field.required, field.comment
+                            ));
+                        }
+                        summary.push('\n');
+                    }
+                }
 
                 if !api.req_example.is_empty() {
                     summary.push_str("### 请求示例\n\n```json\n");

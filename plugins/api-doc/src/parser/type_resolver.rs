@@ -1,4 +1,5 @@
 use std::collections::HashSet;
+use std::ops::Deref;
 
 use crate::models::{ApiField, NodeInfo};
 use crate::parser::annotation;
@@ -80,7 +81,12 @@ pub fn parse_descriptor_params(descriptor: &str) -> Vec<String> {
     params
 }
 
-/// 简化类名: java/lang/String -> String
+/// 获取类型的简短显示名: com.xxx.Foo -> Foo, String -> String
+pub fn short_type_name(full_name: &str) -> &str {
+    full_name.rsplit('.').next().unwrap_or(full_name)
+}
+
+/// 简化类名: java/lang/String -> String, com/xxx/Foo -> com.xxx.Foo
 pub fn simplify_class_name(internal_name: &str) -> String {
     match internal_name {
         "java/lang/String" => "String".to_string(),
@@ -89,6 +95,8 @@ pub fn simplify_class_name(internal_name: &str) -> String {
         "java/lang/Double" => "Double".to_string(),
         "java/lang/Float" => "Float".to_string(),
         "java/lang/Boolean" => "Boolean".to_string(),
+        "java/lang/Object" => "Object".to_string(),
+        "java/lang/Void" => "Object".to_string(),
         "java/lang/Date" => "Date".to_string(),
         "java/time/LocalDateTime" => "LocalDateTime".to_string(),
         "java/time/LocalDate" => "LocalDate".to_string(),
@@ -96,11 +104,7 @@ pub fn simplify_class_name(internal_name: &str) -> String {
         "java/util/List" => "List".to_string(),
         "java/util/Map" => "Map".to_string(),
         "java/util/Set" => "Set".to_string(),
-        _ => internal_name
-            .rsplit('/')
-            .next()
-            .unwrap_or(internal_name)
-            .to_string(),
+        _ => internal_name.replace('/', "."),
     }
 }
 
@@ -152,59 +156,116 @@ pub fn parse_generic_types(signature: &str) -> Vec<String> {
 }
 
 /// 从泛型签名中提取返回类型的实际类名
-/// 例如 `Ljava/util/List<Lcom/example/dto/UserDTO;>;` -> "com/example/dto/UserDTO"
+/// 正确处理多层嵌套泛型，如:
+///   `LResult<LPageResponse<LUserDTO;>;>;` -> "UserDTO" (最内层)
+///   `LResult<Ljava/lang/Void;>;` -> "Result" (回退到外层包装器)
+///   `LResult<LUserDTO;>;` -> "UserDTO" (最内层)
+/// 同时将包装器类型也加入候选，确保内层为 Void 时也能解析到包装器
 pub fn extract_return_type_from_signature(signature: &str) -> Option<String> {
-    // 查找 ) 后的返回类型
     let return_part = signature.split(')').nth(1)?;
+    let chars: Vec<char> = return_part.chars().collect();
 
-    // 提取最内层的 L...; 类型
-    let mut depth = 0;
-    let mut innermost_start = None;
-    let mut innermost_end = None;
+    let mut candidates: Vec<(usize, String)> = Vec::new();
+    let mut i = 0;
 
-    for (i, c) in return_part.char_indices() {
-        match c {
-            '<' => {
-                depth += 1;
-                if depth == 1 {
-                    innermost_start = None;
+    // 提取外层类型 (在 '<' 或 ';' 之前的 L... 类型)
+    if i < chars.len() && chars[i] == 'L' {
+        let start = i + 1;
+        while i < chars.len() && chars[i] != '<' && chars[i] != ';' {
+            i += 1;
+        }
+        let outer_class: String = chars[start..i].iter().collect();
+        if !outer_class.starts_with("java/") && !outer_class.is_empty() {
+            candidates.push((0, outer_class));
+        }
+    } else {
+        // 跳过到 '<' 或 ';'
+        while i < chars.len() && chars[i] != '<' && chars[i] != ';' {
+            i += 1;
+        }
+    }
+
+    // 递归收集泛型参数中的内层类名 (depth >= 1)
+    if i < chars.len() && chars[i] == '<' {
+        let mut depth = 1usize;
+        collect_type_candidates(&chars, &mut i, &mut depth, &mut candidates);
+    }
+
+    // 优先返回最深层（最内层）的非 java 类型
+    candidates.sort_by(|a, b| b.0.cmp(&a.0));
+    candidates
+        .first()
+        .map(|(_, class_name)| class_name.replace('/', "."))
+}
+
+/// 递归收集签名中的非 java 类型候选
+fn collect_type_candidates(
+    chars: &[char],
+    i: &mut usize,
+    depth: &mut usize,
+    candidates: &mut Vec<(usize, String)>,
+) {
+    while *i < chars.len() {
+        match chars[*i] {
+            'L' => {
+                *i += 1;
+                let start = *i;
+                // 扫描类名，跳过嵌套的 <...>
+                let mut nesting = 0;
+                while *i < chars.len() {
+                    match chars[*i] {
+                        '<' => {
+                            nesting += 1;
+                            *i += 1;
+                            // 递归处理泛型参数
+                            collect_type_candidates(chars, i, &mut (*depth + nesting), candidates);
+                        }
+                        ';' => {
+                            if nesting == 0 {
+                                break;
+                            }
+                            nesting -= 1;
+                            *i += 1;
+                        }
+                        _ => {
+                            *i += 1;
+                        }
+                    }
                 }
+                let class_name: String = chars[start..*i].iter().collect();
+                if !class_name.starts_with("java/") && !class_name.contains('<') {
+                    candidates.push((*depth, class_name));
+                }
+                *i += 1; // skip ';'
+            }
+            '<' => {
+                *i += 1;
+                collect_type_candidates(chars, i, depth, candidates);
             }
             '>' => {
-                if depth == 1 && innermost_start.is_some() {
-                    innermost_end = Some(i);
-                }
-                depth -= 1;
+                *i += 1;
+                return;
             }
-            'L' => {
-                if depth >= 1 {
-                    innermost_start = Some(i + 1);
-                }
+            '*' | '+' | '-' => {
+                // 通配符: * (=?), + (extends), - (super)
+                *i += 1;
             }
-            ';' => {
-                if depth >= 1 && innermost_start.is_some() && innermost_end.is_none() {
-                    let class_name: String = return_part[innermost_start.unwrap()..i].to_string();
-                    if !class_name.starts_with("java/") {
-                        return Some(class_name.replace('/', "."));
-                    }
-                    innermost_start = None;
+            'T' => {
+                // 类型变量: Tname;
+                *i += 1;
+                while *i < chars.len() && chars[*i] != ';' {
+                    *i += 1;
                 }
+                *i += 1; // skip ';'
             }
-            _ => {}
-        }
-    }
-
-    // 如果没有嵌套泛型，直接查找第一个 L...;
-    if let Some(pos) = return_part.find('L') {
-        if let Some(end) = return_part[pos..].find(';') {
-            let class_name = &return_part[pos + 1..pos + end];
-            if !class_name.starts_with("java/") {
-                return Some(class_name.replace('/', "."));
+            '[' => {
+                *i += 1;
+            }
+            _ => {
+                *i += 1;
             }
         }
     }
-
-    None
 }
 
 /// 递归提取 DTO 字段
@@ -233,12 +294,17 @@ pub fn extract_dto_fields(
 
     for field in &class_file.fields {
         let field_name = field.name.to_string();
-        let field_type_name = annotation::get_field_type_name(&field.descriptor);
 
         // 跳过静态字段和内部字段
-        if field_name.contains('$') {
+        if field
+            .access_flags
+            .contains(cafebabe::FieldAccessFlags::STATIC)
+            || field_name.contains('$')
+        {
             continue;
         }
+
+        let field_type_name = annotation::get_field_type_name(&field.descriptor);
 
         // 获取 @ApiModelProperty 信息
         let (comment, required, example_value) =
@@ -256,8 +322,13 @@ pub fn extract_dto_fields(
         if is_custom_type {
             let (sub_fields, sub_nodes) = extract_dto_fields(&resolved_type, parser, visited);
             if !sub_fields.is_empty() {
+                let short = resolved_type
+                    .rsplit('.')
+                    .next()
+                    .unwrap_or(&resolved_type)
+                    .to_string();
                 nodes.push(NodeInfo {
-                    node_name: resolved_type.clone(),
+                    node_name: short,
                     node_desc: comment.clone(),
                     resp_fields: sub_fields,
                 });
@@ -267,7 +338,7 @@ pub fn extract_dto_fields(
 
         fields.push(ApiField {
             field_name,
-            field_type: resolved_type,
+            field_type: short_type_name(&resolved_type).to_string(),
             required,
             field_length: String::new(),
             comment,
@@ -275,7 +346,25 @@ pub fn extract_dto_fields(
         });
     }
 
+    // 解析父类字段（处理继承）
+    if let Some(parent_name) = resolve_super_class_name(&class_file) {
+        if parent_name != "java/lang/Object" && parser.class_exists(&parent_name) {
+            let parent_dot = parent_name.replace('/', ".");
+            let (parent_fields, parent_nodes) = extract_dto_fields(&parent_dot, parser, visited);
+            fields.extend(parent_fields);
+            nodes.extend(parent_nodes);
+        }
+    }
+
     (fields, nodes)
+}
+
+/// 从 class 文件解析父类名称
+fn resolve_super_class_name(class_file: &cafebabe::ClassFile) -> Option<String> {
+    class_file
+        .super_class
+        .as_ref()
+        .map(|cn| cn.deref().to_string())
 }
 
 /// 从字段签名中解析实际类型
@@ -339,13 +428,11 @@ pub fn is_custom_type_private(type_name: &str) -> bool {
 }
 
 /// 从泛型签名中提取方法参数的实际类型列表
-/// 对于包装器类型（如 HrmsAppRequest<PraiseV2Req>），提取内层泛型参数
-/// 签名格式: `(Lcom/example/dto/Wrapper<Lcom/example/dto/UserDTO;>;)Lcom/example/vo/Result<Lcom/example/vo/UserVO;>;`
-/// 返回参数的泛型内层类型 internal name 列表
+/// 对于包装器类型（如 HrmsAppRequest<XxxReq>），提取所有非 java 类型（含包装器和内层泛型）
+/// 返回所有候选类型 internal name 列表（使用 / 分隔符）
 pub fn extract_param_types_from_signature(signature: &str) -> Vec<String> {
     let chars: Vec<char> = signature.chars().collect();
 
-    // 找到 ( 开始
     let mut i = 0;
     while i < chars.len() && chars[i] != '(' {
         i += 1;
@@ -360,42 +447,13 @@ pub fn extract_param_types_from_signature(signature: &str) -> Vec<String> {
     while i < chars.len() && chars[i] != ')' {
         match chars[i] {
             'L' => {
-                let start = i + 1;
-                while i < chars.len() && chars[i] != ';' {
-                    i += 1;
-                }
-                // i 现在在 ';' 位置
-                // 检查 ';' 之后是否有 '<' (泛型参数)
-                // 但实际上泛型签名格式是 Lcom/xxx/Foo<Lcom/xxx/Bar;>;
-                // 即 < 在 ; 之前，不是之后
-                // 需要重新扫描这个参数
-                let class_path: String = chars[start..i].iter().collect();
+                let mut candidates: Vec<(usize, String)> = Vec::new();
+                let mut depth = 0usize;
+                parse_type_arg(&chars, &mut i, &mut depth, &mut candidates);
 
-                // 从 start 位置开始，找 <...> 泛型参数中的内层类型
-                let mut j = start;
-                let mut found_inner = false;
-                while j < i {
-                    if chars[j] == '<' {
-                        // 找到了泛型参数，提取内层非 java 类型
-                        if let Some(inner_type) = extract_innermost_type(&chars, j) {
-                            if !inner_type.starts_with("java/") {
-                                params.push(inner_type);
-                                found_inner = true;
-                            }
-                        }
-                        break;
-                    }
-                    j += 1;
-                }
-                if !found_inner && !class_path.starts_with("java/") {
-                    // 没有泛型参数，直接用该类型
-                    params.push(class_path);
-                }
-
-                i += 1; // skip ';'
-                // 跳过多余的 > (泛型签名的闭合)
-                while i < chars.len() && chars[i] == '>' {
-                    i += 1;
+                // 返回所有非 java 候选类型（含包装器和内层类型）
+                for (_, class_name) in &candidates {
+                    params.push(class_name.clone());
                 }
             }
             '[' => {
@@ -426,46 +484,96 @@ pub fn extract_param_types_from_signature(signature: &str) -> Vec<String> {
     params
 }
 
-/// 从 `<...>` 泛型参数中提取最内层的非 java/ 标准库类型
-fn extract_innermost_type(chars: &[char], start: usize) -> Option<String> {
-    let mut i = start;
-    if i >= chars.len() || chars[i] != '<' {
-        return None;
-    }
-    i += 1; // skip '<'
+/// 解析单个类型参数 `L...<...>;`，收集非 java 的候选类型
+fn parse_type_arg(
+    chars: &[char],
+    i: &mut usize,
+    depth: &mut usize,
+    candidates: &mut Vec<(usize, String)>,
+) {
+    // chars[*i] == 'L'
+    *i += 1;
+    let start = *i;
+    let mut name_end = *i; // 纯类名（不含泛型）的结束位置
+    let mut nesting = 0;
 
-    let mut depth = 1;
-    let mut last_non_java: Option<String> = None;
-
-    while i < chars.len() && depth > 0 {
-        match chars[i] {
+    while *i < chars.len() {
+        match chars[*i] {
             '<' => {
-                depth += 1;
-                i += 1;
-            }
-            '>' => {
-                depth -= 1;
-                i += 1;
-            }
-            'L' => {
-                let start = i + 1;
-                let mut end = start;
-                while end < chars.len() && chars[end] != ';' {
-                    end += 1;
+                if nesting == 0 {
+                    name_end = *i; // 类名在 < 之前结束
                 }
-                let class_path: String = chars[start..end].iter().collect();
-                if !class_path.starts_with("java/") {
-                    last_non_java = Some(class_path);
+                nesting += 1;
+                *i += 1;
+                let inner_depth = *depth + nesting;
+                parse_generic_args(chars, i, inner_depth, candidates);
+                nesting -= 1;
+            }
+            ';' => {
+                if nesting == 0 {
+                    if name_end == start {
+                        name_end = *i; // 没有泛型，类名到 ; 结束
+                    }
+                    break;
                 }
-                i = end + 1; // skip ';'
+                *i += 1;
             }
             _ => {
-                i += 1;
+                *i += 1;
             }
         }
     }
 
-    last_non_java
+    let class_name: String = chars[start..name_end].iter().collect();
+    if !class_name.starts_with("java/") && !class_name.is_empty() {
+        candidates.push((*depth, class_name));
+    }
+
+    if *i < chars.len() && chars[*i] == ';' {
+        *i += 1;
+    }
+}
+
+/// 解析 `<...>` 泛型参数块中的所有类型
+fn parse_generic_args(
+    chars: &[char],
+    i: &mut usize,
+    depth: usize,
+    candidates: &mut Vec<(usize, String)>,
+) {
+    while *i < chars.len() && chars[*i] != '>' {
+        match chars[*i] {
+            'L' => {
+                let mut d = depth;
+                parse_type_arg(chars, i, &mut d, candidates);
+            }
+            'T' => {
+                *i += 1;
+                while *i < chars.len() && chars[*i] != ';' {
+                    *i += 1;
+                }
+                if *i < chars.len() {
+                    *i += 1;
+                }
+            }
+            '*' | '+' | '-' => {
+                *i += 1;
+            }
+            '[' => {
+                while *i < chars.len() && chars[*i] == '[' {
+                    *i += 1;
+                }
+            }
+            _ => {
+                *i += 1;
+            }
+        }
+    }
+
+    // 跳过 >
+    if *i < chars.len() && chars[*i] == '>' {
+        *i += 1;
+    }
 }
 
 /// 从方法描述符获取返回类型
@@ -480,14 +588,14 @@ pub fn get_return_type_from_descriptor(descriptor: &str) -> String {
         s if s.len() == 1 => resolve_base_type(s.chars().next().unwrap()).to_string(),
         s if s.starts_with('L') => {
             let class_name = s.trim_start_matches('L').trim_end_matches(';');
-            simplify_class_name(class_name)
+            class_name.replace('/', ".")
         }
         s if s.starts_with('[') => {
             let dims = s.chars().take_while(|c| *c == '[').count();
             let element = &s[dims..];
             let base = if element.starts_with('L') {
                 let cn = element.trim_start_matches('L').trim_end_matches(';');
-                return format!("{}{}", simplify_class_name(cn), "[]".repeat(dims));
+                return format!("{}{}", cn.replace('/', "."), "[]".repeat(dims));
             } else if element.len() == 1 {
                 resolve_base_type(element.chars().next().unwrap())
             } else {

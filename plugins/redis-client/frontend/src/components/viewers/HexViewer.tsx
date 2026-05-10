@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { call } from '../../api';
 
 interface Props { selectedKey: string | null; }
 
@@ -11,10 +12,11 @@ export function HexViewer({ selectedKey }: Props) {
     if (!selectedKey) return;
     (async () => {
       setLoading(true);
-      const r = await window.pluginAPI?.call('redis-client', 'hex_dump', { key: selectedKey, max_bytes: 1024 });
-      const data = r as { hex: string; length: number };
-      setHex(data.hex);
-      setLength(data.length);
+      try {
+        const data = await call('hex_dump', { key: selectedKey, max_bytes: 1024 });
+        setHex(data.hex as string);
+        setLength(data.length as number);
+      } catch { /* handled */ }
       setLoading(false);
     })();
   }, [selectedKey]);

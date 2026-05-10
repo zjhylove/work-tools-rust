@@ -1,22 +1,59 @@
-use redis::{Commands, Connection};
+use redis::{Connection, Commands};
 use serde_json::Value;
 use std::collections::HashMap;
 
-/// SCAN keys and fetch TYPE + TTL for each
+/// Convert raw key bytes to a display-safe string.
+/// Non-UTF-8 bytes are shown as \xHH escape sequences.
+pub fn key_to_display(raw: &[u8]) -> String {
+    match std::str::from_utf8(raw) {
+        Ok(s) => s.to_string(),
+        Err(_) => raw
+            .iter()
+            .map(|&b| {
+                if b >= 0x20 && b <= 0x7e {
+                    (b as char).to_string()
+                } else {
+                    format!("\\x{b:02x}")
+                }
+            })
+            .collect(),
+    }
+}
+
+/// SCAN keys and fetch TYPE + TTL in batch using pipeline
 pub fn scan_key_infos(
-    keys: &[String],
+    keys: &[Vec<u8>],
     conn: &mut Connection,
 ) -> Result<Vec<Value>, Box<dyn std::error::Error + Send + Sync>> {
-    let mut result = Vec::with_capacity(keys.len());
-    for k in keys {
-        let key_type: String = redis::cmd("TYPE")
-            .arg(k)
-            .query(conn)
-            .unwrap_or_else(|_| "unknown".into());
-        let ttl: i64 = redis::cmd("TTL").arg(k).query(conn).unwrap_or(-2);
-        result.push(serde_json::json!({ "key": k, "type": key_type, "ttl": ttl }));
+    if keys.is_empty() {
+        return Ok(Vec::new());
     }
-    Ok(result)
+
+    let mut pipe = redis::pipe();
+    for k in keys {
+        pipe.cmd("TYPE").arg(k);
+        pipe.cmd("TTL").arg(k);
+    }
+    let results: Vec<redis::Value> = pipe.query(conn)?;
+
+    let mut key_infos = Vec::with_capacity(keys.len());
+    let mut i = 0;
+    for raw_key in keys {
+        let display_key = key_to_display(raw_key);
+        let key_type: String = redis::from_redis_value(
+            results.get(i).unwrap_or(&redis::Value::BulkString("unknown".into()))
+        ).unwrap_or_else(|_| "unknown".to_string());
+        let ttl: i64 = redis::from_redis_value(
+            results.get(i + 1).unwrap_or(&redis::Value::Int(-2))
+        ).unwrap_or(-2);
+        i += 2;
+        key_infos.push(serde_json::json!({
+            "key": display_key,
+            "type": key_type,
+            "ttl": ttl,
+        }));
+    }
+    Ok(key_infos)
 }
 
 /// Search within a key's value (String/Hash/List/Set/ZSet)

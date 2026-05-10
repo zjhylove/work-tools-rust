@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
 import { ConnectionForm } from '../../types';
-import { COLORS, call } from '../../api';
+import { COLORS } from '../../types';
+import { call } from '../../api';
+import { useToast } from '../Toast';
 
 interface Props {
   connId: string | null;
@@ -16,17 +18,50 @@ const defaultForm: ConnectionForm = {
 export function ConnectionEdit({ connId, onClose, onSave }: Props) {
   const [form, setForm] = useState<ConnectionForm>(defaultForm);
   const [testing, setTesting] = useState(false);
-  const [testResult, setTestResult] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const { showToast } = useToast();
 
   useEffect(() => {
     if (connId) {
       (async () => {
         try {
-          const r = await window.pluginAPI?.call('redis-client', 'list_connections', {});
-          const conns = (r as { connections: ConnectionForm[] })?.connections || [];
+          const r = await call('list_connections');
+          const conns = (r.connections as any[]) || [];
           const c = conns.find((x: any) => x.id === connId);
-          if (c) setForm(c);
+          if (c) {
+            // 回显已保存的密码（包含 Redis 密码和 SSH 密码）
+            let savedPassword = '';
+            let savedSshPassword = '';
+            let savedSshKeyPassphrase = '';
+            try {
+              const pw = await call('get_saved_password', { id: connId });
+              savedPassword = (pw.password as string) || '';
+              savedSshPassword = (pw.ssh_password as string) || '';
+              savedSshKeyPassphrase = (pw.ssh_key_passphrase as string) || '';
+            } catch { /* ignore */ }
+
+            setForm({
+              name: c.name || '',
+              color: c.color || null,
+              host: c.host || '127.0.0.1',
+              port: c.port || 6379,
+              db: c.db || 0,
+              password: savedPassword,
+              ssh: c.ssh ? {
+                host: c.ssh.host || '',
+                port: c.ssh.port || 22,
+                username: c.ssh.username || '',
+                authType: c.ssh.auth_type || 'password',
+                password: savedSshPassword,
+                keyPath: '',
+                keyPassphrase: savedSshKeyPassphrase,
+                timeoutSecs: c.ssh.timeout_secs || 10,
+              } : null,
+              cluster: c.cluster ? {
+                seedNodes: c.cluster.seed_nodes || '',
+              } : null,
+            });
+          }
         } catch { /* ignore */ }
       })();
     }
@@ -34,9 +69,8 @@ export function ConnectionEdit({ connId, onClose, onSave }: Props) {
 
   const handleTest = async () => {
     setTesting(true);
-    setTestResult(null);
     try {
-      await window.pluginAPI?.call('redis-client', 'test_connection', {
+      await call('test_connection', {
         host: form.host, port: form.port, db: form.db, password: form.password,
         ssh: form.ssh ? {
           host: form.ssh.host, port: form.ssh.port, username: form.ssh.username,
@@ -47,15 +81,15 @@ export function ConnectionEdit({ connId, onClose, onSave }: Props) {
         } : null,
         cluster: form.cluster ? { seed_nodes: form.cluster.seedNodes.split(',').map((s: string) => s.trim()) } : null,
       });
-      setTestResult('连接成功');
-    } catch (e) { setTestResult(`连接失败: ${e}`); }
+      showToast('连接成功', 'success');
+    } catch (e) { showToast(`连接失败: ${e}`, 'error'); }
     setTesting(false);
   };
 
   const handleSave = async () => {
     setSaving(true);
     try {
-      await window.pluginAPI?.call('redis-client', 'save_connection', {
+      await call('save_connection', {
         id: connId || undefined,
         name: form.name, color: form.color, host: form.host, port: form.port, db: form.db,
         password: form.password,
@@ -151,7 +185,6 @@ export function ConnectionEdit({ connId, onClose, onSave }: Props) {
           )}
         </div>
         <div className="modal-footer">
-          {testResult && <span className={testResult.includes('成功') ? 'text-success' : 'text-error'}>{testResult}</span>}
           <button className="btn-secondary" onClick={handleTest} disabled={testing}>{testing ? '测试中…' : '测试连接'}</button>
           <button className="btn-secondary" onClick={onClose}>取消</button>
           <button className="btn-accent" onClick={handleSave} disabled={saving}>{saving ? '保存中…' : '保存'}</button>

@@ -10,10 +10,11 @@ interface TreeItemProps {
   onToggle: (p: string) => void;
   onSelect: (k: string) => void;
   onMultiToggle: (k: string) => void;
+  onContextMenu: (e: React.MouseEvent, node: TreeNode) => void;
 }
 
-function TreeItem({ node, depth, selectedKey, expandedPaths, multiSelect, selectedSet, onToggle, onSelect, onMultiToggle }: TreeItemProps) {
-  const path = node.fullKey || node.name;
+function TreeItem({ node, depth, selectedKey, expandedPaths, multiSelect, selectedSet, onToggle, onSelect, onMultiToggle, onContextMenu }: TreeItemProps) {
+  const path = node.fullKey || node.prefix;
   const isFolder = node.fullKey === null;
   const isExpanded = expandedPaths.has(path);
   const isChecked = selectedSet.has(node.fullKey || '');
@@ -21,7 +22,9 @@ function TreeItem({ node, depth, selectedKey, expandedPaths, multiSelect, select
   if (isFolder) {
     return (
       <div className="tree-branch">
-        <div className="tree-folder" style={{ paddingLeft: depth * 14 + 8 }} onClick={() => onToggle(path)}>
+        <div className="tree-folder" style={{ paddingLeft: depth * 14 + 8 }}
+          onClick={() => onToggle(path)}
+          onContextMenu={e => onContextMenu(e, node)}>
           <span className="tree-arrow">{isExpanded ? '▾' : '▸'}</span>
           <span className="tree-folder-name">{node.name}</span>
           <span className="tree-count">{node.children.length}</span>
@@ -30,7 +33,8 @@ function TreeItem({ node, depth, selectedKey, expandedPaths, multiSelect, select
           <TreeItem key={child.name} node={child} depth={depth + 1}
             selectedKey={selectedKey} expandedPaths={expandedPaths}
             multiSelect={multiSelect} selectedSet={selectedSet}
-            onToggle={onToggle} onSelect={onSelect} onMultiToggle={onMultiToggle} />
+            onToggle={onToggle} onSelect={onSelect} onMultiToggle={onMultiToggle}
+            onContextMenu={onContextMenu} />
         ))}
       </div>
     );
@@ -38,7 +42,8 @@ function TreeItem({ node, depth, selectedKey, expandedPaths, multiSelect, select
 
   return (
     <div className={`tree-leaf ${selectedKey === node.fullKey ? 'selected' : ''}`}
-      style={{ paddingLeft: depth * 14 + 24 }}>
+      style={{ paddingLeft: depth * 14 + 24 }}
+      onContextMenu={e => onContextMenu(e, node)}>
       {multiSelect && (
         <input type="checkbox" className="tree-checkbox"
           checked={isChecked}
@@ -67,16 +72,18 @@ interface KeyTreeProps {
   onToggle: (p: string) => void;
   onSelect: (k: string) => void;
   onMultiToggle: (k: string) => void;
+  onContextMenu: (e: React.MouseEvent, node: TreeNode) => void;
 }
 
-export function KeyTree({ tree, selectedKey, expandedPaths, multiSelect, selectedSet, onToggle, onSelect, onMultiToggle }: KeyTreeProps) {
+export function KeyTree({ tree, selectedKey, expandedPaths, multiSelect, selectedSet, onToggle, onSelect, onMultiToggle, onContextMenu }: KeyTreeProps) {
   return (
     <div className="key-list">
       {tree.map(node => (
         <TreeItem key={node.name} node={node} depth={0}
           selectedKey={selectedKey} expandedPaths={expandedPaths}
           multiSelect={multiSelect} selectedSet={selectedSet}
-          onToggle={onToggle} onSelect={onSelect} onMultiToggle={onMultiToggle} />
+          onToggle={onToggle} onSelect={onSelect} onMultiToggle={onMultiToggle}
+          onContextMenu={onContextMenu} />
       ))}
     </div>
   );

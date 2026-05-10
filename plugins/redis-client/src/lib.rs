@@ -248,11 +248,6 @@ impl Plugin for RedisClientPlugin {
                     (cfg, password)
                 };
 
-                if let Some(ssh) = &cfg.0.ssh {
-                    ssh_tunnel::SshTunnel::test_connect(ssh)
-                        .map_err(|e| format!("SSH 连接测试失败: {e}"))?;
-                }
-
                 let mut temp_tunnel: Option<ssh_tunnel::SshTunnel> = None;
                 let client = Self::connect_client(&cfg.0, cfg.1, &mut temp_tunnel)?;
                 let _: String =
@@ -297,7 +292,7 @@ impl Plugin for RedisClientPlugin {
                     _ => String::new(),
                 };
 
-                let conn_cfg = connection::ConnectionConfig {
+                let mut conn_cfg = connection::ConnectionConfig {
                     id: id.clone(),
                     name: name.to_string(),
                     color,
@@ -308,6 +303,9 @@ impl Plugin for RedisClientPlugin {
                     ssh: parse_optional_struct(&params, "ssh"),
                     cluster: parse_optional_struct(&params, "cluster"),
                 };
+                if let Some(ref mut ssh) = conn_cfg.ssh {
+                    ssh.normalize();
+                }
 
                 if let Some(existing) = self.saved_connections.iter_mut().find(|c| c.id == id) {
                     *existing = conn_cfg;
@@ -324,6 +322,29 @@ impl Plugin for RedisClientPlugin {
                     .saved_connections
                     .iter()
                     .map(|c| {
+                        let ssh_info = c.ssh.as_ref().map(|s| {
+                            let auth_type = match &s.auth {
+                                connection::SshAuth::Password { .. } => "password",
+                                connection::SshAuth::KeyPath { .. } => "key",
+                            };
+                            let has_auth = match &s.auth {
+                                connection::SshAuth::Password { password_obfuscated } => !password_obfuscated.is_empty(),
+                                connection::SshAuth::KeyPath { key_path, .. } => !key_path.is_empty(),
+                            };
+                            serde_json::json!({
+                                "host": s.host,
+                                "port": s.port,
+                                "username": s.username,
+                                "auth_type": auth_type,
+                                "has_auth": has_auth,
+                                "timeout_secs": s.timeout_secs,
+                            })
+                        });
+                        let cluster_info = c.cluster.as_ref().map(|cl| {
+                            serde_json::json!({
+                                "seed_nodes": cl.seed_nodes.join(", "),
+                            })
+                        });
                         serde_json::json!({
                             "id": c.id,
                             "name": c.name,
@@ -334,6 +355,8 @@ impl Plugin for RedisClientPlugin {
                             "has_password": !c.password_obfuscated.is_empty(),
                             "has_ssh": c.ssh.is_some(),
                             "has_cluster": c.cluster.is_some(),
+                            "ssh": ssh_info,
+                            "cluster": cluster_info,
                         })
                     })
                     .collect();
@@ -361,7 +384,31 @@ impl Plugin for RedisClientPlugin {
                 } else {
                     hex::deobfuscate(&conn.password_obfuscated).unwrap_or_default()
                 };
-                Ok(serde_json::json!({ "password": pass }))
+                let ssh_password = conn.ssh.as_ref().and_then(|s| {
+                    match &s.auth {
+                        connection::SshAuth::Password { password_obfuscated } => {
+                            if password_obfuscated.is_empty() {
+                                None
+                            } else {
+                                hex::deobfuscate(password_obfuscated)
+                            }
+                        }
+                        _ => None,
+                    }
+                }).unwrap_or_default();
+                let ssh_key_passphrase = conn.ssh.as_ref().and_then(|s| {
+                    match &s.auth {
+                        connection::SshAuth::KeyPath { passphrase_obfuscated, .. } => {
+                            passphrase_obfuscated.as_ref().and_then(|p| hex::deobfuscate(p))
+                        }
+                        _ => None,
+                    }
+                });
+                Ok(serde_json::json!({
+                    "password": pass,
+                    "ssh_password": ssh_password,
+                    "ssh_key_passphrase": ssh_key_passphrase,
+                }))
             }
 
             // ── Key 操作 ──
@@ -370,24 +417,34 @@ impl Plugin for RedisClientPlugin {
                 let cursor: u64 = params.get("cursor").and_then(|v| v.as_u64()).unwrap_or(0);
                 let pattern = params.get("pattern").and_then(|v| v.as_str()).unwrap_or("*");
                 let count: usize = params.get("count").and_then(|v| v.as_u64()).unwrap_or(50) as usize;
+                let max_keys = count.min(2000);
 
-                let (next_cursor, raw_keys): (u64, Vec<Vec<u8>>) = redis::cmd("SCAN")
-                    .arg(cursor)
-                    .arg("MATCH")
-                    .arg(pattern)
-                    .arg("COUNT")
-                    .arg(count)
-                    .query(&mut conn)?;
+                let mut all_keys: Vec<Vec<u8>> = Vec::new();
+                let mut current_cursor = cursor;
+                let scan_batch = 1000u64;
 
-                let keys: Vec<String> = raw_keys
-                    .iter()
-                    .map(|b| String::from_utf8_lossy(b).to_string())
-                    .take(20) // 硬限制防止阻塞命令线程过久
-                    .collect();
+                loop {
+                    let (next_cursor, batch): (u64, Vec<Vec<u8>>) = redis::cmd("SCAN")
+                        .arg(current_cursor)
+                        .arg("MATCH")
+                        .arg(pattern)
+                        .arg("COUNT")
+                        .arg(scan_batch)
+                        .query(&mut conn)?;
 
-                let key_infos: Vec<Value> = operations::scan_key_infos(&keys, &mut conn)?;
+                    all_keys.extend(batch);
+                    current_cursor = next_cursor;
 
-                Ok(serde_json::json!({ "cursor": next_cursor, "keys": key_infos }))
+                    // Stop if we have enough keys or cursor wrapped back to 0
+                    if all_keys.len() >= max_keys || current_cursor == 0 {
+                        break;
+                    }
+                }
+
+                all_keys.truncate(max_keys);
+                let key_infos: Vec<Value> = operations::scan_key_infos(&all_keys, &mut conn)?;
+
+                Ok(serde_json::json!({ "cursor": current_cursor, "keys": key_infos }))
             }
 
             "get_key_info" => {
@@ -411,7 +468,7 @@ impl Plugin for RedisClientPlugin {
             "delete_key" => {
                 let key = require_str(&params, "key")?;
                 let mut conn = self.get_conn()?;
-                let deleted: i32 = conn.del(key)?;
+                let deleted: i32 = redis::cmd("UNLINK").arg(key).query(&mut conn)?;
                 Ok(serde_json::json!({ "deleted": deleted }))
             }
 
@@ -421,7 +478,7 @@ impl Plugin for RedisClientPlugin {
                     .and_then(|v| v.as_array())
                     .ok_or("缺少 keys")?;
                 let mut conn = self.get_conn()?;
-                let mut cmd = redis::cmd("DEL");
+                let mut cmd = redis::cmd("UNLINK");
                 for k in keys.iter().filter_map(|v| v.as_str()) {
                     cmd.arg(k);
                 }

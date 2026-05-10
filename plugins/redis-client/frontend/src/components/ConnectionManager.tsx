@@ -1,8 +1,7 @@
 import { useState } from 'react';
-import { SavedConnection } from '../types';
+import { SavedConnection, COLORS } from '../types';
 import { ConnectionEdit } from './modals/ConnectionEdit';
 import { DeleteConfirm } from './modals/DeleteConfirm';
-import { COLORS } from '../api';
 
 interface Props {
   savedConns: SavedConnection[];

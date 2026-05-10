@@ -1,6 +1,5 @@
 pub mod html;
 pub mod markdown;
-pub mod word;
 
 use crate::models::ApiInfo;
 use anyhow::Result;

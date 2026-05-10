@@ -89,9 +89,6 @@ impl ApiDocPlugin {
 
         for format in &config.formats {
             let files = match format {
-                models::ExportFormat::Word => {
-                    exporter::word::WordExporter.export(&apis, &config.output_dir, service_name)?
-                }
                 models::ExportFormat::Markdown => exporter::markdown::MarkdownExporter.export(
                     &apis,
                     &config.output_dir,

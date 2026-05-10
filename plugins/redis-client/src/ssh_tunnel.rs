@@ -1,7 +1,7 @@
 use crate::connection::{SshAuth, SshConfig};
 use ssh2::Session;
 use std::io::{Read, Write};
-use std::net::{TcpListener, TcpStream};
+use std::net::{TcpListener, TcpStream, ToSocketAddrs};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread::{self, JoinHandle};
@@ -9,7 +9,7 @@ use std::time::Duration;
 
 pub struct SshTunnel {
     handle: Option<JoinHandle<()>>,
-    session: Option<Arc<Mutex<Session>>>,
+    _session: Option<Arc<Mutex<Session>>>,
     local_port: u16,
     stop_flag: Arc<AtomicBool>,
 }
@@ -22,57 +22,150 @@ impl SshTunnel {
 
 impl Drop for SshTunnel {
     fn drop(&mut self) {
-        // Signal stop and unblock the listener
         self.stop_flag.store(true, Ordering::Relaxed);
-        // Connect to our own port to unblock listener.incoming()
+        if let Some(session) = self._session.take() {
+            if let Ok(s) = session.lock() {
+                s.set_timeout(1);
+                let _ = s.disconnect(None, "closing", None);
+            }
+        }
         if let Ok(stream) = TcpStream::connect(format!("127.0.0.1:{}", self.local_port)) {
             drop(stream);
         }
-        // Join the forwarding thread
         if let Some(h) = self.handle.take() {
             h.join().ok();
         }
-        // Drop session after thread exits
-        self.session.take();
     }
 }
 
 fn create_authenticated_session(config: &SshConfig) -> Result<Session, String> {
+    if config.host.trim().is_empty() {
+        return Err("SSH 主机地址不能为空".to_string());
+    }
     let addr = format!("{}:{}", config.host, config.port);
-    let tcp = TcpStream::connect(&addr)
-        .map_err(|e| format!("SSH TCP connect failed: {e}"))?;
-    tcp.set_read_timeout(Some(Duration::from_secs(config.timeout_secs as u64)))
-        .ok();
+    let timeout = Duration::from_secs(config.timeout_secs as u64);
+    let sock_addrs: Vec<_> = addr
+        .to_socket_addrs()
+        .map_err(|e| format!("SSH 地址解析失败: {e}"))?
+        .collect();
+    if sock_addrs.is_empty() {
+        return Err("SSH 地址解析失败: 无可用地址".to_string());
+    }
+    let mut last_err = String::new();
+    for sock_addr in &sock_addrs {
+        let tcp = match TcpStream::connect_timeout(sock_addr, timeout) {
+            Ok(tcp) => tcp,
+            Err(e) => {
+                last_err = format!("SSH TCP connect to {sock_addr} failed: {e}");
+                continue;
+            }
+        };
+        tcp.set_read_timeout(Some(timeout)).ok();
+        tcp.set_write_timeout(Some(timeout)).ok();
 
-    let mut session = Session::new()
-        .map_err(|e| format!("SSH session creation failed: {e}"))?;
-    session.set_tcp_stream(tcp);
-    session.handshake()
-        .map_err(|e| format!("SSH handshake failed: {e}"))?;
-
-    match &config.auth {
-        SshAuth::Password { password_obfuscated } => {
-            let pass = crate::hex::deobfuscate(password_obfuscated)
-                .ok_or_else(|| "Stored password data is corrupted".to_string())?;
-            session.userauth_password(&config.username, &pass)
-                .map_err(|e| format!("SSH password auth failed: {e}"))?;
+        let mut session = match Session::new() {
+            Ok(s) => s,
+            Err(e) => {
+                last_err = format!("SSH session creation failed: {e}");
+                continue;
+            }
+        };
+        session.set_tcp_stream(tcp);
+        session.set_timeout(timeout.as_millis() as u32);
+        if let Err(e) = session.handshake() {
+            last_err = format!("SSH handshake failed: {e}");
+            continue;
         }
-        SshAuth::KeyPath { key_path, passphrase_obfuscated } => {
-            let passphrase = passphrase_obfuscated.as_ref()
-                .and_then(|p| crate::hex::deobfuscate(p));
-            session.userauth_pubkey_file(
-                &config.username,
-                None,
-                std::path::Path::new(key_path),
-                passphrase.as_deref(),
-            ).map_err(|e| format!("SSH key auth failed: {e}"))?;
+        match &config.auth {
+            SshAuth::Password { password_obfuscated } => {
+                let pass = crate::hex::deobfuscate(password_obfuscated)
+                    .unwrap_or_else(|| password_obfuscated.clone());
+                if let Err(e) = session.userauth_password(&config.username, &pass) {
+                    last_err = format!("SSH password auth failed: {e}");
+                    continue;
+                }
+            }
+            SshAuth::KeyPath { key_path, passphrase_obfuscated } => {
+                let passphrase = passphrase_obfuscated.as_ref()
+                    .and_then(|p| crate::hex::deobfuscate(p).or_else(|| Some(p.clone())));
+                if let Err(e) = session.userauth_pubkey_file(
+                    &config.username,
+                    None,
+                    std::path::Path::new(key_path),
+                    passphrase.as_deref(),
+                ) {
+                    last_err = format!("SSH key auth failed: {e}");
+                    continue;
+                }
+            }
+        }
+        if session.authenticated() {
+            session.set_timeout(0);
+            return Ok(session);
+        }
+        last_err = "SSH authentication failed".to_string();
+    }
+    Err(last_err)
+}
+
+/// Single-threaded forwarding loop using non-blocking I/O to avoid
+/// the deadlock that occurs when two threads compete for a Mutex on
+/// the SSH channel's read/write operations.
+fn forward_loop(
+    session: &Session,
+    mut tcp: TcpStream,
+    channel: &mut ssh2::Channel,
+    stop: &AtomicBool,
+) {
+    session.set_blocking(false);
+    tcp.set_nonblocking(true).ok();
+
+    let mut tcp_buf = [0u8; 8192];
+    let mut ch_buf = [0u8; 8192];
+
+    loop {
+        if stop.load(Ordering::Relaxed) {
+            break;
+        }
+
+        let mut activity = false;
+
+        // remote -> local
+        match channel.read(&mut ch_buf) {
+            Ok(0) => break,
+            Ok(n) => {
+                tcp.set_nonblocking(false).ok();
+                if tcp.write_all(&ch_buf[..n]).is_err() {
+                    break;
+                }
+                tcp.set_nonblocking(true).ok();
+                activity = true;
+            }
+            Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => {}
+            Err(_) => break,
+        }
+
+        // local -> remote
+        match tcp.read(&mut tcp_buf) {
+            Ok(0) => break,
+            Ok(n) => {
+                if channel.write_all(&tcp_buf[..n]).is_err() {
+                    break;
+                }
+                channel.flush().ok();
+                activity = true;
+            }
+            Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => {}
+            Err(_) => break,
+        }
+
+        if !activity {
+            std::thread::sleep(Duration::from_millis(10));
         }
     }
 
-    if !session.authenticated() {
-        return Err("SSH authentication failed".into());
-    }
-    Ok(session)
+    session.set_blocking(true);
+    tcp.set_nonblocking(false).ok();
 }
 
 impl SshTunnel {
@@ -90,6 +183,8 @@ impl SshTunnel {
             .map_err(|e| format!("Get local port failed: {e}"))?
             .port();
 
+        listener.set_nonblocking(true).ok();
+
         let stop_flag = Arc::new(AtomicBool::new(false));
         let stop_for_thread = Arc::clone(&stop_flag);
         let session_for_thread = Arc::clone(&session);
@@ -98,20 +193,24 @@ impl SshTunnel {
         let handle = thread::Builder::new()
             .name("redis-ssh-fwd".into())
             .spawn(move || {
-                for stream in listener.incoming() {
+                loop {
                     if stop_for_thread.load(Ordering::Relaxed) {
                         break;
                     }
 
-                    let stream = match stream {
-                        Ok(s) => s,
+                    let stream = match listener.accept() {
+                        Ok((s, _)) => s,
+                        Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock => {
+                            std::thread::sleep(Duration::from_millis(50));
+                            continue;
+                        }
                         Err(_) => break,
                     };
 
-                    let channel = match session_for_thread
-                        .lock().unwrap()
-                        .channel_direct_tcpip(&rh, remote_port, None)
-                    {
+                    // Hold the session lock to open channel AND run forwarding.
+                    // This is safe because forwarding is single-threaded and non-blocking.
+                    let sess = session_for_thread.lock().unwrap();
+                    let mut channel = match sess.channel_direct_tcpip(&rh, remote_port, None) {
                         Ok(ch) => ch,
                         Err(e) => {
                             tracing::warn!(?e, "ssh channel_direct_tcpip failed");
@@ -119,96 +218,17 @@ impl SshTunnel {
                         }
                     };
 
-                    let ch = Arc::new(Mutex::new(channel));
-                    let mut reader = match stream.try_clone() {
-                        Ok(r) => r,
-                        Err(e) => {
-                            tracing::warn!(?e, "stream try_clone failed");
-                            continue;
-                        }
-                    };
-                    let mut writer = stream;
-
-                    let ch_reader = Arc::clone(&ch);
-
-                    // local -> remote
-                    let t1 = match thread::Builder::new()
-                        .name("ssh-fwd-local-to-remote".into())
-                        .spawn(move || {
-                            let mut buf = [0u8; 8192];
-                            loop {
-                                let n = match reader.read(&mut buf) {
-                                    Ok(0) => break,
-                                    Ok(n) => n,
-                                    Err(e) => {
-                                        tracing::warn!(?e, "read from local stream failed");
-                                        break;
-                                    }
-                                };
-                                let mut ch = match ch_reader.lock() {
-                                    Ok(c) => c,
-                                    Err(_) => break,
-                                };
-                                if ch.write_all(&buf[..n]).is_err() {
-                                    break;
-                                }
-                            }
-                        }) {
-                            Ok(h) => h,
-                            Err(e) => {
-                                tracing::warn!(?e, "failed to spawn local->remote thread");
-                                continue;
-                            }
-                        };
-
-                    // remote -> local
-                    let t2 = match thread::Builder::new()
-                        .name("ssh-fwd-remote-to-local".into())
-                        .spawn(move || {
-                            let mut buf = [0u8; 8192];
-                            loop {
-                                let n = {
-                                    let mut ch = match ch.lock() {
-                                        Ok(c) => c,
-                                        Err(_) => break,
-                                    };
-                                    match ch.read(&mut buf) {
-                                        Ok(0) => break,
-                                        Ok(n) => n,
-                                        Err(e) => {
-                                            tracing::warn!(?e, "read from ssh channel failed");
-                                            break;
-                                        }
-                                    }
-                                };
-                                if writer.write_all(&buf[..n]).is_err() {
-                                    break;
-                                }
-                            }
-                        }) {
-                            Ok(h) => h,
-                            Err(e) => {
-                                tracing::warn!(?e, "failed to spawn remote->local thread");
-                                continue;
-                            }
-                        };
-
-                    t1.join().ok();
-                    t2.join().ok();
+                    forward_loop(&sess, stream, &mut channel, &stop_for_thread);
+                    drop(channel);
                 }
             })
             .map_err(|e| format!("Failed to spawn forwarding thread: {e}"))?;
 
         Ok(SshTunnel {
             handle: Some(handle),
-            session: Some(session),
+            _session: Some(session),
             local_port,
             stop_flag,
         })
-    }
-
-    pub fn test_connect(config: &SshConfig) -> Result<(), String> {
-        let _session = create_authenticated_session(config)?;
-        Ok(())
     }
 }

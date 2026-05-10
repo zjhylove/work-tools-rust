@@ -60,6 +60,23 @@ pub enum ConnectionMode {
     },
 }
 
+impl SshConfig {
+    /// Obfuscate plaintext passwords so stored config can be deobfuscated on use.
+    pub fn normalize(&mut self) {
+        match &mut self.auth {
+            SshAuth::Password { password_obfuscated } => {
+                let p = std::mem::take(password_obfuscated);
+                *password_obfuscated = crate::hex::obfuscate(&p);
+            }
+            SshAuth::KeyPath { passphrase_obfuscated, .. } => {
+                if let Some(p) = passphrase_obfuscated.take() {
+                    *passphrase_obfuscated = Some(crate::hex::obfuscate(&p));
+                }
+            }
+        }
+    }
+}
+
 impl ConnectionConfig {
     /// Build a ConnectionMode for establishing Redis connection
     pub fn to_connection_mode(&self, password: Option<String>) -> ConnectionMode {

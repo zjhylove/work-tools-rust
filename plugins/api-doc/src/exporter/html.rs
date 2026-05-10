@@ -4,8 +4,8 @@ use std::path::Path;
 
 use worktools_plugin_api::escape_xml;
 
-use crate::exporter::DocumentExporter;
 use crate::exporter::sanitize_filename;
+use crate::exporter::DocumentExporter;
 use crate::models::ApiInfo;
 
 pub struct HtmlExporter;
@@ -79,6 +79,35 @@ impl DocumentExporter for HtmlExporter {
                 }
                 html.push_str("</table>\n");
 
+                // 请求嵌套节点
+                for node in &api.req_nodes {
+                    let title = if node.node_desc.is_empty() {
+                        escape_xml(&node.node_name)
+                    } else {
+                        format!(
+                            "{} ({})",
+                            escape_xml(&node.node_name),
+                            escape_xml(&node.node_desc)
+                        )
+                    };
+                    html.push_str(&format!("<h4>{}</h4>\n", title));
+                    if !node.resp_fields.is_empty() {
+                        html.push_str(
+                            "<table><tr><th>字段名</th><th>类型</th><th>必填</th><th>注释</th></tr>\n",
+                        );
+                        for field in &node.resp_fields {
+                            html.push_str(&format!(
+                                "<tr><td>{}</td><td>{}</td><td>{}</td><td>{}</td></tr>\n",
+                                escape_xml(&field.field_name),
+                                escape_xml(&field.field_type),
+                                field.required,
+                                escape_xml(&field.comment)
+                            ));
+                        }
+                        html.push_str("</table>\n");
+                    }
+                }
+
                 if !api.req_example.is_empty() {
                     html.push_str("<h3>请求示例</h3>\n<pre><code class=\"json\">");
                     html.push_str(&escape_xml(&api.req_example));
@@ -92,7 +121,11 @@ impl DocumentExporter for HtmlExporter {
                     let title = if node.node_desc.is_empty() {
                         escape_xml(&node.node_name)
                     } else {
-                        format!("{} ({})", escape_xml(&node.node_name), escape_xml(&node.node_desc))
+                        format!(
+                            "{} ({})",
+                            escape_xml(&node.node_name),
+                            escape_xml(&node.node_desc)
+                        )
                     };
                     html.push_str(&format!("<h4>{}</h4>\n", title));
                     if !node.resp_fields.is_empty() {

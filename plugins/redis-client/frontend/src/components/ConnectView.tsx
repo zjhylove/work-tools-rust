@@ -1,6 +1,7 @@
 import { useState } from 'react';
-import { SavedConnection } from '../types';
-import { COLORS, call } from '../api';
+import { SavedConnection, COLORS } from '../types';
+import { call } from '../api';
+import { useToast } from './Toast';
 
 interface Props {
   savedConns: SavedConnection[];
@@ -11,17 +12,16 @@ interface Props {
 
 export function ConnectView({ savedConns, onConnect, onQuickConnect, onManage }: Props) {
   const [mode, setMode] = useState<'saved' | 'quick'>('saved');
-  const [passwordMap, setPasswordMap] = useState<Record<string, string>>({});
   const [quick, setQuick] = useState({ host: '127.0.0.1', port: 6379, db: 0, password: '' });
   const [connecting, setConnecting] = useState(false);
+  const { showToast } = useToast();
 
   const handleQuickConnect = async () => {
     setConnecting(true);
     try {
-      await call('connect', { host: quick.host, port: quick.port, db: quick.db, password: quick.password });
       onQuickConnect(quick.host, quick.port, quick.db, quick.password);
     } catch (e) {
-      alert(`连接失败: ${e}`);
+      showToast(`连接失败: ${e}`);
     }
     setConnecting(false);
   };
@@ -70,7 +70,7 @@ export function ConnectView({ savedConns, onConnect, onQuickConnect, onManage }:
             <div className="list-status">暂无已保存的连接</div>
           ) : savedConns.map((c, i) => (
             <div key={c.id} className="saved-conn-item">
-              <div className="saved-conn-main" onClick={() => onConnect(c.id, passwordMap[c.id])}>
+              <div className="saved-conn-main" onClick={() => onConnect(c.id)}>
                 <div className="conn-left">
                   <span className="conn-color-dot" style={{ background: c.color || COLORS[i % COLORS.length] }} />
                   <div>
@@ -83,11 +83,6 @@ export function ConnectView({ savedConns, onConnect, onQuickConnect, onManage }:
                   {c.has_cluster && <span className="conn-badge">Cluster</span>}
                 </div>
               </div>
-              {c.has_password && (
-                <input type="password" placeholder="密码" className="conn-password"
-                  onChange={e => setPasswordMap(p => ({ ...p, [c.id]: e.target.value }))}
-                  onClick={e => e.stopPropagation()} />
-              )}
             </div>
           ))}
         </div>

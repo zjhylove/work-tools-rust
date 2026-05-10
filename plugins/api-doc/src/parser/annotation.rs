@@ -5,8 +5,8 @@ use cafebabe::attributes::{AnnotationElementValue, AttributeData};
 use cafebabe::descriptors::{FieldDescriptor, FieldType};
 use cafebabe::ClassFile;
 
-use crate::models::MethodInfo;
 use super::type_resolver;
+use crate::models::MethodInfo;
 
 /// Spring 注解的类名 (JVM 内部格式)
 const CONTROLLER_CLASS: &str = "org/springframework/stereotype/Controller";

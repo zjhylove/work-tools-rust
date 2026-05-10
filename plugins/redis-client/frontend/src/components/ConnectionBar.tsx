@@ -13,7 +13,12 @@ export function ConnectionBar({ savedConns, currentId, onConnect, onDisconnect, 
     <div className="connection-bar">
       <div className="connection-selector">
         <span className="status-dot" />
-        <select value={currentId || ''} onChange={e => { if (e.target.value) onConnect(e.target.value); }}>
+        <select value={currentId || ''} onChange={async e => {
+          if (e.target.value) {
+            onDisconnect();
+            onConnect(e.target.value);
+          }
+        }}>
           <option value="" disabled>选择连接...</option>
           {savedConns.map(c => (
             <option key={c.id} value={c.id}>{c.name} ({c.host}:{c.port})</option>
