@@ -6,8 +6,17 @@ declare global {
     pluginAPI?: {
       call: (pluginId: string, method: string, params?: Record<string, unknown>) => Promise<unknown>;
     };
+    WorkTools: {
+      toast: {
+        success: (message: string) => void;
+        error: (message: string) => void;
+        info: (message: string) => void;
+        warning: (message: string) => void;
+      };
+    };
   }
 }
+const WorkTools = window.WorkTools;
 
 const TIMEZONES = [
   { label: 'UTC+8 上海', value: 'Asia/Shanghai' },
@@ -28,7 +37,6 @@ function App() {
   const [batchInput, setBatchInput] = useState('');
   const [batchResults, setBatchResults] = useState<Array<Record<string, string>>>([]);
   const [activeTab, setActiveTab] = useState<'ts2dt' | 'dt2ts' | 'batch'>('ts2dt');
-  const [error, setError] = useState('');
   const [pulse, setPulse] = useState(false);
   const mountedRef = useRef(true);
 
@@ -36,8 +44,6 @@ function App() {
     mountedRef.current = true;
     return () => { mountedRef.current = false; };
   }, []);
-
-  const clearError = () => setError('');
 
   useEffect(() => {
     const tick = async () => {
@@ -56,29 +62,26 @@ function App() {
   }, [timezone]);
 
   const handleTsToDt = useCallback(async () => {
-    clearError();
     try {
       const result = await window.pluginAPI?.call('timestamp-converter', 'timestamp_to_datetime', { ts: tsInput, timezone });
       setTsResult((result as Record<string, string>) || null);
     } catch (e) {
-      setError(String(e));
+      WorkTools.toast.error(String(e));
       setTsResult(null);
     }
   }, [tsInput, timezone]);
 
   const handleDtToTs = useCallback(async () => {
-    clearError();
     try {
       const result = await window.pluginAPI?.call('timestamp-converter', 'datetime_to_timestamp', { datetime: dtInput, timezone });
       setDtResult((result as Record<string, number>) || null);
     } catch (e) {
-      setError(String(e));
+      WorkTools.toast.error(String(e));
       setDtResult(null);
     }
   }, [dtInput, timezone]);
 
   const handleBatchConvert = useCallback(async () => {
-    clearError();
     const lines = batchInput.split('\n').filter(l => l.trim());
     const items = lines.map(line => {
       const isNumeric = /^\d+$/.test(line.trim());
@@ -90,7 +93,7 @@ function App() {
         setBatchResults((result as { results: Array<Record<string, string>> }).results);
       }
     } catch (e) {
-      setError(String(e));
+      WorkTools.toast.error(String(e));
       setBatchResults([]);
     }
   }, [batchInput, timezone]);
@@ -247,7 +250,6 @@ function App() {
         )}
       </div>
 
-      {error && <div className="error-toast" onClick={() => setError('')}>{error}</div>}
     </div>
   );
 }
