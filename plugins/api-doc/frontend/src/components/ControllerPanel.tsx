@@ -7,6 +7,7 @@ interface Props {
   expandedClasses: Set<string>
   searchFilter: string
   loading: boolean
+  onBack: () => void
   onToggleMethod: (key: string) => void
   onToggleClass: (className: string) => void
   onToggleExpand: (cn: string) => void
@@ -18,7 +19,7 @@ interface Props {
 
 export default function ControllerPanel({
   controllers, selectedMethods, expandedClasses, searchFilter, loading,
-  onToggleMethod, onToggleClass, onToggleExpand, onSelectAll, onDeselectAll,
+  onBack, onToggleMethod, onToggleClass, onToggleExpand, onSelectAll, onDeselectAll,
   onSearchChange, onParse,
 }: Props) {
   const filteredControllers = controllers.filter(c => {
@@ -34,6 +35,12 @@ export default function ControllerPanel({
   return (
     <div className="panel panel--left">
       <div className="panel-toolbar">
+        <button onClick={onBack} className="btn btn--ghost btn--xs" title="返回配置">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <line x1="19" y1="12" x2="5" y2="12" />
+            <polyline points="12 19 5 12 12 5" />
+          </svg>
+        </button>
         <div className="search-box">
           <svg className="search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <circle cx="11" cy="11" r="8" />

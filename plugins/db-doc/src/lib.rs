@@ -182,11 +182,11 @@ impl DbDocPlugin {
         // 选择导出器并导出
         let exported_files: Vec<String> = match config.format {
             ExportFormat::Markdown => {
-                let exporter = exporter::MarkdownExporter::new(config.template);
+                let exporter = exporter::MarkdownExporter::new();
                 exporter::DocumentExporter::export(&exporter, &tables_info, &config)?
             }
-            ExportFormat::Word => {
-                let exporter = exporter::WordExporter::new(config.template);
+            ExportFormat::Html => {
+                let exporter = exporter::HtmlExporter;
                 exporter::DocumentExporter::export(&exporter, &tables_info, &config)?
             }
         };
@@ -197,7 +197,6 @@ impl DbDocPlugin {
             connection_name: conn_config.name,
             tables: config.tables.clone(),
             format: config.format,
-            template: config.template,
             output_path: exported_files.first().cloned().unwrap_or_default(),
             exported_at: chrono::Utc::now().to_rfc3339(),
         };

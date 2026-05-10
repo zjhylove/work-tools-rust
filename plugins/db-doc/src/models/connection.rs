@@ -124,8 +124,8 @@ impl ConnectionConfig {
 /// 导出格式
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ExportFormat {
-    Word,
     Markdown,
+    Html,
 }
 
 impl Serialize for ExportFormat {
@@ -134,8 +134,8 @@ impl Serialize for ExportFormat {
         S: serde::Serializer,
     {
         serializer.serialize_str(match self {
-            ExportFormat::Word => "word",
             ExportFormat::Markdown => "markdown",
+            ExportFormat::Html => "html",
         })
     }
 }
@@ -147,9 +147,8 @@ impl<'de> Deserialize<'de> for ExportFormat {
     {
         let s = String::deserialize(deserializer)?;
         match s.as_str() {
-            "word" => Ok(ExportFormat::Word),
             "markdown" => Ok(ExportFormat::Markdown),
-            // 未知格式（如已移除的 pdf）降级为 Markdown
+            "html" => Ok(ExportFormat::Html),
             _ => Ok(ExportFormat::Markdown),
         }
     }
@@ -158,23 +157,9 @@ impl<'de> Deserialize<'de> for ExportFormat {
 impl ExportFormat {
     pub fn extension(&self) -> &'static str {
         match self {
-            ExportFormat::Word => "docx",
             ExportFormat::Markdown => "md",
+            ExportFormat::Html => "html",
         }
-    }
-}
-
-/// 模板风格
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "lowercase")]
-pub enum TemplateStyle {
-    Simple,   // 简洁版
-    Detailed, // 详细版
-}
-
-impl Default for TemplateStyle {
-    fn default() -> Self {
-        Self::Detailed
     }
 }
 
@@ -183,14 +168,15 @@ impl Default for TemplateStyle {
 pub struct ExportConfig {
     /// 连接配置 ID
     pub connection_id: String,
+    /// 连接配置名称（导出时传入，用于文件名）
+    #[serde(default)]
+    pub connection_name: String,
     /// 选中的表
     pub tables: Vec<String>,
     /// 输出目录
     pub output_dir: String,
     /// 导出格式
     pub format: ExportFormat,
-    /// 模板风格
-    pub template: TemplateStyle,
 }
 
 /// 导出历史记录
@@ -204,8 +190,6 @@ pub struct ExportHistory {
     pub tables: Vec<String>,
     /// 导出格式
     pub format: ExportFormat,
-    /// 模板风格
-    pub template: TemplateStyle,
     /// 输出路径
     pub output_path: String,
     /// 导出时间 (ISO 8601)

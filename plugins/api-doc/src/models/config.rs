@@ -9,12 +9,6 @@ pub struct ApiDocConfig {
     /// 服务名称
     #[serde(default)]
     pub service_name: String,
-    /// 依赖 JAR 前缀列表
-    #[serde(default)]
-    pub dependency_jars: Vec<String>,
-    /// 是否自动扫描依赖
-    #[serde(default)]
-    pub auto_scan_dependencies: bool,
 }
 
 /// 导出格式
@@ -84,21 +78,4 @@ pub struct SelectedApi {
     pub class_name: String,
     /// 方法名
     pub method_name: String,
-}
-
-/// 导出历史记录
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ExportHistory {
-    /// 记录 ID
-    pub id: String,
-    /// 服务名称
-    pub service_name: String,
-    /// API 数量
-    pub api_count: usize,
-    /// 导出格式
-    pub formats: Vec<ExportFormat>,
-    /// 输出路径
-    pub output_path: String,
-    /// 导出时间 (ISO 8601)
-    pub exported_at: String,
 }

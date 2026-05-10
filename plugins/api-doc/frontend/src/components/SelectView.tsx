@@ -36,15 +36,6 @@ export default function SelectView({
 }: Props) {
   return (
     <div className="view-container view-container--split">
-      <div className="split-back">
-        <button onClick={onBack} className="btn btn--ghost">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <line x1="19" y1="12" x2="5" y2="12" />
-            <polyline points="12 19 5 12 12 5" />
-          </svg>
-          返回配置
-        </button>
-      </div>
       <div className="split-layout">
         <ControllerPanel
           controllers={controllers}
@@ -52,6 +43,7 @@ export default function SelectView({
           expandedClasses={expandedClasses}
           searchFilter={searchFilter}
           loading={loading}
+          onBack={onBack}
           onToggleMethod={onToggleMethod}
           onToggleClass={onToggleClass}
           onToggleExpand={onToggleExpand}

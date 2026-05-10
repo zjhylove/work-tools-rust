@@ -20,12 +20,6 @@ anyhow = "1.0"
 # 数据库驱动 (编译时检查)
 sqlx = { version = "0.8", features = ["mysql", "postgres", "runtime-tokio-rustls", "chrono"] }
 
-# 模板引擎
-handlebars = "5.1"
-
-# DOCX 生成
-zip = "0.6"
-
 # 加密 (复用密码管理器方案)
 aes = "0.8"
 sha2 = "0.10"

@@ -1,8 +1,6 @@
 export interface ApiDocConfig {
   source_jar_path: string
   service_name: string
-  dependency_jars: string[]
-  auto_scan_dependencies: boolean
 }
 
 export interface MethodInfo {
@@ -46,15 +44,6 @@ export interface ApiInfo {
   req_example: string
   resp_nodes: NodeInfo[]
   resp_example: string
-}
-
-export interface ExportHistory {
-  id: string
-  service_name: string
-  api_count: number
-  formats: string[]
-  output_path: string
-  exported_at: string
 }
 
 export type ViewMode = 'config' | 'select' | 'preview'

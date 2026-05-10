@@ -1,15 +1,13 @@
-use crate::models::{ExportConfig, TableInfo, TemplateStyle};
+use crate::models::{ExportConfig, TableInfo};
 use anyhow::Result;
 use std::path::Path;
 
 /// Markdown 文档导出器
-pub struct MarkdownExporter {
-    template_style: TemplateStyle,
-}
+pub struct MarkdownExporter;
 
 impl MarkdownExporter {
-    pub fn new(template_style: TemplateStyle) -> Self {
-        Self { template_style }
+    pub fn new() -> Self {
+        Self
     }
 
     /// 导出单张表到 Markdown 文件
@@ -48,50 +46,12 @@ impl MarkdownExporter {
         Ok(())
     }
 
-    /// 渲染单张表
+    /// 渲染单张表（详细版）
     fn render_table(&self, table: &TableInfo) -> String {
-        match self.template_style {
-            TemplateStyle::Simple => self.render_simple(table),
-            TemplateStyle::Detailed => self.render_detailed(table),
-        }
-    }
-
-    /// 简洁模板
-    fn render_simple(&self, table: &TableInfo) -> String {
         let mut md = String::new();
 
         md.push_str(&format!("## {}\n\n", table.name));
 
-        if let Some(ref comment) = table.comment {
-            if !comment.is_empty() {
-                md.push_str(&format!("> {}\n\n", comment));
-            }
-        }
-
-        // 表格头
-        md.push_str("| 字段 | 类型 | 说明 |\n");
-        md.push_str("|------|------|------|\n");
-
-        for col in &table.columns {
-            let comment = col.comment.as_deref().unwrap_or("-");
-            md.push_str(&format!(
-                "| {} | {} | {} |\n",
-                col.name,
-                col.formatted_data_type(),
-                comment
-            ));
-        }
-
-        md
-    }
-
-    /// 详细模板
-    fn render_detailed(&self, table: &TableInfo) -> String {
-        let mut md = String::new();
-
-        md.push_str(&format!("## {}\n\n", table.name));
-
-        // 表信息
         if let Some(ref comment) = table.comment {
             if !comment.is_empty() {
                 md.push_str(&format!("**表注释**: {}\n\n", comment));
@@ -200,8 +160,8 @@ mod tests {
     }
 
     #[test]
-    fn test_render_simple() {
-        let exporter = MarkdownExporter::new(TemplateStyle::Simple);
+    fn test_render_table() {
+        let exporter = MarkdownExporter::new();
         let table = create_test_table();
         let md = exporter.render_table(&table);
 
@@ -209,14 +169,6 @@ mod tests {
         assert!(md.contains("用户表"));
         assert!(md.contains("| id |"));
         assert!(md.contains("| username |"));
-    }
-
-    #[test]
-    fn test_render_detailed() {
-        let exporter = MarkdownExporter::new(TemplateStyle::Detailed);
-        let table = create_test_table();
-        let md = exporter.render_table(&table);
-
         assert!(md.contains("### 字段列表"));
         assert!(md.contains("### 索引列表"));
         assert!(md.contains("BIGINT"));

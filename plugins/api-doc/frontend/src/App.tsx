@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import './App.css'
-import { ApiDocConfig, ControllerInfo, ApiInfo, ExportHistory, ViewMode } from './types'
+import { ApiDocConfig, ControllerInfo, ApiInfo, ViewMode } from './types'
 import StepHeader from './components/StepHeader'
 import ConfigView from './components/ConfigView'
 import SelectView from './components/SelectView'
@@ -19,8 +19,6 @@ declare global {
 const defaultConfig: ApiDocConfig = {
   source_jar_path: '',
   service_name: '',
-  dependency_jars: [],
-  auto_scan_dependencies: false,
 }
 
 function App() {
@@ -32,7 +30,6 @@ function App() {
   const [exportFormats, setExportFormats] = useState<string[]>(['markdown'])
   const [outputDir, setOutputDir] = useState('')
   const [outputFiles, setOutputFiles] = useState<string[]>([])
-  const [history, setHistory] = useState<ExportHistory[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [toast, setToast] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
@@ -74,8 +71,6 @@ function App() {
       try {
         const savedConfig = await callAPI<ApiDocConfig | null>('load_config')
         if (savedConfig) setConfig({ ...defaultConfig, ...savedConfig })
-        const h = await callAPI<ExportHistory[]>('get_export_history')
-        setHistory(h)
       } catch {
         // First run
       }
@@ -177,8 +172,6 @@ function App() {
         service_name: config.service_name,
         controllers,
         selected,
-        dependency_jars: config.dependency_jars,
-        auto_scan_dependencies: config.auto_scan_dependencies,
       })
       setApis(result)
       setExpandedApis(new Set(result.map(a => a.full_path)))
@@ -215,8 +208,6 @@ function App() {
       setOutputFiles(files)
       setView('preview')
       showToast('success', `导出了 ${files.length} 个文件`)
-      const h = await callAPI<ExportHistory[]>('get_export_history')
-      setHistory(h)
     } catch {
       // error handled
     } finally {
@@ -244,7 +235,6 @@ function App() {
           config={config}
           setConfig={setConfig}
           loading={loading}
-          history={history}
           onScan={handleScan}
           onOpenJar={handleOpenJar}
         />

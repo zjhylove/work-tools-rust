@@ -161,7 +161,6 @@ impl JarParser {
         service_name: &str,
     ) -> Result<Vec<ApiInfo>> {
         let mut apis = Vec::new();
-        let mut visited = HashSet::new();
 
         // 构建 class_name -> ControllerInfo 的映射
         let ctrl_map: HashMap<&str, &ControllerInfo> = controllers
@@ -186,12 +185,12 @@ impl JarParser {
             // 获取请求参数和返回类型
             let (req_fields, mut req_nodes, resp_nodes) = self
                 .with_class(class_name, |class_file| {
-                    self.extract_method_fields(class_file, method_name, &mut visited)
+                    self.extract_method_fields(class_file, method_name, &mut HashSet::new())
                 })?;
 
             // 动态设置 HrmsAppApi 节点的 d/c/m/v 示例值
             let api_path_method = full_path.rsplit('/').next().unwrap_or("").to_string();
-            let api_version_num = version.trim_start_matches('v').to_string();
+            let api_version_num = version.clone();
             for node in &mut req_nodes {
                 if node.node_name == "HrmsAppApi" {
                     for f in &mut node.resp_fields {
@@ -505,7 +504,7 @@ fn extract_path_segments(path: &str) -> (String, String) {
     let business_module = parts.first().unwrap_or(&"").to_string();
     let version = parts
         .iter()
-        .find(|s| s.starts_with('v') && s.len() <= 3)
+        .find(|s| s.starts_with('v') && s.len() <= 10)
         .unwrap_or(&"")
         .to_string();
 

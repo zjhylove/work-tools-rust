@@ -1,8 +1,8 @@
+mod html;
 mod markdown;
-mod word;
 
+pub use html::HtmlExporter;
 pub use markdown::MarkdownExporter;
-pub use word::WordExporter;
 
 use crate::models::{ExportConfig, TableInfo};
 use anyhow::Result;

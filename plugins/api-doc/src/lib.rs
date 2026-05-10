@@ -57,20 +57,8 @@ impl ApiDocPlugin {
         info!(jar_path = %jar_path, api_count = selected.len(), "开始解析 API 详情");
         let mut parser = parser::JarParser::new(jar_path)?;
 
-        let dep_jars: Vec<String> = params["dependency_jars"]
-            .as_array()
-            .map(|arr| {
-                arr.iter()
-                    .filter_map(|v| v.as_str().map(|s| s.to_string()))
-                    .collect()
-            })
-            .unwrap_or_default();
-        let auto_scan = params["auto_scan_dependencies"].as_bool().unwrap_or(false);
-
-        if auto_scan || !dep_jars.is_empty() {
-            if let Err(e) = parser.load_dependencies(jar_path, &dep_jars, auto_scan) {
-                warn!(error = %e, "加载依赖 JAR 失败，继续解析");
-            }
+        if let Err(e) = parser.load_dependencies(jar_path, &[], true) {
+            warn!(error = %e, "加载依赖 JAR 失败，继续解析");
         }
 
         let apis = parser.parse_api_details(&controllers, &selected, service_name)?;
@@ -101,23 +89,7 @@ impl ApiDocPlugin {
             output_files.extend(files);
         }
 
-        // 保存导出历史
-        let history = models::ExportHistory {
-            id: uuid::Uuid::new_v4().to_string(),
-            service_name: service_name.to_string(),
-            api_count: apis.len(),
-            formats: config.formats.clone(),
-            output_path: config.output_dir.clone(),
-            exported_at: chrono::Local::now().to_rfc3339(),
-        };
-        self.storage.add_export_history(history)?;
-
         Ok(serde_json::to_value(output_files)?)
-    }
-
-    fn handle_get_export_history(&self) -> Result<Value> {
-        let history = self.storage.get_export_history()?;
-        Ok(serde_json::to_value(history)?)
     }
 }
 
@@ -159,7 +131,6 @@ impl Plugin for ApiDocPlugin {
             "scan_controllers" => self.handle_scan_controllers(params),
             "parse_api_details" => self.handle_parse_api_details(params),
             "export_docs" => self.handle_export_docs(params),
-            "get_export_history" => self.handle_get_export_history(),
             _ => Err(anyhow::anyhow!("未知方法: {}", method)),
         };
         result.map_err(|e| e.into())
