@@ -46,7 +46,7 @@ work-tools-rust/
 │   ├── src/               # React 前端
 │   └── src-tauri/src/     # Rust 后端
 │       ├── lib.rs              # 应用初始化、Tauri builder
-│       ├── commands.rs         # 17 个 Tauri 命令
+│       ├── commands.rs         # 21 个 Tauri 命令
 │       ├── plugin_manager.rs   # 动态库加载、插件生命周期
 │       ├── plugin_package.rs   # .wtplugin.zip 解析安装
 │       ├── plugin_registry.rs  # 插件注册表管理
@@ -54,7 +54,7 @@ work-tools-rust/
 │       ├── config.rs           # 插件配置持久化
 │       ├── paths.rs            # 工作目录路径管理
 │       └── tray.rs             # 系统托盘
-├── plugins/                # 8 个插件 (各有独立 frontend/)
+├── plugins/                # 13 个插件 (各有独立 frontend/)
 │   ├── password-manager/   # 密码管理器 (AES 加密)
 │   ├── json-tools/         # JSON 工具
 │   ├── auth-plugin/        # 双因素验证 (TOTP)
@@ -62,7 +62,12 @@ work-tools-rust/
 │   ├── db-doc/             # 数据库文档生成 (MySQL/PostgreSQL)
 │   ├── k8s-forward/        # K8s 端口转发 (SSH 隧道 + HTTP 代理)
 │   ├── db-router/          # 数据库路由 (Rhai 脚本解析)
-│   └── object-storage/     # 对象存储 (阿里云OSS + 腾讯云COS)
+│   ├── object-storage/     # 对象存储 (阿里云OSS + 腾讯云COS)
+│   ├── timestamp-converter/ # Unix时间戳转换 (多时区/批量)
+│   ├── cron-tools/         # Cron表达式解析/可视化
+│   ├── redis-client/       # Redis 客户端 (Key/多类型操作)
+│   ├── api-doc/            # API文档生成 (Spring Boot JAR解析)
+│   └── ...
 ├── shared/
 │   ├── types/             # 共享数据类型
 │   └── plugin-api/        # Plugin trait + storage/error/tracing
@@ -112,7 +117,7 @@ work-tools-rust/
 - `get_logs` 通过 `iter().rev().filter().take(100)` 避免克隆全部
 - `clear_logs` 清空环形缓冲
 - winit/tao 的 WARN 被过滤到 ERROR 级别，消除事件循环噪音
-- 所有 8 个插件接入 tracing，关键操作有 info/warn/error 日志
+- 所有 13 个插件接入 tracing，关键操作有 info/warn/error 日志
 
 ### 插件系统关键设计
 
@@ -143,7 +148,7 @@ work-tools-rust/
 
 - `tauri-app/` 被 exclude 是因为它包含前端项目 (package.json, node_modules 等)，不在 workspace 的管理范围内
 - `tauri-app/src-tauri/` 作为 Rust crate 仍然是 workspace member
-- `cargo test` 在根目录运行时会测试所有 12 个 workspace members（4 shared + 8 plugins）
+- `cargo test` 在根目录运行时会测试所有 15 个 workspace members（2 shared + 13 plugins）
 - `cargo check/build` 只编译 workspace members（不包含 tauri-app 前端）
 
 ## 插件开发要点
