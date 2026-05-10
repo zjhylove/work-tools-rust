@@ -26,7 +26,7 @@ export function Toolbar({
       {/* 左侧文件选择 */}
       <button
         onClick={onOpenOriginal}
-        className="file-select-btn"
+        className="wt-btn wt-btn--secondary wt-btn--sm file-select-btn"
         title="打开原始文件"
       >
         <span className="icon">+</span>
@@ -61,7 +61,7 @@ export function Toolbar({
       {/* 右侧文件选择 */}
       <button
         onClick={onOpenModified}
-        className="file-select-btn"
+        className="wt-btn wt-btn--secondary wt-btn--sm file-select-btn"
         title="打开修改后的文件"
       >
         <span className="icon">~</span>

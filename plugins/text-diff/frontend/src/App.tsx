@@ -10,6 +10,7 @@ declare global {
     pluginAPI: {
       call: (pluginId: string, method: string, params: any) => Promise<any>;
     };
+    WorkTools: { toast: { success(m:string):void; error(m:string):void; info(m:string):void; warning(m:string):void }; FieldError: { show(el:HTMLElement, m:string):void; clear(el:HTMLElement):void; clearAll(f:HTMLElement):void } }
   }
 }
 
@@ -21,9 +22,6 @@ function App() {
   // 文件名
   const [originalFileName, setOriginalFileName] = useState<string>('');
   const [modifiedFileName, setModifiedFileName] = useState<string>('');
-
-  // 错误状态
-  const [error, setError] = useState<string | null>(null);
 
   // 文件输入 refs
   const originalFileInputRef = useRef<HTMLInputElement>(null);
@@ -47,8 +45,7 @@ function App() {
       setOriginalFileName(file.name);
     };
     reader.onerror = () => {
-      setError(`读取文件失败: ${file.name}`);
-      setTimeout(() => setError(null), 3000);
+      window.WorkTools.toast.error(`读取文件失败: ${file.name}`);
     };
     reader.readAsText(file);
   }, []);
@@ -64,8 +61,7 @@ function App() {
       setModifiedFileName(file.name);
     };
     reader.onerror = () => {
-      setError(`读取文件失败: ${file.name}`);
-      setTimeout(() => setError(null), 3000);
+      window.WorkTools.toast.error(`读取文件失败: ${file.name}`);
     };
     reader.readAsText(file);
   }, []);
@@ -81,13 +77,6 @@ function App() {
 
   return (
     <div className="app">
-      {error && (
-        <div className="error-banner">
-          × {error}
-          <button onClick={() => setError(null)} className="close-btn">×</button>
-        </div>
-      )}
-
       <Toolbar
         originalFileName={originalFileName}
         modifiedFileName={modifiedFileName}
