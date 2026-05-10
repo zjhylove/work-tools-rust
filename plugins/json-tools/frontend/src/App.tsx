@@ -12,7 +12,6 @@ function App() {
   const [error, setError] = useState<ValidationError | null>(null);
   const [selectedPath, setSelectedPath] = useState<JsonPath | null>(null);
   const [isExpanded, setIsExpanded] = useState<Record<string, boolean>>({ 'root': true });
-  const [successMessage, setSuccessMessage] = useState<string>('');
   const [isFormatted, setIsFormatted] = useState<boolean>(false);
 
   // 计算节点数量
@@ -99,13 +98,9 @@ function App() {
       }
 
       setJsonText(result);
-      setSuccessMessage('操作成功');
-      setTimeout(() => setSuccessMessage(''), 2000);
+      (window as any).WorkTools.toast.success('操作成功');
     } catch (e) {
-      setError({
-        valid: false,
-        error: (e as Error).message
-      });
+      (window as any).WorkTools.toast.error((e as Error).message);
     }
   };
 
@@ -171,13 +166,6 @@ function App() {
           <div className="empty-description">
             在左侧输入 JSON 文本,或点击上方"格式化"按钮查看示例
           </div>
-        </div>
-      )}
-
-      {/* 成功提示 - 固定在顶部 */}
-      {successMessage && (
-        <div className="json-success">
-          ✓ {successMessage}
         </div>
       )}
 

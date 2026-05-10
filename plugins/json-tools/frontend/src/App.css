@@ -137,27 +137,6 @@
   cursor: not-allowed;
 }
 
-/* 成功提示 - 固定在页面顶部 */
-.json-success {
-  position: fixed;
-  top: 20px;
-  left: 50%;
-  transform: translateX(-50%);
-  padding: 10px 16px;
-  background: var(--success-light);
-  border: 1px solid var(--success-border);
-  border-radius: 8px;
-  color: var(--success-text);
-  font-size: 13px;
-  font-weight: 500;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-  z-index: 1000;
-  animation: slideDown 0.3s ease;
-}
-
 /* 错误提示 - 绝对定位在编辑器下方 */
 .json-error {
   position: absolute;
@@ -199,7 +178,7 @@
 }
 
 .error-location {
-  color: #a33;
+  color: var(--error-text);
   font-weight: 600;
   background: rgba(220, 53, 69, 0.1);
   padding: 2px 8px;
@@ -208,7 +187,7 @@
 }
 
 .error-suggestion {
-  color: #2e7d32;
+  color: var(--success-text);
   font-weight: 500;
   background: rgba(46, 125, 50, 0.1);
   padding: 2px 8px;
@@ -363,24 +342,24 @@
 }
 
 .tree-key {
-  color: #d32f2f;
+  color: var(--wt-syntax-key);
   font-weight: 600;
 }
 
 .tree-string {
-  color: #2e7d32;
+  color: var(--wt-syntax-string);
 }
 
 .tree-number {
-  color: #1565c0;
+  color: var(--wt-syntax-number);
 }
 
 .tree-boolean {
-  color: #c62828;
+  color: var(--wt-syntax-boolean);
 }
 
 .tree-null {
-  color: #7f8c8d;
+  color: var(--wt-syntax-null);
   font-style: italic;
 }
 
