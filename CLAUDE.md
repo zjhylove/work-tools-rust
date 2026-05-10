@@ -158,6 +158,32 @@ work-tools-rust/
 
 每个插件有独立的 `frontend/` 目录 (React + Vite)，构建后输出到 `assets/`。插件前端通过 `window.pluginAPI` 与后端通信。**CSS 必须使用 `var(--xxx)` 设计令牌**（如 `var(--bg-primary)`、`var(--text-primary)`），禁止硬编码颜色，以兼容浅色/暗色双主题。
 
+### 前端开发规范
+
+**反馈提示**:
+- 操作成功/失败 → `WorkTools.toast.success(msg)` / `.error(msg)` / `.info(msg)` / `.warning(msg)`
+- 禁止自行实现 toast 或使用 alert()
+- Toast 自动消失 3s，click 可提前关闭，支持多条同时显示
+
+**表单校验**:
+- 必须逐字段校验，失焦触发校验，输入时清除本字段错误
+- 校验错误显示在本字段下方：`WorkTools.FieldError.show(inputEl, msg)`
+- 提交前全量校验，有任一错误不提交
+- 禁止用 toast 显示校验错误
+- 禁止使用原生 `alert()` 或 `confirm()` 进行用户交互
+
+**CSS 变量**:
+- 所有颜色必须使用 `var(--xxx)` 设计令牌，禁止硬编码色值（如 `#c82333`、`#666`、`rgba(0,0,0,0.5)`）
+- 按钮统一使用：`.wt-btn--primary` / `.wt-btn--secondary` / `.wt-btn--danger` / `.wt-btn--ghost`
+- 模态框统一使用：`.wt-modal-overlay` / `.wt-modal` / `.wt-modal-header` / `.wt-modal-body` / `.wt-modal-footer`
+- 空状态：`.wt-empty-state`
+- 加载态：按钮内嵌 `.wt-spinner` + disabled 状态
+
+**组件规范**:
+- 删除/不可逆操作必须使用 `.wt-modal-*` 确认弹窗
+- 提交/导出等异步操作按钮必须有 loading 态（`.wt-spinner` + disabled）
+- 表单输入框使用 `.wt-form-input`，标签使用 `.wt-form-label`，容器使用 `.wt-form-group`
+
 ## CI/CD
 
 GitHub Actions (`.github/workflows/build.yml`): Tag push (`v*`) 触发多平台构建 — macOS (universal/intel/arm .dmg)、Windows (.msi)、Linux (.deb/.AppImage)，各平台插件包合并为 `plugins-<platform>.zip`，自动创建 GitHub Release。
