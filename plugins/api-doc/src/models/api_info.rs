@@ -53,13 +53,26 @@ pub struct ApiInfo {
     pub resp_example: String,
 }
 
+/// 集合类型元信息
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CollectionInfo {
+    /// 容器类型 ("List" | "Set" | "Map")
+    pub container: String,
+    /// 元素类型 (List/Set 的元素类型，Map 的值类型)
+    pub element_type: String,
+    /// Map 的键类型 (仅 Map 类型有值)
+    pub key_type: Option<String>,
+}
+
 /// API 字段信息
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ApiField {
     /// 字段名
     pub field_name: String,
-    /// 字段类型
+    /// 字段类型 (简单类型或泛型完整名称如 "List<ProcessStep>")
     pub field_type: String,
+    /// 集合类型信息 (List/Set/Map 时有值)
+    pub collection_info: Option<CollectionInfo>,
     /// 是否必填
     pub required: String,
     /// 字段长度

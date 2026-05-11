@@ -1,13 +1,18 @@
 use crate::models::{ApiField, NodeInfo};
 
 /// 根据 Java 类型生成模拟值
-fn mock_value_for_type(field_type: &str, example_value: &str) -> String {
+fn mock_value_for_type(field: &ApiField, all_nodes: &[NodeInfo]) -> String {
     // 优先使用 example_value
-    if !example_value.is_empty() {
-        return format!("\"{}\"", example_value);
+    if !field.example_value.is_empty() {
+        return format!("\"{}\"", field.example_value);
     }
 
-    match field_type {
+    // 如果是集合类型，生成数组
+    if let Some(ref info) = field.collection_info {
+        return mock_collection_value(info, &field.example_value, all_nodes);
+    }
+
+    match field.field_type.as_str() {
         "String" => "\"string\"".to_string(),
         "Integer" | "int" => "0".to_string(),
         "Long" | "long" => "0".to_string(),
@@ -23,6 +28,106 @@ fn mock_value_for_type(field_type: &str, example_value: &str) -> String {
         "BigDecimal" => "\"0.00\"".to_string(),
         t if t.ends_with("[]") => "[]".to_string(),
         _ => "{}".to_string(), // 对象类型返回空对象
+    }
+}
+
+/// 为集合类型生成 Mock 值
+fn mock_collection_value(
+    info: &crate::models::CollectionInfo,
+    example_value: &str,
+    all_nodes: &[NodeInfo],
+) -> String {
+    // 如果有 example_value，包装成单元素数组
+    if !example_value.is_empty() {
+        return format!("[\"{}\"]", example_value);
+    }
+
+    // 提取元素类型的短名称（处理可能包含完整包名的情况）
+    let element_short = if info.element_type.contains('.') {
+        info.element_type
+            .rsplit('.')
+            .next()
+            .unwrap_or(&info.element_type)
+    } else {
+        &info.element_type
+    };
+
+    // 检查元素类型是否匹配某个嵌套节点
+    // 需要同时检查短名称（如 "ProcessStep"）和可能的完整名称
+    let child_node = all_nodes.iter().find(|n| {
+        let node_short = short_name(&n.node_name);
+        // 短名称直接匹配
+        node_short == element_short ||
+        // 节点名以短名称结尾（如 "com.example.ProcessStep" 以 "ProcessStep" 结尾）
+        n.node_name.ends_with(&format!(".{}", element_short)) ||
+        n.node_name.ends_with(&format!("/{}", element_short)) ||
+        // 元素类型可能是完整包名，提取短名称再匹配
+        (info.element_type.contains('.') && short_name(&info.element_type) == node_short)
+    });
+
+    if let Some(child) = child_node {
+        // 递归生成嵌套对象的 Mock（多元素数组，展示 2 个示例）
+        let obj_value1 = generate_node_mock(child, all_nodes, "      ");
+        let obj_value2 = generate_node_mock(child, all_nodes, "      ");
+
+        // 清理每行的缩进，保持格式整洁
+        let obj_lines1: Vec<String> = obj_value1
+            .lines()
+            .enumerate()
+            .map(|(i, line)| {
+                let trimmed = line.trim();
+                if i == 0 {
+                    format!("    {}", trimmed)
+                } else {
+                    format!("      {}", trimmed)
+                }
+            })
+            .collect();
+        let obj_lines2: Vec<String> = obj_value2
+            .lines()
+            .enumerate()
+            .map(|(i, line)| {
+                let trimmed = line.trim();
+                if i == 0 {
+                    format!("    {}", trimmed)
+                } else {
+                    format!("      {}", trimmed)
+                }
+            })
+            .collect();
+
+        let obj_str1 = obj_lines1.join("\n");
+        let obj_str2 = obj_lines2.join("\n");
+
+        format!(
+            "[\n{}\n,\n{}\n]",
+            obj_str1,
+            obj_str2
+        )
+    } else {
+        // 基础类型值（单元素数组）
+        let primitive = mock_primitive_value(&info.element_type);
+        format!("[{}]", primitive)
+    }
+}
+
+/// 生成基础类型的 Mock 值
+fn mock_primitive_value(type_name: &str) -> String {
+    match type_name {
+        "String" => "\"string\"".to_string(),
+        "Integer" | "int" => "0".to_string(),
+        "Long" | "long" => "0".to_string(),
+        "Double" | "double" => "0.0".to_string(),
+        "Float" | "float" => "0.0".to_string(),
+        "Boolean" | "boolean" => "true".to_string(),
+        "Byte" | "byte" => "0".to_string(),
+        "Short" | "short" => "0".to_string(),
+        "Character" | "char" => "\"a\"".to_string(),
+        "Date" => "\"2024-01-01\"".to_string(),
+        "LocalDateTime" => "\"2024-01-01T00:00:00\"".to_string(),
+        "LocalDate" => "\"2024-01-01\"".to_string(),
+        "BigDecimal" => "\"0.00\"".to_string(),
+        _ => "\"\"".to_string(),
     }
 }
 
@@ -47,7 +152,7 @@ pub fn generate_req_mock_json(fields: &[ApiField], nodes: &[NodeInfo]) -> String
         let value = if let Some(child) = child_node {
             generate_node_mock_inner(child, nodes, "  ")
         } else {
-            mock_value_for_type(&field.field_type, &field.example_value)
+            mock_value_for_type(field, nodes)
         };
 
         lines.push(format!("  \"{}\": {}{}", field.field_name, value, comma));
@@ -70,7 +175,7 @@ fn generate_node_mock_inner(node: &NodeInfo, all_nodes: &[NodeInfo], base_indent
         let value = if let Some(child) = child_node {
             generate_node_mock_inner(child, all_nodes, &inner_indent)
         } else {
-            mock_value_for_type(&field.field_type, &field.example_value)
+            mock_value_for_type(field, all_nodes)
         };
 
         let comma = if i < node.resp_fields.len() - 1 {
@@ -120,7 +225,7 @@ fn generate_node_mock(node: &NodeInfo, all_nodes: &[NodeInfo], indent: &str) -> 
         let value = if let Some(child) = child_node {
             generate_node_mock(child, all_nodes, &inner_indent)
         } else {
-            mock_value_for_type(&field.field_type, &field.example_value)
+            mock_value_for_type(field, all_nodes)
         };
 
         let comma = if i < node.resp_fields.len() - 1 {

@@ -35,6 +35,7 @@ function App() {
   const [toast, setToast] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
   const [expandedClasses, setExpandedClasses] = useState<Set<string>>(new Set())
   const [searchFilter, setSearchFilter] = useState('')
+  const [apiSearchFilter, setApiSearchFilter] = useState('')
   const [expandedApis, setExpandedApis] = useState<Set<string>>(new Set())
   const [apiReady, setApiReady] = useState(false)
 
@@ -251,6 +252,7 @@ function App() {
           loading={loading}
           exportFormats={exportFormats}
           outputDir={outputDir}
+          apiSearchFilter={apiSearchFilter}
           onBack={() => setView('config')}
           onToggleMethod={toggleMethod}
           onToggleClass={toggleClass}
@@ -258,6 +260,7 @@ function App() {
           onSelectAll={selectAll}
           onDeselectAll={deselectAll}
           onSearchChange={setSearchFilter}
+          onApiSearchChange={setApiSearchFilter}
           onParse={handleParseDetails}
           onToggleApi={toggleApi}
           onFormatChange={setExportFormats}

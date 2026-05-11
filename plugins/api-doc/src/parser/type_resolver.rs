@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 use std::ops::Deref;
 
-use crate::models::{ApiField, NodeInfo};
+use crate::models::{ApiField, CollectionInfo, NodeInfo};
 use crate::parser::annotation;
 use crate::parser::JarParser;
 
@@ -311,9 +311,33 @@ pub fn extract_dto_fields(
             annotation::get_api_model_property(&class_file, &field_name);
 
         // 尝试获取更精确的类型信息 (从 Signature 属性)
-        let resolved_type = annotation::get_field_signature(&class_file, &field_name)
-            .and_then(|sig| resolve_field_type_from_signature(&sig))
-            .unwrap_or_else(|| field_type_name.clone());
+        let signature = annotation::get_field_signature(&class_file, &field_name);
+
+        // 检查是否是集合类型，并提取元素类型
+        let (collection_info, element_full_name) = signature
+            .as_ref()
+            .and_then(|sig| parse_collection_signature(sig))
+            .map(|(container, element_full, key_full)| {
+                let element_short = short_type_name(&element_full).to_string();
+                let key_short = key_full.as_ref().map(|k| short_type_name(k).to_string());
+                let info = CollectionInfo {
+                    container,
+                    element_type: element_short,
+                    key_type: key_short,
+                };
+                (Some(info), element_full)
+            })
+            .unwrap_or((None, String::new()));
+
+        // 确定要递归解析的类型（优先使用集合元素类型）
+        let resolved_type = if !element_full_name.is_empty() {
+            element_full_name
+        } else {
+            signature
+                .as_ref()
+                .and_then(|sig| resolve_field_type_from_signature(sig))
+                .unwrap_or_else(|| field_type_name.clone())
+        };
 
         // 如果是自定义类型（非 Java 标准库），递归提取
         let is_custom_type =
@@ -336,9 +360,17 @@ pub fn extract_dto_fields(
             }
         }
 
+        // 构建显示的类型名称
+        let display_type = if let Some(ref info) = collection_info {
+            format!("{}<{}>", info.container, short_type_name(&info.element_type))
+        } else {
+            short_type_name(&resolved_type).to_string()
+        };
+
         fields.push(ApiField {
             field_name,
-            field_type: short_type_name(&resolved_type).to_string(),
+            field_type: display_type,
+            collection_info,
             required,
             field_length: String::new(),
             comment,
@@ -393,6 +425,116 @@ fn resolve_field_type_from_signature(signature: &str) -> Option<String> {
     }
 
     result
+}
+
+/// 解析集合类型的 Signature
+/// 例如: `Ljava/util/List<Lcom/xxx/ProcessStep;>;` -> Some(("List", "com.xxx.ProcessStep", None))
+/// 例如: `Ljava/util/Map<Ljava/lang/String;Ljava/lang/Integer;>;` -> Some(("Map", "Integer", Some("String")))
+/// 例如: `LProcessStep;` -> None
+fn parse_collection_signature(signature: &str) -> Option<(String, String, Option<String>)> {
+    let chars: Vec<char> = signature.chars().collect();
+    let mut i = 0;
+
+    // 跳过前导 'L'
+    if i >= chars.len() || chars[i] != 'L' {
+        return None;
+    }
+    i += 1;
+
+    // 读取容器类型名称
+    let container_start = i;
+    while i < chars.len() && chars[i] != '<' && chars[i] != ';' {
+        i += 1;
+    }
+    let container_name: String = chars[container_start..i].iter().collect();
+
+    // 检查是否是集合类型
+    let is_collection = matches!(
+        container_name.as_str(),
+        "java/util/List" | "java/util/Set" | "java/util/Map"
+    );
+
+    if !is_collection {
+        return None;
+    }
+
+    // 如果没有泛型参数，返回 None
+    if i >= chars.len() || chars[i] != '<' {
+        return None;
+    }
+    i += 1; // 跳过 '<'
+
+    let container_short = match container_name.as_str() {
+        "java/util/List" => "List",
+        "java/util/Set" => "Set",
+        "java/util/Map" => "Map",
+        _ => &container_name,
+    };
+
+    // 对于 Map，解析键和值两个类型参数
+    if container_short == "Map" {
+        let key_type = parse_single_type_arg(&chars, &mut i);
+        let value_type = parse_single_type_arg(&chars, &mut i);
+        return Some((container_short.to_string(), value_type, Some(key_type)));
+    }
+
+    // 对于 List 和 Set，解析单个元素类型
+    let element_type = parse_single_type_arg(&chars, &mut i);
+    Some((container_short.to_string(), element_type, None))
+}
+
+/// 解析 `<>` 中的单个类型参数，返回类型全名 (点分隔)
+fn parse_single_type_arg(chars: &[char], i: &mut usize) -> String {
+    if *i >= chars.len() {
+        return "Object".to_string();
+    }
+
+    match chars[*i] {
+        'L' => {
+            *i += 1;
+            let start = *i;
+            while *i < chars.len() && chars[*i] != ';' && chars[*i] != '<' {
+                *i += 1;
+            }
+            let name: String = chars[start..*i].iter().collect();
+            // 跳过可能的嵌套泛型
+            if *i < chars.len() && chars[*i] == '<' {
+                let mut depth = 1;
+                *i += 1;
+                while *i < chars.len() && depth > 0 {
+                    match chars[*i] {
+                        '<' => depth += 1,
+                        '>' => depth -= 1,
+                        _ => {}
+                    }
+                    *i += 1;
+                }
+            }
+            // 跳过 ';'
+            if *i < chars.len() && chars[*i] == ';' {
+                *i += 1;
+            }
+            simplify_class_name(&name)
+        }
+        'T' => {
+            // 类型变量引用: TName; — 无法解析具体类型
+            *i += 1;
+            while *i < chars.len() && chars[*i] != ';' {
+                *i += 1;
+            }
+            if *i < chars.len() && chars[*i] == ';' {
+                *i += 1;
+            }
+            "Object".to_string()
+        }
+        '[' => {
+            while *i < chars.len() && chars[*i] == '[' {
+                *i += 1;
+            }
+            "Object".to_string()
+        }
+        _ => "Object".to_string(),
+    }
 }
 
 /// 非 Java 标准库且非数组的类型视为自定义类型

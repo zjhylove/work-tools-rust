@@ -5,6 +5,7 @@ import ExportPanel from './ExportPanel'
 interface Props {
   apis: ApiInfo[]
   expandedApis: Set<string>
+  searchFilter: string
   onToggleApi: (path: string) => void
   exportFormats: string[]
   outputDir: string
@@ -13,13 +14,33 @@ interface Props {
   onOutputDirChange: (dir: string) => void
   onOpenOutputDir: () => void
   onExport: () => void
+  onSearchChange: (v: string) => void
+}
+
+// 判断 API 是否匹配搜索条件
+function apiMatches(api: ApiInfo, query: string): boolean {
+  if (!query) return true
+  const q = query.toLowerCase()
+  return (
+    api.api_name.toLowerCase().includes(q) ||
+    api.full_path.toLowerCase().includes(q) ||
+    api.http_method.toLowerCase().includes(q) ||
+    api.service_name.toLowerCase().includes(q) ||
+    api.business_module.toLowerCase().includes(q)
+  )
 }
 
 export default function DetailPanel({
-  apis, expandedApis, onToggleApi,
+  apis, expandedApis, searchFilter, onToggleApi,
   exportFormats, outputDir, loading,
   onFormatChange, onOutputDirChange, onOpenOutputDir, onExport,
+  onSearchChange,
 }: Props) {
+  const query = searchFilter.trim()
+
+  // 过滤匹配的 API
+  const filteredApis = apis.filter(api => apiMatches(api, query))
+
   return (
     <div className="panel panel--right">
       {apis.length === 0 ? (
@@ -38,17 +59,42 @@ export default function DetailPanel({
         <>
           <div className="panel-heading">
             <span className="panel-heading-text">解析结果</span>
-            <span className="panel-heading-count">{apis.length} 个 API</span>
+            <div className="panel-heading-actions">
+              <span className="panel-heading-count">
+                {query ? `${filteredApis.length}/${apis.length}` : `${apis.length}`} 个 API
+              </span>
+              <div className="search-box search-box--compact">
+                <svg className="search-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="11" cy="11" r="8" />
+                  <line x1="21" y1="21" x2="16.65" y2="16.65" />
+                </svg>
+                <input
+                  type="text"
+                  className="search-input search-input--sm"
+                  placeholder="搜索 API..."
+                  value={searchFilter}
+                  onChange={e => onSearchChange(e.target.value)}
+                />
+              </div>
+            </div>
           </div>
           <div className="api-list">
-            {apis.map(api => (
-              <ApiCard
-                key={api.full_path}
-                api={api}
-                isExpanded={expandedApis.has(api.full_path)}
-                onToggle={() => onToggleApi(api.full_path)}
-              />
-            ))}
+            {filteredApis.length === 0 ? (
+              <div className="panel-empty">
+                <p>未找到匹配的 API</p>
+                <p className="panel-empty-sub">请尝试其他搜索关键词</p>
+              </div>
+            ) : (
+              filteredApis.map(api => (
+                <ApiCard
+                  key={api.full_path}
+                  api={api}
+                  isExpanded={expandedApis.has(api.full_path)}
+                  onToggle={() => onToggleApi(api.full_path)}
+                  searchQuery={query}
+                />
+              ))
+            )}
           </div>
           <ExportPanel
             apis={apis}

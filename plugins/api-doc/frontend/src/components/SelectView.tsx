@@ -12,6 +12,7 @@ interface Props {
   loading: boolean
   exportFormats: string[]
   outputDir: string
+  apiSearchFilter: string
   onBack: () => void
   onToggleMethod: (key: string) => void
   onToggleClass: (className: string) => void
@@ -19,6 +20,7 @@ interface Props {
   onSelectAll: () => void
   onDeselectAll: () => void
   onSearchChange: (v: string) => void
+  onApiSearchChange: (v: string) => void
   onParse: () => void
   onToggleApi: (path: string) => void
   onFormatChange: (formats: string[]) => void
@@ -29,9 +31,9 @@ interface Props {
 
 export default function SelectView({
   controllers, selectedMethods, expandedClasses, searchFilter,
-  apis, expandedApis, loading, exportFormats, outputDir,
+  apis, expandedApis, loading, exportFormats, outputDir, apiSearchFilter,
   onBack, onToggleMethod, onToggleClass, onToggleExpand,
-  onSelectAll, onDeselectAll, onSearchChange, onParse, onToggleApi,
+  onSelectAll, onDeselectAll, onSearchChange, onApiSearchChange, onParse, onToggleApi,
   onFormatChange, onOutputDirChange, onOpenOutputDir, onExport,
 }: Props) {
   return (
@@ -55,6 +57,7 @@ export default function SelectView({
         <DetailPanel
           apis={apis}
           expandedApis={expandedApis}
+          searchFilter={apiSearchFilter}
           onToggleApi={onToggleApi}
           exportFormats={exportFormats}
           outputDir={outputDir}
@@ -63,6 +66,7 @@ export default function SelectView({
           onOutputDirChange={onOutputDirChange}
           onOpenOutputDir={onOpenOutputDir}
           onExport={onExport}
+          onSearchChange={onApiSearchChange}
         />
       </div>
     </div>

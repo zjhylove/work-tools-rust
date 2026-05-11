@@ -4,17 +4,40 @@ interface Props {
   api: ApiInfo
   isExpanded: boolean
   onToggle: () => void
+  searchQuery?: string
 }
 
-export default function ApiCard({ api, isExpanded, onToggle }: Props) {
+// 高亮搜索匹配的文本
+function highlightMatch(text: string, query: string): React.ReactElement {
+  if (!query) return <span>{text}</span>
+
+  const regex = new RegExp(`(${query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi')
+  const parts = text.split(regex)
+
+  return (
+    <span>
+      {parts.map((part, i) =>
+        regex.test(part) ? (
+          <mark key={i} className="search-highlight">{part}</mark>
+        ) : (
+          <span key={i}>{part}</span>
+        )
+      )}
+    </span>
+  )
+}
+
+export default function ApiCard({ api, isExpanded, onToggle, searchQuery = '' }: Props) {
+  const query = searchQuery.trim()
+
   return (
     <div className={`api-card ${isExpanded ? 'api-card--expanded' : ''}`}>
       <div className="api-card-header" onClick={onToggle}>
         <span className={`method-badge method-badge--pill ${httpMethodColor(api.http_method)}`}>
-          {api.http_method}
+          {highlightMatch(api.http_method, query)}
         </span>
-        <span className="api-card-path">{api.full_path}</span>
-        <span className="api-card-name">{api.api_name}</span>
+        <span className="api-card-path">{highlightMatch(api.full_path, query)}</span>
+        <span className="api-card-name">{highlightMatch(api.api_name, query)}</span>
         <span className={`expand-arrow ${isExpanded ? 'expanded' : ''}`}>
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
             <polyline points="9 18 15 12 9 6" />
@@ -54,10 +77,10 @@ export default function ApiCard({ api, isExpanded, onToggle }: Props) {
                   <tbody>
                     {api.req_fields.map(f => (
                       <tr key={f.field_name}>
-                        <td><code>{f.field_name}</code></td>
-                        <td>{f.field_type}</td>
+                        <td><code>{highlightMatch(f.field_name, query)}</code></td>
+                        <td>{highlightMatch(f.field_type, query)}</td>
                         <td><span className={`required-tag ${f.required === '是' ? 'required-tag--yes' : 'required-tag--no'}`}>{f.required}</span></td>
-                        <td>{f.comment}</td>
+                        <td>{highlightMatch(f.comment, query)}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -66,8 +89,8 @@ export default function ApiCard({ api, isExpanded, onToggle }: Props) {
               {api.req_nodes.map(node => (
                 <div key={node.node_name} className="resp-node">
                   <div className="resp-node-header">
-                    {node.node_name}
-                    {node.node_desc && <span className="resp-node-desc">({node.node_desc})</span>}
+                    {highlightMatch(node.node_name, query)}
+                    {node.node_desc && <span className="resp-node-desc">({highlightMatch(node.node_desc, query)})</span>}
                   </div>
                   <div className="table-wrap">
                     <table>
@@ -75,10 +98,10 @@ export default function ApiCard({ api, isExpanded, onToggle }: Props) {
                       <tbody>
                         {node.resp_fields.map(f => (
                           <tr key={f.field_name}>
-                            <td><code>{f.field_name}</code></td>
-                            <td>{f.field_type}</td>
+                            <td><code>{highlightMatch(f.field_name, query)}</code></td>
+                            <td>{highlightMatch(f.field_type, query)}</td>
                             <td><span className={`required-tag ${f.required === '是' ? 'required-tag--yes' : 'required-tag--no'}`}>{f.required}</span></td>
-                            <td>{f.comment}</td>
+                            <td>{highlightMatch(f.comment, query)}</td>
                           </tr>
                         ))}
                       </tbody>
@@ -109,16 +132,18 @@ export default function ApiCard({ api, isExpanded, onToggle }: Props) {
               </div>
               {api.resp_nodes.map(node => (
                 <div key={node.node_name} className="resp-node">
-                  <div className="resp-node-header">{node.node_name} {node.node_desc && <span className="resp-node-desc">({node.node_desc})</span>}</div>
+                  <div className="resp-node-header">
+                    {highlightMatch(node.node_name, query)} {node.node_desc && <span className="resp-node-desc">({highlightMatch(node.node_desc, query)})</span>}
+                  </div>
                   <div className="table-wrap">
                     <table>
                       <thead><tr><th>字段名</th><th>类型</th><th>注释</th></tr></thead>
                       <tbody>
                         {node.resp_fields.map(f => (
                           <tr key={f.field_name}>
-                            <td><code>{f.field_name}</code></td>
-                            <td>{f.field_type}</td>
-                            <td>{f.comment}</td>
+                            <td><code>{highlightMatch(f.field_name, query)}</code></td>
+                            <td>{highlightMatch(f.field_type, query)}</td>
+                            <td>{highlightMatch(f.comment, query)}</td>
                           </tr>
                         ))}
                       </tbody>

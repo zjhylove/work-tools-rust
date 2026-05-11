@@ -17,19 +17,73 @@ interface Props {
   onParse: () => void
 }
 
+// 高亮搜索匹配的文本
+function highlightMatch(text: string, query: string): React.ReactElement {
+  if (!query) return <span>{text}</span>
+
+  const regex = new RegExp(`(${query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi')
+  const parts = text.split(regex)
+
+  return (
+    <span>
+      {parts.map((part, i) =>
+        regex.test(part) ? (
+          <mark key={i} className="search-highlight">{part}</mark>
+        ) : (
+          <span key={i}>{part}</span>
+        )
+      )}
+    </span>
+  )
+}
+
+// 判断方法是否匹配搜索条件
+function methodMatches(method: any, query: string): boolean {
+  if (!query) return true
+  const q = query.toLowerCase()
+  return (
+    method.path?.toLowerCase().includes(q) ||
+    method.api_name?.toLowerCase().includes(q) ||
+    method.method_name?.toLowerCase().includes(q) ||
+    method.http_method?.toLowerCase().includes(q)
+  )
+}
+
+// 判断 Controller 是否匹配搜索条件
+function controllerMatches(ctrl: ControllerInfo, query: string): boolean {
+  if (!query) return true
+  const q = query.toLowerCase()
+  return (
+    ctrl.class_name.toLowerCase().includes(q) ||
+    ctrl.class_path.toLowerCase().includes(q) ||
+    ctrl.methods.some(m => methodMatches(m, q))
+  )
+}
+
 export default function ControllerPanel({
   controllers, selectedMethods, expandedClasses, searchFilter, loading,
   onBack, onToggleMethod, onToggleClass, onToggleExpand, onSelectAll, onDeselectAll,
   onSearchChange, onParse,
 }: Props) {
-  const filteredControllers = controllers.filter(c => {
-    if (!searchFilter) return true
-    const q = searchFilter.toLowerCase()
-    return (
-      c.class_name.toLowerCase().includes(q) ||
-      c.class_path.toLowerCase().includes(q) ||
-      c.methods.some(m => m.path.toLowerCase().includes(q) || m.api_name.toLowerCase().includes(q))
-    )
+  const query = searchFilter.trim()
+
+  // 过滤 Controller：保留匹配的 Controller
+  const filteredControllers = controllers.filter(c => controllerMatches(c, query))
+
+  // 计算每个 Controller 中匹配的方法数量
+  const controllersWithMatchInfo = filteredControllers.map(ctrl => {
+    const matchingMethods = query
+      ? ctrl.methods.filter(m => methodMatches(m, query))
+      : ctrl.methods
+
+    const shouldAutoExpand = query && matchingMethods.length > 0 &&
+      matchingMethods.length < ctrl.methods.length
+
+    return {
+      ctrl,
+      matchingMethods,
+      shouldAutoExpand,
+    }
   })
 
   return (
@@ -66,11 +120,14 @@ export default function ControllerPanel({
       </div>
 
       <div className="controller-tree">
-        {filteredControllers.map(ctrl => {
-          const allMethodKeys = ctrl.methods.map(m => `${ctrl.class_name}::${m.method_name}`)
+        {controllersWithMatchInfo.map(({ ctrl, matchingMethods, shouldAutoExpand }) => {
+          const displayMethods = query ? matchingMethods : ctrl.methods
+          const allMethodKeys = displayMethods.map(m => `${ctrl.class_name}::${m.method_name}`)
           const allSelected = allMethodKeys.length > 0 && allMethodKeys.every(k => selectedMethods.has(k))
           const someSelected = allMethodKeys.some(k => selectedMethods.has(k))
-          const isExpanded = expandedClasses.has(ctrl.class_name)
+
+          // 搜索时自动展开，或者用户手动展开
+          const isExpanded = shouldAutoExpand || expandedClasses.has(ctrl.class_name)
 
           return (
             <div key={ctrl.class_name} className="controller-group">
@@ -89,15 +146,23 @@ export default function ControllerPanel({
                     <polyline points="9 18 15 12 9 6" />
                   </svg>
                 </span>
-                <span className="controller-name">{ctrl.class_name}</span>
-                <span className="controller-path">{ctrl.class_path}</span>
-                <span className="method-count-badge">{ctrl.methods.length}</span>
+                <span className="controller-name">
+                  {highlightMatch(ctrl.class_name, query)}
+                </span>
+                <span className="controller-path">
+                  {highlightMatch(ctrl.class_path, query)}
+                </span>
+                <span className="method-count-badge">
+                  {query ? `${matchingMethods.length}/${ctrl.methods.length}` : ctrl.methods.length}
+                </span>
               </div>
 
               {isExpanded && (
                 <div className="method-list">
-                  {ctrl.methods.map(method => {
+                  {displayMethods.map(method => {
                     const key = `${ctrl.class_name}::${method.method_name}`
+                    const fullPath = `${ctrl.class_path}${method.path}`
+
                     return (
                       <div key={key} className={`method-item ${selectedMethods.has(key) ? 'method-item--selected' : ''}`}>
                         <label className="checkbox-wrap" onClick={e => e.stopPropagation()}>
@@ -109,10 +174,16 @@ export default function ControllerPanel({
                           <span className="checkbox-mark" />
                         </label>
                         <span className={`method-badge ${httpMethodColor(method.http_method)}`}>
-                          {method.http_method}
+                          {highlightMatch(method.http_method, query)}
                         </span>
-                        <span className="method-path">{ctrl.class_path}{method.path}</span>
-                        {method.api_name && <span className="method-api-name">{method.api_name}</span>}
+                        <span className="method-path">
+                          {highlightMatch(fullPath, query)}
+                        </span>
+                        {method.api_name && (
+                          <span className="method-api-name">
+                            {highlightMatch(method.api_name, query)}
+                          </span>
+                        )}
                       </div>
                     )
                   })}

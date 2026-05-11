@@ -336,6 +336,15 @@
   font-style: italic;
 }
 
+/* ── Search Highlight ──────────────────────────────── */
+.search-highlight {
+  background: var(--accent-light);
+  color: var(--accent);
+  padding: 0 2px;
+  border-radius: 2px;
+  font-weight: 600;
+}
+
 /* ── HTTP Method Badges ────────────────────────────── */
 .method-badge {
   display: inline-flex;
@@ -422,6 +431,22 @@
   padding: 2px 8px;
   border-radius: 10px;
   font-weight: 600;
+}
+
+.panel-heading-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  margin-left: auto;
+}
+
+.search-box--compact {
+  width: 200px;
+}
+
+.search-input--sm {
+  padding: var(--space-xs) var(--space-sm) var(--space-xs) 26px;
+  font-size: var(--font-size-sm);
 }
 
 /* ── API List ──────────────────────────────────────── */
