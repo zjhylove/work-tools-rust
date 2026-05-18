@@ -148,6 +148,9 @@ impl SshService {
     }
 
     pub fn disconnect(&mut self) {
+        self.stop_reconnect();
+        self.stop_heartbeat();
+
         for flag in &self.stop_flags {
             *flag.lock().unwrap() = true;
         }
@@ -399,6 +402,116 @@ impl SshService {
             .as_ref()
             .map(|h| h.is_finished())
             .unwrap_or(true)
+    }
+
+    /// 启动自动重连
+    pub fn start_reconnect(&mut self) {
+        self.stop_reconnect();
+
+        let params = match &self.connect_params {
+            Some(p) => ConnectParams {
+                host: p.host.clone(),
+                port: p.port,
+                username: p.username.clone(),
+                password: p.password.clone(),
+            },
+            None => return,
+        };
+
+        self.reconnect_state = Some(ReconnectState {
+            retry_count: 0,
+            max_retries: 10,
+            next_retry_at: std::time::Instant::now(),
+            abort: false,
+        });
+
+        let stop = self.reconnect_stop.clone();
+        let session_slot = self.session.clone();
+
+        let host = params.host.clone();
+        let port = params.port;
+        let username = params.username.clone();
+        let password = params.password.clone();
+
+        let handle = thread::spawn(move || {
+            let mut delay = Duration::from_secs(2);
+            let max_delay = Duration::from_secs(60);
+
+            for attempt in 1..=10u32 {
+                if *stop.lock().unwrap() {
+                    tracing::info!("SSH 重连已取消");
+                    return;
+                }
+
+                tracing::info!("SSH 重连尝试 {}/10，{} 秒后执行...", attempt, delay.as_secs());
+                let sleep_until = std::time::Instant::now() + delay;
+                while std::time::Instant::now() < sleep_until {
+                    if *stop.lock().unwrap() {
+                        tracing::info!("SSH 重连已取消");
+                        return;
+                    }
+                    thread::sleep(Duration::from_secs(1));
+                }
+
+                match Self::try_connect(&host, port, &username, &password) {
+                    Ok(session) => {
+                        tracing::info!("SSH 重连成功（第 {} 次尝试）", attempt);
+                        if let Some(slot) = session_slot.as_ref() {
+                            *slot.lock().unwrap() = session;
+                        }
+                        return;
+                    }
+                    Err(e) => {
+                        tracing::warn!("SSH 重连失败（第 {} 次）: {}", attempt, e);
+                    }
+                }
+
+                delay = std::cmp::min(delay * 2, max_delay);
+            }
+
+            tracing::error!("SSH 重连失败，已耗尽 10 次重试");
+        });
+
+        self.reconnect_thread = Some(handle);
+    }
+
+    /// 停止重连
+    pub fn stop_reconnect(&mut self) {
+        *self.reconnect_stop.lock().unwrap() = true;
+        if let Some(handle) = self.reconnect_thread.take() {
+            let _ = handle.join();
+        }
+        *self.reconnect_stop.lock().unwrap() = false;
+        self.reconnect_state = None;
+    }
+
+    /// 尝试建立 SSH 连接（供重连线程使用）
+    fn try_connect(host: &str, port: u16, username: &str, password: &str) -> Result<Session> {
+        let addr = format!("{}:{}", host, port);
+        let tcp = TcpStream::connect(&addr)?;
+        let mut session = Session::new()?;
+        session.set_tcp_stream(tcp);
+        session.handshake()?;
+        session.userauth_password(username, password)?;
+        if !session.authenticated() {
+            return Err(anyhow!("SSH 认证失败"));
+        }
+        session.set_blocking(false);
+        Ok(session)
+    }
+
+    /// 检查重连线程是否完成
+    pub fn check_reconnect_result(&mut self) -> Option<bool> {
+        let handle = self.reconnect_thread.as_ref()?;
+        if !handle.is_finished() {
+            return None;
+        }
+        let handle = self.reconnect_thread.take().unwrap();
+        let _ = handle.join();
+        // If we get here, the reconnect thread finished. We need to check if the session is connected.
+        let connected = self.is_connected();
+        self.reconnect_state = None;
+        Some(connected)
     }
 
     fn bind_auto_port(&mut self, local_host: &str) -> Result<(TcpListener, u16)> {
