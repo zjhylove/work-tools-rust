@@ -29,10 +29,20 @@ export interface ProxyMapping {
   editable: boolean;
 }
 
+export type SshConnectionState = "Connected" | "Disconnected" | "Reconnecting";
+
+export interface ReconnectInfo {
+  retry_count: number;
+  max_retries: number;
+  next_retry_at: number;
+}
+
 export interface SshStatus {
   connected: boolean;
   host?: string;
   port?: number;
+  status: SshConnectionState;
+  reconnect_info?: ReconnectInfo;
 }
 
 export interface KuboardStatus {
