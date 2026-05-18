@@ -43,7 +43,6 @@ struct ReconnectState {
     retry_count: u32,
     max_retries: u32,
     next_retry_at: std::time::Instant,
-    abort: bool,
 }
 
 /// 活跃的转发连接
@@ -430,7 +429,6 @@ impl SshService {
             retry_count: 0,
             max_retries: 10,
             next_retry_at: std::time::Instant::now(),
-            abort: false,
         });
 
         let stop = self.reconnect_stop.clone();

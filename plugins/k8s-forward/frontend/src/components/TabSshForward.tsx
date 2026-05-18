@@ -70,7 +70,7 @@ export default function TabSshForward() {
 
   const handleDisconnect = async () => {
     await call("ssh_disconnect");
-    setSshStatus({ connected: false });
+    setSshStatus({ connected: false, status: "Disconnected" });
     window.WorkTools.toast.info("已断开");
   };
 
