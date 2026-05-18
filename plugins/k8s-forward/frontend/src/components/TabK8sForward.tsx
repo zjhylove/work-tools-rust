@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import type { KuboardStatus, PodInfo, K8sForwardInfo, ForwardRule, ProxyMapping, LoginResult } from "../types";
+import type { KuboardStatus, PodInfo, K8sForwardInfo, ForwardRule, ProxyMapping, LoginResult, SshStatus } from "../types";
 
 declare global {
   interface Window { WorkTools: { toast: { success(m:string):void; error(m:string):void; info(m:string):void; warning(m:string):void }; FieldError: { show(el:HTMLElement, m:string):void; clear(el:HTMLElement):void; clearAll(f:HTMLElement):void } } }
@@ -20,6 +20,7 @@ export default function TabK8sForward() {
   const [search, setSearch] = useState("");
   const [forwards, setForwards] = useState<K8sForwardInfo>({ rules: [], mappings: [] });
   const [editingForward, setEditingForward] = useState<{ rule_id: string; domain: string; local_port: number; pod_name: string; remote_host: string; remote_port: number; local_host: string } | null>(null);
+  const [sshStatus, setSshStatus] = useState<SshStatus>({ connected: false, status: "Disconnected" });
 
   const call = useCallback(async (method: string, params?: unknown) => {
     return await window.pluginAPI.call(PLUGIN_ID, method, (params ?? {}) as Record<string, unknown>);
@@ -27,6 +28,11 @@ export default function TabK8sForward() {
 
   const loadStatus = async () => { setKstatus(await call("kuboard_status") as KuboardStatus); };
   const loadForwards = async () => { setForwards(await call("list_k8s_forwards") as K8sForwardInfo); };
+  const loadSshStatus = async () => {
+    try {
+      setSshStatus(await call("ssh_status") as SshStatus);
+    } catch { /* ignore */ }
+  };
   const validateForwards = async () => {
     try {
       const result = await call("validate_k8s_forwards") as { removed: number };
@@ -51,6 +57,13 @@ export default function TabK8sForward() {
       results.forEach((r, i) => { if (r.status === "rejected") console.warn(`init call ${i} failed:`, r.reason); });
     };
     init();
+  }, []);
+
+  // 定期轮询 SSH 状态
+  useEffect(() => {
+    loadSshStatus();
+    const timer = setInterval(loadSshStatus, 5000);
+    return () => clearInterval(timer);
   }, []);
 
   const handleLogin = async () => {
@@ -260,7 +273,18 @@ export default function TabK8sForward() {
           </div>
 
           {forwards.rules.length > 0 && (
-            <div className="card">
+            <>
+              {sshStatus.status === "Reconnecting" && (
+                <div className="reconnect-banner">
+                  SSH 重连中 (第 {sshStatus.reconnect_info?.retry_count ?? 0}/{sshStatus.reconnect_info?.max_retries ?? 10} 次)...
+                </div>
+              )}
+              {sshStatus.status === "Disconnected" && sshStatus.reconnect_info?.retry_count === sshStatus.reconnect_info?.max_retries && (
+                <div className="reconnect-banner error">
+                  SSH 连接已断开，请前往 SSH端口转发 页面重新连接
+                </div>
+              )}
+              <div className="card">
               <div className="card-header">已转发列表</div>
               <table>
                 <thead><tr><th>Pod名称</th><th>Pod地址</th><th>本地端口</th><th>目标</th><th>操作</th></tr></thead>
@@ -283,6 +307,7 @@ export default function TabK8sForward() {
                 </tbody>
               </table>
             </div>
+            </>
           )}
         </>
       )}
