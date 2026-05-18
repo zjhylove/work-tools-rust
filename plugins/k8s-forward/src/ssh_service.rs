@@ -342,6 +342,65 @@ impl SshService {
         self.forwards.len()
     }
 
+    /// 启动心跳检测线程
+    pub fn start_heartbeat(&mut self) {
+        self.stop_heartbeat();
+
+        *self.heartbeat_stop.lock().unwrap() = false;
+        let stop = self.heartbeat_stop.clone();
+        let session_check = self.session.clone();
+
+        let handle = thread::spawn(move || {
+            let mut fail_count = 0u32;
+            loop {
+                if *stop.lock().unwrap() {
+                    return;
+                }
+                thread::sleep(Duration::from_secs(15));
+
+                if *stop.lock().unwrap() {
+                    return;
+                }
+
+                let alive = session_check
+                    .as_ref()
+                    .map(|s| {
+                        let session = s.lock().unwrap();
+                        session.authenticated()
+                    })
+                    .unwrap_or(false);
+
+                if alive {
+                    fail_count = 0;
+                } else {
+                    fail_count += 1;
+                    if fail_count >= 2 {
+                        tracing::warn!("SSH 心跳检测失败 {} 次，判定连接已断开", fail_count);
+                        return;
+                    }
+                }
+            }
+        });
+
+        self.heartbeat_thread = Some(handle);
+    }
+
+    /// 停止心跳检测线程
+    pub fn stop_heartbeat(&mut self) {
+        *self.heartbeat_stop.lock().unwrap() = true;
+        if let Some(handle) = self.heartbeat_thread.take() {
+            let _ = handle.join();
+        }
+    }
+
+    /// 检查心跳线程是否已退出（退出表示检测到断连）
+    pub fn heartbeat_exited(&self) -> bool {
+        self.heartbeat_thread
+            .as_ref()
+            .map(|h| h.is_finished())
+            .unwrap_or(true)
+    }
+
     fn bind_auto_port(&mut self, local_host: &str) -> Result<(TcpListener, u16)> {
         let used_ports: Vec<u16> = self.forwards.iter().map(|f| f.rule.local_port).collect();
         loop {
