@@ -148,6 +148,12 @@ impl K8sForwardPlugin {
             connected: ssh.is_connected(),
             host: data.ssh.as_ref().map(|s| s.host.clone()),
             port: data.ssh.as_ref().map(|s| s.port),
+            status: if ssh.is_connected() {
+                SshConnectionState::Connected
+            } else {
+                SshConnectionState::Disconnected
+            },
+            reconnect_info: None,
         };
         Ok(serde_json::to_value(status)?)
     }

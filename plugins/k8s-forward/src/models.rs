@@ -157,11 +157,35 @@ pub struct PodInfo {
 
 // ── 状态类型 ──
 
+/// SSH 连接状态
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub enum SshConnectionState {
+    Connected,
+    Disconnected,
+    Reconnecting,
+}
+
+/// 重连元信息
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ReconnectInfo {
+    pub retry_count: u32,
+    pub max_retries: u32,
+    pub next_retry_at: u64, // Unix 时间戳（秒）
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SshStatus {
     pub connected: bool,
     pub host: Option<String>,
     pub port: Option<u16>,
+    #[serde(default = "default_connection_state")]
+    pub status: SshConnectionState,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reconnect_info: Option<ReconnectInfo>,
+}
+
+fn default_connection_state() -> SshConnectionState {
+    SshConnectionState::Disconnected
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
