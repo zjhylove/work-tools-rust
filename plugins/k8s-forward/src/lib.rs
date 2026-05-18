@@ -100,6 +100,7 @@ impl K8sForwardPlugin {
         // 先断开旧连接清理所有线程和端口绑定，避免旧 listener 占用端口导致恢复规则失败
         ssh.disconnect();
         ssh.connect(host, port, username, password)?;
+        ssh.start_heartbeat();
 
         // 连接成功后自动恢复之前保存的转发规则
         let mut data = self.load_data()?;
@@ -141,19 +142,68 @@ impl K8sForwardPlugin {
         Ok(json!({"success": true}))
     }
 
+    fn handle_ssh_reconnect(&self) -> Result<Value> {
+        let mut ssh = self.ssh.lock().unwrap();
+        if ssh.is_connected() {
+            return Err(anyhow::anyhow!("SSH 已连接，无需重连"));
+        }
+        if !ssh.has_connect_params() {
+            return Err(anyhow::anyhow!("没有保存的连接参数，请使用 ssh_connect"));
+        }
+        ssh.stop_reconnect();
+        ssh.start_reconnect();
+        Ok(json!({"success": true, "message": "开始重连..."}))
+    }
+
     fn handle_ssh_status(&self) -> Result<Value> {
-        let ssh = self.ssh.lock().unwrap();
+        let mut ssh = self.ssh.lock().unwrap();
         let data = self.load_data()?;
+
+        // 检查心跳线程是否退出（退出表示检测到断连）
+        if ssh.heartbeat_exited() && !ssh.is_reconnecting() && ssh.has_connect_params() {
+            tracing::warn!("SSH 心跳检测到断连，启动自动重连");
+            ssh.start_reconnect();
+        }
+
+        // 检查重连线程结果
+        let reconnect_result = ssh.check_reconnect_result();
+
+        // 如果重连成功，恢复转发规则并启动心跳
+        if reconnect_result == Some(true) {
+            let mut restored = 0;
+            let mut data_inner = self.load_data()?;
+            for rule in data_inner.forward_rules.iter_mut() {
+                match ssh.add_forward(
+                    &rule.local_host,
+                    &rule.remote_host,
+                    rule.remote_port,
+                    rule.local_port,
+                ) {
+                    Ok(assigned) => {
+                        if rule.local_port == 0 {
+                            rule.local_port = assigned;
+                        }
+                        restored += 1;
+                    }
+                    Err(e) => tracing::warn!("重连后恢复转发规则失败 [{}]: {}", rule.name, e),
+                }
+            }
+            if restored > 0 {
+                self.save_data(&data_inner)?;
+            }
+            ssh.start_heartbeat();
+            tracing::info!("SSH 重连成功，已恢复 {} 条转发规则", restored);
+        }
+
+        let state = ssh.connection_state();
+        let reconnect_info = ssh.get_reconnect_info();
+
         let status = SshStatus {
-            connected: ssh.is_connected(),
+            connected: state == SshConnectionState::Connected,
             host: data.ssh.as_ref().map(|s| s.host.clone()),
             port: data.ssh.as_ref().map(|s| s.port),
-            status: if ssh.is_connected() {
-                SshConnectionState::Connected
-            } else {
-                SshConnectionState::Disconnected
-            },
-            reconnect_info: None,
+            status: state,
+            reconnect_info,
         };
         Ok(serde_json::to_value(status)?)
     }
@@ -688,6 +738,7 @@ impl Plugin for K8sForwardPlugin {
             "ssh_connect" => dispatch!(self.handle_ssh_connect(&params)),
             "ssh_disconnect" => dispatch!(self.handle_ssh_disconnect()),
             "ssh_status" => dispatch!(self.handle_ssh_status()),
+            "ssh_reconnect" => dispatch!(self.handle_ssh_reconnect()),
             "list_forward_rules" => dispatch!(self.handle_list_forward_rules()),
             "add_forward_rule" => dispatch!(self.handle_add_forward_rule(&params)),
             "update_forward_rule" => dispatch!(self.handle_update_forward_rule(&params)),

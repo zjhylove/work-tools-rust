@@ -97,6 +97,14 @@ impl SshService {
             .unwrap_or(false)
     }
 
+    pub fn has_connect_params(&self) -> bool {
+        self.connect_params.is_some()
+    }
+
+    pub fn is_reconnecting(&self) -> bool {
+        self.reconnect_state.is_some()
+    }
+
     pub fn connection_state(&self) -> SshConnectionState {
         if self.reconnect_state.is_some() {
             SshConnectionState::Reconnecting
