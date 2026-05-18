@@ -21,7 +21,7 @@
 //! 在同一线程内串行处理无需额外同步；不同 forward 之间通过 session 锁
 //! 互斥，锁持有时间极短（非阻塞操作立刻返回），无锁竞争问题。
 
-use crate::models::{ForwardRule, RuleType};
+use crate::models::{ForwardRule, ReconnectInfo, RuleType, SshConnectionState};
 use anyhow::{anyhow, Result};
 use ssh2::Session;
 use std::io::{Read, Write};
@@ -29,6 +29,22 @@ use std::net::{TcpListener, TcpStream};
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
+
+/// 保存的 SSH 连接参数，供重连使用
+struct ConnectParams {
+    host: String,
+    port: u16,
+    username: String,
+    password: String,
+}
+
+/// 重连状态
+struct ReconnectState {
+    retry_count: u32,
+    max_retries: u32,
+    next_retry_at: std::time::Instant,
+    abort: bool,
+}
 
 /// 活跃的转发连接
 struct ActiveConn {
@@ -43,6 +59,13 @@ pub struct SshService {
     next_port: u16,
     threads: Vec<thread::JoinHandle<()>>,
     stop_flags: Vec<Arc<Mutex<bool>>>,
+    // 新增字段
+    connect_params: Option<ConnectParams>,
+    heartbeat_stop: Arc<Mutex<bool>>,
+    heartbeat_thread: Option<thread::JoinHandle<()>>,
+    reconnect_stop: Arc<Mutex<bool>>,
+    reconnect_state: Option<ReconnectState>,
+    reconnect_thread: Option<thread::JoinHandle<()>>,
 }
 
 struct ForwardEntry {
@@ -58,6 +81,12 @@ impl SshService {
             next_port: 10000,
             threads: vec![],
             stop_flags: vec![],
+            connect_params: None,
+            heartbeat_stop: Arc::new(Mutex::new(false)),
+            heartbeat_thread: None,
+            reconnect_stop: Arc::new(Mutex::new(false)),
+            reconnect_state: None,
+            reconnect_thread: None,
         }
     }
 
@@ -66,6 +95,33 @@ impl SshService {
             .as_ref()
             .map(|s| s.lock().unwrap().authenticated())
             .unwrap_or(false)
+    }
+
+    pub fn connection_state(&self) -> SshConnectionState {
+        if self.reconnect_state.is_some() {
+            SshConnectionState::Reconnecting
+        } else if self.is_connected() {
+            SshConnectionState::Connected
+        } else {
+            SshConnectionState::Disconnected
+        }
+    }
+
+    pub fn get_reconnect_info(&self) -> Option<ReconnectInfo> {
+        self.reconnect_state.as_ref().map(|rs| {
+            let duration_until_retry = rs.next_retry_at
+                .checked_duration_since(std::time::Instant::now())
+                .unwrap_or(std::time::Duration::from_secs(0));
+            let next_retry_time = std::time::SystemTime::now() + std::time::Duration::from_secs(duration_until_retry.as_secs());
+            ReconnectInfo {
+                retry_count: rs.retry_count,
+                max_retries: rs.max_retries,
+                next_retry_at: next_retry_time
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap_or(std::time::Duration::from_secs(0))
+                    .as_secs(),
+            }
+        })
     }
 
     pub fn connect(&mut self, host: &str, port: u16, username: &str, password: &str) -> Result<()> {
@@ -79,6 +135,14 @@ impl SshService {
             return Err(anyhow!("SSH 认证失败"));
         }
         session.set_blocking(false);
+
+        self.connect_params = Some(ConnectParams {
+            host: host.to_string(),
+            port,
+            username: username.to_string(),
+            password: password.to_string(),
+        });
+
         self.session = Some(Arc::new(Mutex::new(session)));
         Ok(())
     }
