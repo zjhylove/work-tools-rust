@@ -7,12 +7,17 @@ plugins/**/*.wtplugin.zip
 release/*.dmg
 release/*.wtplugin.zip
 
+#claude
+.claude/
+.claude/*
+
 # Dependencies
 node_modules/*
 node_modules
 
 # Git worktrees
 .worktrees/
+.worktrees/*
 
 # Backup files
 *.backup
@@ -22,7 +27,7 @@ node_modules
 
 # IDE
 .vscode/
-.idea
+.idea/
 .idea/*
 *.swp
 *.swo
