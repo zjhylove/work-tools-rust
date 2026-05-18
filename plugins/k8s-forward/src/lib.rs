@@ -90,20 +90,8 @@ impl K8sForwardPlugin {
 
     // ── SSH 管理 ──
 
-    fn handle_ssh_connect(&self, params: &Value) -> Result<Value> {
-        let host = get_str(params, "host")?;
-        let port = params.get("port").and_then(|v| v.as_u64()).unwrap_or(22) as u16;
-        let username = get_str(params, "username")?;
-        let password = get_str(params, "password")?;
-
-        let mut ssh = self.ssh.lock().unwrap();
-        // 先断开旧连接清理所有线程和端口绑定，避免旧 listener 占用端口导致恢复规则失败
-        ssh.disconnect();
-        ssh.connect(host, port, username, password)?;
-        ssh.start_heartbeat();
-
-        // 连接成功后自动恢复之前保存的转发规则
-        let mut data = self.load_data()?;
+    /// 恢复所有持久化的转发规则到 SSH 服务
+    fn restore_forwards(&self, ssh: &mut SshService, data: &mut PluginData) -> usize {
         let mut restored = 0;
         for rule in data.forward_rules.iter_mut() {
             match ssh.add_forward(
@@ -121,6 +109,24 @@ impl K8sForwardPlugin {
                 Err(e) => tracing::warn!("恢复转发规则失败 [{}]: {}", rule.name, e),
             }
         }
+        restored
+    }
+
+    fn handle_ssh_connect(&self, params: &Value) -> Result<Value> {
+        let host = get_str(params, "host")?;
+        let port = params.get("port").and_then(|v| v.as_u64()).unwrap_or(22) as u16;
+        let username = get_str(params, "username")?;
+        let password = get_str(params, "password")?;
+
+        let mut ssh = self.ssh.lock().unwrap();
+        // 先断开旧连接清理所有线程和端口绑定，避免旧 listener 占用端口导致恢复规则失败
+        ssh.disconnect();
+        ssh.connect(host, port, username, password)?;
+        ssh.start_heartbeat();
+
+        // 连接成功后自动恢复之前保存的转发规则
+        let mut data = self.load_data()?;
+        let restored = self.restore_forwards(&mut ssh, &mut data);
 
         // 加密保存 SSH 凭据
         let enc_pwd = self.encryptor.encrypt(password)?;
@@ -170,26 +176,10 @@ impl K8sForwardPlugin {
 
         // 如果重连成功，恢复转发规则并启动心跳
         if reconnect_result == Some(true) {
-            let mut restored = 0;
-            let mut data_inner = self.load_data()?;
-            for rule in data_inner.forward_rules.iter_mut() {
-                match ssh.add_forward(
-                    &rule.local_host,
-                    &rule.remote_host,
-                    rule.remote_port,
-                    rule.local_port,
-                ) {
-                    Ok(assigned) => {
-                        if rule.local_port == 0 {
-                            rule.local_port = assigned;
-                        }
-                        restored += 1;
-                    }
-                    Err(e) => tracing::warn!("重连后恢复转发规则失败 [{}]: {}", rule.name, e),
-                }
-            }
+            let mut data_mut = self.load_data()?;
+            let restored = self.restore_forwards(&mut ssh, &mut data_mut);
             if restored > 0 {
-                self.save_data(&data_inner)?;
+                self.save_data(&data_mut)?;
             }
             ssh.start_heartbeat();
             tracing::info!("SSH 重连成功，已恢复 {} 条转发规则", restored);

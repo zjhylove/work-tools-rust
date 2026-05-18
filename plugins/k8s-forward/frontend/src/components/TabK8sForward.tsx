@@ -59,12 +59,12 @@ export default function TabK8sForward() {
     init();
   }, []);
 
-  // 定期轮询 SSH 状态
+  // 定期轮询 SSH 状态（仅在需要时）
   useEffect(() => {
-    loadSshStatus();
+    if (sshStatus.status !== "Reconnecting") return;
     const timer = setInterval(loadSshStatus, 5000);
     return () => clearInterval(timer);
-  }, []);
+  }, [sshStatus.status]);
 
   const handleLogin = async () => {
     const urlInput = document.querySelector(".kuboard-url-input") as HTMLInputElement;

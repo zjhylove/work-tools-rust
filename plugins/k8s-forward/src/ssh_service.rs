@@ -132,16 +132,7 @@ impl SshService {
     }
 
     pub fn connect(&mut self, host: &str, port: u16, username: &str, password: &str) -> Result<()> {
-        let addr = format!("{}:{}", host, port);
-        let tcp = TcpStream::connect(&addr)?;
-        let mut session = Session::new()?;
-        session.set_tcp_stream(tcp);
-        session.handshake()?;
-        session.userauth_password(username, password)?;
-        if !session.authenticated() {
-            return Err(anyhow!("SSH 认证失败"));
-        }
-        session.set_blocking(false);
+        let session = Self::create_session(host, port, username, password)?;
 
         self.connect_params = Some(ConnectParams {
             host: host.to_string(),
@@ -459,7 +450,7 @@ impl SshService {
                     thread::sleep(Duration::from_secs(1));
                 }
 
-                match Self::try_connect(&host, port, &username, &password) {
+                match Self::create_session(&host, port, &username, &password) {
                     Ok(session) => {
                         tracing::info!("SSH 重连成功（第 {} 次尝试）", attempt);
                         if let Some(slot) = session_slot.as_ref() {
@@ -491,8 +482,7 @@ impl SshService {
         self.reconnect_state = None;
     }
 
-    /// 尝试建立 SSH 连接（供重连线程使用）
-    fn try_connect(host: &str, port: u16, username: &str, password: &str) -> Result<Session> {
+    fn create_session(host: &str, port: u16, username: &str, password: &str) -> Result<Session> {
         let addr = format!("{}:{}", host, port);
         let tcp = TcpStream::connect(&addr)?;
         let mut session = Session::new()?;
@@ -514,7 +504,6 @@ impl SshService {
         }
         let handle = self.reconnect_thread.take().unwrap();
         let _ = handle.join();
-        // If we get here, the reconnect thread finished. We need to check if the session is connected.
         let connected = self.is_connected();
         self.reconnect_state = None;
         Some(connected)
