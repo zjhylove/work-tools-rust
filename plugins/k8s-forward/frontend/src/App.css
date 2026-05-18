@@ -40,6 +40,8 @@ body { font-family: var(--font-sans); font-size: 13px; color: var(--text-primary
 .status-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; }
 .status-dot.online { background: var(--success); }
 .status-dot.offline { background: var(--error); }
+.status-dot.reconnecting { background: var(--warning, #f0ad4e); animation: pulse 1.5s infinite; }
+@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
 
 table { width: 100%; border-collapse: collapse; font-size: 12px; }
 th, td { padding: 8px 10px; text-align: left; border-bottom: 1px solid var(--border-color); }

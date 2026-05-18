@@ -8,7 +8,7 @@ declare global {
 const PLUGIN_ID = "k8s-forward";
 
 export default function TabSshForward() {
-  const [sshStatus, setSshStatus] = useState<SshStatus>({ connected: false });
+  const [sshStatus, setSshStatus] = useState<SshStatus>({ connected: false, status: "Disconnected" });
   const [rules, setRules] = useState<ForwardRule[]>([]);
   const [form, setForm] = useState({ host: "", port: 22, username: "", password: "" });
   const [editing, setEditing] = useState<ForwardRule | null>(null);
@@ -47,6 +47,13 @@ export default function TabSshForward() {
     };
     init();
   }, []);
+
+  // 定期轮询 SSH 状态（检测重连状态变化）
+  useEffect(() => {
+    if (!sshStatus.connected && sshStatus.status !== "Reconnecting") return;
+    const timer = setInterval(loadStatus, 5000);
+    return () => clearInterval(timer);
+  }, [sshStatus.connected, sshStatus.status]);
 
   const handleConnect = async () => {
     const hostInput = document.querySelector(".ssh-host-input") as HTMLInputElement;
@@ -150,14 +157,28 @@ export default function TabSshForward() {
           <div className="form-group"><label>端口</label><input type="number" value={form.port} onChange={e => setForm({...form, port: +e.target.value})} /></div>
           <div className="form-group"><label>用户名</label><input value={form.username} onChange={e => setForm({...form, username: e.target.value})} /></div>
           <div className="form-group"><label>密码</label><input type="password" value={form.password} onChange={e => setForm({...form, password: e.target.value})} /></div>
-          {sshStatus.connected
-            ? <button className="btn btn-danger" onClick={handleDisconnect}>断开</button>
-            : <button className="btn btn-primary" onClick={handleConnect}>连接</button>
-          }
+          {sshStatus.status === "Connected" ? (
+            <button className="btn btn-danger" onClick={handleDisconnect}>断开</button>
+          ) : sshStatus.status === "Reconnecting" ? (
+            <button className="btn btn-secondary" disabled>重连中...</button>
+          ) : (
+            <button className="btn btn-primary" onClick={handleConnect}>连接</button>
+          )}
+          {sshStatus.status === "Disconnected" && sshStatus.reconnect_info?.retry_count === sshStatus.reconnect_info?.max_retries && (
+            <button className="btn btn-secondary" onClick={async () => { await call("ssh_reconnect"); loadStatus(); }} style={{ marginLeft: 8 }}>
+              重新连接
+            </button>
+          )}
         </div>
         <div style={{marginTop:8}}>
-          <span className={`status-dot ${sshStatus.connected ? "online" : "offline"}`}></span>
-          {sshStatus.connected ? `已连接 → ${sshStatus.host}:${sshStatus.port}` : "未连接"}
+          <span className={`status-dot ${
+            sshStatus.status === "Connected" ? "online" :
+            sshStatus.status === "Reconnecting" ? "reconnecting" :
+            "offline"
+          }`}></span>
+          {sshStatus.status === "Connected" && `已连接 → ${sshStatus.host}:${sshStatus.port}`}
+          {sshStatus.status === "Reconnecting" && `重连中 (第 ${sshStatus.reconnect_info?.retry_count ?? 0}/${sshStatus.reconnect_info?.max_retries ?? 10} 次)...`}
+          {sshStatus.status === "Disconnected" && (sshStatus.reconnect_info?.retry_count === sshStatus.reconnect_info?.max_retries ? "连接已断开，请手动重连" : "未连接")}
         </div>
       </div>
 
