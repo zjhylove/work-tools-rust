@@ -7,6 +7,9 @@ plugins/**/*.wtplugin.zip
 release/*.dmg
 release/*.wtplugin.zip
 
+# Generated plugin frontend assets
+plugins/*/assets/
+
 #claude
 .claude/
 .claude/*
