@@ -58,13 +58,14 @@ pub struct SshService {
     next_port: u16,
     threads: Vec<thread::JoinHandle<()>>,
     stop_flags: Vec<Arc<Mutex<bool>>>,
-    // 新增字段
     connect_params: Option<ConnectParams>,
     heartbeat_stop: Arc<Mutex<bool>>,
     heartbeat_thread: Option<thread::JoinHandle<()>>,
     reconnect_stop: Arc<Mutex<bool>>,
-    reconnect_state: Option<ReconnectState>,
+    reconnect_state: Arc<Mutex<Option<ReconnectState>>>,
     reconnect_thread: Option<thread::JoinHandle<()>>,
+    manual_disconnect: bool,
+    reconnect_exhausted: bool,
 }
 
 struct ForwardEntry {
@@ -84,8 +85,10 @@ impl SshService {
             heartbeat_stop: Arc::new(Mutex::new(false)),
             heartbeat_thread: None,
             reconnect_stop: Arc::new(Mutex::new(false)),
-            reconnect_state: None,
+            reconnect_state: Arc::new(Mutex::new(None)),
             reconnect_thread: None,
+            manual_disconnect: false,
+            reconnect_exhausted: false,
         }
     }
 
@@ -101,11 +104,20 @@ impl SshService {
     }
 
     pub fn is_reconnecting(&self) -> bool {
-        self.reconnect_state.is_some()
+        self.reconnect_state.lock().unwrap().is_some()
+    }
+
+    pub fn is_reconnect_exhausted(&self) -> bool {
+        self.reconnect_exhausted
+    }
+
+    /// 检查是否有转发线程异常退出
+    pub fn any_forward_thread_exited(&self) -> bool {
+        self.threads.iter().any(|h| h.is_finished())
     }
 
     pub fn connection_state(&self) -> SshConnectionState {
-        if self.reconnect_state.is_some() {
+        if self.reconnect_state.lock().unwrap().is_some() {
             SshConnectionState::Reconnecting
         } else if self.is_connected() {
             SshConnectionState::Connected
@@ -114,8 +126,16 @@ impl SshService {
         }
     }
 
+    pub fn manual_disconnect(&self) -> bool {
+        self.manual_disconnect
+    }
+
+    pub fn set_manual_disconnect(&mut self, value: bool) {
+        self.manual_disconnect = value;
+    }
+
     pub fn get_reconnect_info(&self) -> Option<ReconnectInfo> {
-        self.reconnect_state.as_ref().map(|rs| {
+        self.reconnect_state.lock().unwrap().as_ref().map(|rs| {
             let duration_until_retry = rs.next_retry_at
                 .checked_duration_since(std::time::Instant::now())
                 .unwrap_or(std::time::Duration::from_secs(0));
@@ -142,6 +162,7 @@ impl SshService {
         });
 
         self.session = Some(Arc::new(Mutex::new(session)));
+        self.reconnect_exhausted = false;
         Ok(())
     }
 
@@ -357,10 +378,13 @@ impl SshService {
                 if *stop.lock().unwrap() {
                     return;
                 }
-                thread::sleep(Duration::from_secs(15));
-
-                if *stop.lock().unwrap() {
-                    return;
+                // 每 15 秒检测一次心跳，但每秒检查停止标志以便快速响应断开
+                let sleep_until = std::time::Instant::now() + Duration::from_secs(15);
+                while std::time::Instant::now() < sleep_until {
+                    if *stop.lock().unwrap() {
+                        return;
+                    }
+                    thread::sleep(Duration::from_secs(1));
                 }
 
                 let alive = session_check
@@ -405,6 +429,7 @@ impl SshService {
     /// 启动自动重连
     pub fn start_reconnect(&mut self) {
         self.stop_reconnect();
+        self.reconnect_exhausted = false;
 
         let params = match &self.connect_params {
             Some(p) => ConnectParams {
@@ -416,7 +441,7 @@ impl SshService {
             None => return,
         };
 
-        self.reconnect_state = Some(ReconnectState {
+        *self.reconnect_state.lock().unwrap() = Some(ReconnectState {
             retry_count: 0,
             max_retries: 10,
             next_retry_at: std::time::Instant::now(),
@@ -424,6 +449,7 @@ impl SshService {
 
         let stop = self.reconnect_stop.clone();
         let session_slot = self.session.clone();
+        let state = self.reconnect_state.clone();
 
         let host = params.host.clone();
         let port = params.port;
@@ -438,6 +464,15 @@ impl SshService {
                 if *stop.lock().unwrap() {
                     tracing::info!("SSH 重连已取消");
                     return;
+                }
+
+                // 更新重试计数
+                {
+                    let mut s = state.lock().unwrap();
+                    if let Some(ref mut rs) = *s {
+                        rs.retry_count = attempt;
+                        rs.next_retry_at = std::time::Instant::now() + delay;
+                    }
                 }
 
                 tracing::info!("SSH 重连尝试 {}/10，{} 秒后执行...", attempt, delay.as_secs());
@@ -479,7 +514,7 @@ impl SshService {
             let _ = handle.join();
         }
         *self.reconnect_stop.lock().unwrap() = false;
-        self.reconnect_state = None;
+        *self.reconnect_state.lock().unwrap() = None;
     }
 
     fn create_session(host: &str, port: u16, username: &str, password: &str) -> Result<Session> {
@@ -505,7 +540,10 @@ impl SshService {
         let handle = self.reconnect_thread.take().unwrap();
         let _ = handle.join();
         let connected = self.is_connected();
-        self.reconnect_state = None;
+        *self.reconnect_state.lock().unwrap() = None;
+        if !connected {
+            self.reconnect_exhausted = true;
+        }
         Some(connected)
     }
 

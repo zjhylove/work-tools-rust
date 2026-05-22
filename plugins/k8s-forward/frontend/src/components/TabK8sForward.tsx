@@ -279,9 +279,9 @@ export default function TabK8sForward() {
                   SSH 重连中 (第 {sshStatus.reconnect_info?.retry_count ?? 0}/{sshStatus.reconnect_info?.max_retries ?? 10} 次)...
                 </div>
               )}
-              {sshStatus.status === "Disconnected" && sshStatus.reconnect_info?.retry_count === sshStatus.reconnect_info?.max_retries && (
+              {sshStatus.status === "Disconnected" && sshStatus.reconnect_info && sshStatus.reconnect_info.retry_count === sshStatus.reconnect_info.max_retries && (
                 <div className="reconnect-banner error">
-                  SSH 连接已断开，请前往 SSH端口转发 页面重新连接
+                  SSH 重连失败（已重试 {sshStatus.reconnect_info.max_retries} 次），请前往 SSH端口转发 页面点击连接
                 </div>
               )}
               <div className="card">

@@ -119,6 +119,7 @@ impl K8sForwardPlugin {
         let password = get_str(params, "password")?;
 
         let mut ssh = self.ssh.lock().unwrap();
+        ssh.set_manual_disconnect(false);
         // 先断开旧连接清理所有线程和端口绑定，避免旧 listener 占用端口导致恢复规则失败
         ssh.disconnect();
         ssh.connect(host, port, username, password)?;
@@ -144,7 +145,9 @@ impl K8sForwardPlugin {
     }
 
     fn handle_ssh_disconnect(&self) -> Result<Value> {
-        self.ssh.lock().unwrap().disconnect();
+        let mut ssh = self.ssh.lock().unwrap();
+        ssh.set_manual_disconnect(true);
+        ssh.disconnect();
         Ok(json!({"success": true}))
     }
 
@@ -157,6 +160,7 @@ impl K8sForwardPlugin {
             return Err(anyhow::anyhow!("没有保存的连接参数，请使用 ssh_connect"));
         }
         ssh.stop_reconnect();
+        ssh.set_manual_disconnect(false);
         ssh.start_reconnect();
         Ok(json!({"success": true, "message": "开始重连..."}))
     }
@@ -165,9 +169,19 @@ impl K8sForwardPlugin {
         let mut ssh = self.ssh.lock().unwrap();
         let data = self.load_data()?;
 
-        // 检查心跳线程是否退出（退出表示检测到断连）
-        if ssh.heartbeat_exited() && !ssh.is_reconnecting() && ssh.has_connect_params() {
-            tracing::warn!("SSH 心跳检测到断连，启动自动重连");
+        // 检查是否需要触发自动重连
+        let need_reconnect = !ssh.is_reconnecting()
+            && ssh.has_connect_params()
+            && !ssh.manual_disconnect()
+            && !ssh.is_reconnect_exhausted()
+            && (ssh.heartbeat_exited() || (ssh.is_connected() && ssh.any_forward_thread_exited()));
+
+        if need_reconnect {
+            if ssh.heartbeat_exited() {
+                tracing::warn!("SSH 心跳检测到断连，启动自动重连");
+            } else {
+                tracing::warn!("检测到转发线程异常退出，启动自动重连");
+            }
             ssh.start_reconnect();
         }
 

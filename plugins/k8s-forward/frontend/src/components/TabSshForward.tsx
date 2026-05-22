@@ -69,9 +69,15 @@ export default function TabSshForward() {
   };
 
   const handleDisconnect = async () => {
-    await call("ssh_disconnect");
+    const prevStatus = sshStatus;
     setSshStatus({ connected: false, status: "Disconnected" });
-    window.WorkTools.toast.info("已断开");
+    try {
+      await call("ssh_disconnect");
+      window.WorkTools.toast.info("SSH 已断开");
+    } catch (e: unknown) {
+      setSshStatus(prevStatus);
+      window.WorkTools.toast.error(`断开失败: ${e}`);
+    }
   };
 
   const handleAdd = () => {
@@ -164,11 +170,6 @@ export default function TabSshForward() {
           ) : (
             <button className="btn btn-primary" onClick={handleConnect}>连接</button>
           )}
-          {sshStatus.status === "Disconnected" && sshStatus.reconnect_info?.retry_count === sshStatus.reconnect_info?.max_retries && (
-            <button className="btn btn-secondary" onClick={async () => { await call("ssh_reconnect"); loadStatus(); }} style={{ marginLeft: 8 }}>
-              重新连接
-            </button>
-          )}
         </div>
         <div style={{marginTop:8}}>
           <span className={`status-dot ${
@@ -178,7 +179,7 @@ export default function TabSshForward() {
           }`}></span>
           {sshStatus.status === "Connected" && `已连接 → ${sshStatus.host}:${sshStatus.port}`}
           {sshStatus.status === "Reconnecting" && `重连中 (第 ${sshStatus.reconnect_info?.retry_count ?? 0}/${sshStatus.reconnect_info?.max_retries ?? 10} 次)...`}
-          {sshStatus.status === "Disconnected" && (sshStatus.reconnect_info?.retry_count === sshStatus.reconnect_info?.max_retries ? "连接已断开，请手动重连" : "未连接")}
+          {sshStatus.status === "Disconnected" && "未连接"}
         </div>
       </div>
 
