@@ -8,6 +8,15 @@ declare global {
   }
 }
 
+export interface SshConnection {
+  id: string;
+  name: string;
+  host: string;
+  port: number;
+  username: string;
+  password: string;
+}
+
 export interface ForwardRule {
   id: string;
   name: string;
@@ -16,6 +25,7 @@ export interface ForwardRule {
   remote_host: string;
   remote_port: number;
   rule_type: "Manual" | "K8s";
+  ssh_connection_id: string;
   cluster?: string;
   namespace?: string;
   pod_name?: string;
@@ -43,6 +53,8 @@ export interface SshStatus {
   port?: number;
   status: SshConnectionState;
   reconnect_info?: ReconnectInfo;
+  connection_id?: string;
+  connection_name?: string;
 }
 
 export interface KuboardStatus {
