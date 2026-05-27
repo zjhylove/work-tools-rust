@@ -181,6 +181,23 @@ impl SshService {
         self.session = None;
     }
 
+    /// 停止所有转发线程并释放 TCP 端口，但保持 SSH 会话不断开。
+    /// 用于自动重连成功后清理旧会话残留的转发线程。
+    pub fn stop_forwards(&mut self) {
+        let count = self.threads.len();
+        for flag in &self.stop_flags {
+            *flag.lock().unwrap() = true;
+        }
+        for handle in self.threads.drain(..) {
+            let _ = handle.join();
+        }
+        self.stop_flags.clear();
+        self.forwards.clear();
+        if count > 0 {
+            tracing::info!("已停止 {} 个旧转发线程", count);
+        }
+    }
+
     /// 添加端口转发规则，返回实际使用的本地端口
     pub fn add_forward(
         &mut self,
@@ -188,6 +205,7 @@ impl SshService {
         remote_host: &str,
         remote_port: u16,
         local_port: u16,
+        ssh_connection_id: &str,
     ) -> Result<u16> {
         let session = self.session.clone().ok_or_else(|| anyhow!("SSH 未连接"))?;
 
@@ -328,6 +346,7 @@ impl SshService {
             namespace: None,
             pod_name: None,
             container_name: None,
+            ssh_connection_id: ssh_connection_id.to_string(),
         };
 
         self.threads.push(handle);
