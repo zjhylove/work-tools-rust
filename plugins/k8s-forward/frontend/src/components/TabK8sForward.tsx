@@ -256,10 +256,10 @@ export default function TabK8sForward() {
             <div className="form-row">
               <div className="form-group">
                 <label>通过 SSH 转发</label>
-                <select value={selectedSshId} onChange={e => setSelectedSshId(e.target.value)}>
+                <select value={selectedSshId} onChange={e => setSelectedSshId(e.target.value)} onFocus={loadSshConnections}>
                   <option value="">-- 选择 SSH 连接 --</option>
-                  {sshConnections.map(c => (
-                    <option key={c.connection_id} value={c.connection_id}>{c.connection_name} ({c.host}:{c.port}){c.connected ? "" : " - 未连接"}</option>
+                  {sshConnections.filter(c => c.connected).map(c => (
+                    <option key={c.connection_id} value={c.connection_id}>{c.connection_name} ({c.host}:{c.port})</option>
                   ))}
                 </select>
               </div>
