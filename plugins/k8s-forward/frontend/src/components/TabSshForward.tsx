@@ -13,7 +13,7 @@ export default function TabSshForward() {
   const [selectedConnId, setSelectedConnId] = useState<string>("");
   const [editingRule, setEditingRule] = useState<ForwardRule | null>(null);
   const [isNewRule, setIsNewRule] = useState(false);
-  const [editingConn, setEditingConn] = useState<(SshConnection & { id?: string }) | null>(null);
+  const [editingConn, setEditingConn] = useState<{ id?: string; name: string; host: string; port: number; username: string; password: string } | null>(null);
 
   const call = useCallback(async (method: string, params?: unknown) => {
     return await window.pluginAPI.call(PLUGIN_ID, method, (params ?? {}) as Record<string, unknown>);
@@ -176,7 +176,7 @@ export default function TabSshForward() {
       <div className="card">
         <div className="card-header" style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
           <span>SSH 连接管理</span>
-          <button className="btn btn-primary btn-sm" onClick={() => setEditingConn({ name: "", host: "", port: 22, username: "", password: "" })}>+ 添加 SSH</button>
+          <button className="btn btn-primary btn-sm" onClick={() => setEditingConn({ id: undefined, name: "", host: "", port: 22, username: "", password: "" })}>+ 添加 SSH</button>
         </div>
         {connections.length === 0 ? (
           <div style={{textAlign:"center",color:"var(--text-tertiary)",padding:20}}>暂无 SSH 连接，点击右上角添加</div>
@@ -206,7 +206,7 @@ export default function TabSshForward() {
                     ) : (
                       <button className="btn btn-primary btn-sm" onClick={() => handleConnect(c.connection_id!)}>连接</button>
                     )}
-                    <button className="btn btn-secondary btn-sm" style={{marginLeft:4}} onClick={() => setEditingConn({ id: c.connection_id, name: c.connection_name || "", host: c.host || "", port: c.port || 22, username: "", password: "" })}>编辑</button>
+                    <button className="btn btn-secondary btn-sm" style={{marginLeft:4}} onClick={() => setEditingConn({ id: c.connection_id!, name: c.connection_name || "", host: c.host || "", port: c.port || 22, username: "", password: "" })}>编辑</button>
                     <button className="btn btn-danger btn-sm" style={{marginLeft:4}} onClick={() => handleRemoveConnection(c.connection_id!)}>删除</button>
                   </td>
                 </tr>
