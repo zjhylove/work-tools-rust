@@ -65,9 +65,21 @@ pub struct ForwardRule {
 
 ### Migration strategy
 
-Custom `Deserialize` for `PluginData`:
-- If `ssh_connections` is empty but legacy `ssh: Option<SshConfig>` is present, convert to a `SshConnection` with `id = UUID`, `name = "{host}"`, and assign all existing `forward_rules` to this connection ID
-- `SshConfig` struct is kept for migration reading only, removed from active data model
+In `K8sForwardPlugin::load_data()`, after deserializing `PluginData`, check and migrate:
+
+1. Read old JSON with both `ssh` and `ssh_connections` fields. Keep `SshConfig` struct with `#[serde(default)]` for backward compat read:
+   ```rust
+   pub struct PluginData {
+       #[serde(default)]
+       pub ssh_connections: Vec<SshConnection>,
+       #[serde(default)]
+       pub ssh: Option<SshConfig>,  // legacy, used only for migration
+       // ...
+   }
+   ```
+2. In `load_data()`: if `ssh_connections` is empty and `ssh` is Some, create a `SshConnection` from the old `SshConfig` with a generated UUID and `name = host`, then set all `forward_rules[].ssh_connection_id` to this new ID
+3. After migration, call `save_data()` to persist the new format
+4. On serialize, the `ssh` field is skipped (`#[serde(skip_serializing)]`) so the new format is clean
 
 ## Backend Architecture Changes (lib.rs)
 
@@ -90,7 +102,7 @@ pub struct K8sForwardPlugin {
 |---|---|---|
 | `ssh_add_connection` | `{name, host, port, username, password}` | Add SSH connection config (does not connect) |
 | `ssh_update_connection` | `{id, name?, host?, port?, username?, password?}` | Update connection config |
-| `ssh_remove_connection` | `{id}` | Remove connection (disconnect first, clean up forwards) |
+| `ssh_remove_connection` | `{id}` | Disconnect if active, stop all associated forwards, remove connection config AND its associated forward_rules from PluginData |
 | `ssh_list_connections` | - | Return all connections with status info |
 
 ### Modified handle_call methods
@@ -181,7 +193,7 @@ export interface SshStatus {
 
 - Connecting to a connection that is already connected: return error "Already connected"
 - Forwarding on a disconnected SSH: return error with connection name, suggest connecting first
-- Removing a connection that has active forwards: auto-stop forwards and warn
+- Removing a connection that has active forwards: auto-stop forwards, remove all associated forward_rules from PluginData, and show toast with count of removed rules
 - Duplicate connection names: allowed (disambiguated by host:port display)
 
 ## Testing Strategy
