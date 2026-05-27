@@ -21,6 +21,8 @@ export default function TabK8sForward() {
   const [forwards, setForwards] = useState<K8sForwardInfo>({ rules: [], mappings: [] });
   const [editingForward, setEditingForward] = useState<{ rule_id: string; domain: string; local_port: number; pod_name: string; remote_host: string; remote_port: number; local_host: string } | null>(null);
   const [sshStatus, setSshStatus] = useState<SshStatus>({ connected: false, status: "Disconnected" });
+  const [sshConnections, setSshConnections] = useState<SshStatus[]>([]);
+  const [selectedSshId, setSelectedSshId] = useState<string>("");
 
   const call = useCallback(async (method: string, params?: unknown) => {
     return await window.pluginAPI.call(PLUGIN_ID, method, (params ?? {}) as Record<string, unknown>);
@@ -31,6 +33,12 @@ export default function TabK8sForward() {
   const loadSshStatus = async () => {
     try {
       setSshStatus(await call("ssh_status") as SshStatus);
+    } catch { /* ignore */ }
+  };
+  const loadSshConnections = async () => {
+    try {
+      const list = await call("ssh_list_connections") as SshStatus[];
+      setSshConnections(list);
     } catch { /* ignore */ }
   };
   const validateForwards = async () => {
@@ -53,7 +61,7 @@ export default function TabK8sForward() {
           });
         }
       } catch { /* ignore */ }
-      const results = await Promise.allSettled([loadStatus(), loadForwards()]);
+      const results = await Promise.allSettled([loadStatus(), loadForwards(), loadSshConnections()]);
       results.forEach((r, i) => { if (r.status === "rejected") console.warn(`init call ${i} failed:`, r.reason); });
     };
     init();
@@ -126,8 +134,12 @@ export default function TabK8sForward() {
   };
 
   const handleForward = async (podName: string, containerName: string, containerPort: number) => {
+    if (!selectedSshId) {
+      window.WorkTools.toast.warning("请先选择一个 SSH 连接");
+      return;
+    }
     try {
-      await call("forward_pod", { cluster: selCluster, namespace: selNs, pod_name: podName, container_name: containerName, container_port: containerPort });
+      await call("forward_pod", { cluster: selCluster, namespace: selNs, pod_name: podName, container_name: containerName, container_port: containerPort, ssh_connection_id: selectedSshId });
       window.WorkTools.toast.success(`已转发 ${podName}/${containerName}:${containerPort}`);
       loadForwards();
     } catch (e: unknown) { window.WorkTools.toast.error(`转发失败: ${e}`); }
@@ -167,6 +179,11 @@ export default function TabK8sForward() {
   const clearUrlError = () => {
     const urlInput = document.querySelector(".kuboard-url-input") as HTMLInputElement;
     if (urlInput) window.WorkTools.FieldError.clear(urlInput);
+  };
+
+  const getConnectionName = (connId: string) => {
+    const conn = sshConnections.find(c => c.connection_id === connId);
+    return conn?.connection_name || "-";
   };
 
   const filteredPods = pods.filter(p => p.status === "Running" && p.name.toLowerCase().includes(search.toLowerCase()));
@@ -235,6 +252,21 @@ export default function TabK8sForward() {
           </div>
 
           <div className="card">
+            <div className="card-header">SSH 连接选择</div>
+            <div className="form-row">
+              <div className="form-group">
+                <label>通过 SSH 转发</label>
+                <select value={selectedSshId} onChange={e => setSelectedSshId(e.target.value)}>
+                  <option value="">-- 选择 SSH 连接 --</option>
+                  {sshConnections.filter(c => c.connected).map(c => (
+                    <option key={c.connection_id} value={c.connection_id}>{c.connection_name} ({c.host}:{c.port})</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          </div>
+
+          <div className="card">
             <div className="card-header" style={{display:"flex",justifyContent:"space-between"}}>
               <span>Pod 列表 ({filteredPods.length})</span>
               <input placeholder="搜索 Pod..." value={search} onChange={e => setSearch(e.target.value)} className="search-input-sm" />
@@ -287,7 +319,7 @@ export default function TabK8sForward() {
               <div className="card">
               <div className="card-header">已转发列表</div>
               <table>
-                <thead><tr><th>Pod名称</th><th>Pod地址</th><th>本地端口</th><th>目标</th><th>操作</th></tr></thead>
+                <thead><tr><th>Pod名称</th><th>Pod地址</th><th>本地端口</th><th>目标</th><th>SSH连接</th><th>操作</th></tr></thead>
                 <tbody>
                   {forwards.rules.map(r => {
                     const m = forwards.mappings.find(m => m.rule_id === r.id && m.editable);
@@ -297,6 +329,7 @@ export default function TabK8sForward() {
                         <td>{m?.domain || `${r.remote_host}:${r.remote_port}`}</td>
                         <td>{r.local_port}</td>
                         <td>{r.remote_host}:{r.remote_port}</td>
+                        <td>{getConnectionName(r.ssh_connection_id)}</td>
                         <td>
                           <button className="btn btn-secondary btn-sm" style={{marginRight:4}} onClick={() => setEditingForward({ rule_id: r.id, domain: m?.domain || `${r.remote_host}:${r.remote_port}`, local_port: r.local_port, pod_name: r.pod_name || "", remote_host: r.remote_host, remote_port: r.remote_port, local_host: r.local_host })}>编辑</button>
                           <button className="btn btn-danger btn-sm" onClick={() => handleUnforward(r.id)}>取消</button>
