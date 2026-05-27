@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import type { ForwardRule, SshStatus } from "../types";
+import type { ForwardRule, SshConnection, SshStatus } from "../types";
 
 declare global {
   interface Window { WorkTools: { toast: { success(m:string):void; error(m:string):void; info(m:string):void; warning(m:string):void }; FieldError: { show(el:HTMLElement, m:string):void; clear(el:HTMLElement):void; clearAll(f:HTMLElement):void } } }
@@ -8,19 +8,20 @@ declare global {
 const PLUGIN_ID = "k8s-forward";
 
 export default function TabSshForward() {
-  const [sshStatus, setSshStatus] = useState<SshStatus>({ connected: false, status: "Disconnected" });
+  const [connections, setConnections] = useState<SshStatus[]>([]);
   const [rules, setRules] = useState<ForwardRule[]>([]);
-  const [form, setForm] = useState({ host: "", port: 22, username: "", password: "" });
-  const [editing, setEditing] = useState<ForwardRule | null>(null);
+  const [selectedConnId, setSelectedConnId] = useState<string>("");
+  const [editingRule, setEditingRule] = useState<ForwardRule | null>(null);
   const [isNewRule, setIsNewRule] = useState(false);
+  const [editingConn, setEditingConn] = useState<(SshConnection & { id?: string }) | null>(null);
 
   const call = useCallback(async (method: string, params?: unknown) => {
     return await window.pluginAPI.call(PLUGIN_ID, method, (params ?? {}) as Record<string, unknown>);
   }, []);
 
-  const loadStatus = async () => {
-    const s = await call("ssh_status") as SshStatus;
-    setSshStatus(s);
+  const loadConnections = async () => {
+    const list = await call("ssh_list_connections") as SshStatus[];
+    setConnections(list);
   };
 
   const loadRules = async () => {
@@ -29,58 +30,69 @@ export default function TabSshForward() {
   };
 
   useEffect(() => {
-    const init = async () => {
-      try {
-        const cfg = await call("get_config") as Record<string, unknown>;
-        const ssh = cfg.ssh as Record<string, unknown> | undefined;
-        if (ssh) {
-          setForm({
-            host: (ssh.host as string) || "",
-            port: (ssh.port as number) || 22,
-            username: (ssh.username as string) || "",
-            password: (ssh.password as string) || "",
-          });
-        }
-      } catch { /* ignore */ }
-      const results = await Promise.allSettled([loadStatus(), loadRules()]);
-      results.forEach((r, i) => { if (r.status === "rejected") console.warn(`init call ${i} failed:`, r.reason); });
-    };
-    init();
+    Promise.allSettled([loadConnections(), loadRules()]).then(() => {});
   }, []);
 
-  // 定期轮询 SSH 状态（检测重连状态变化）
   useEffect(() => {
-    if (!sshStatus.connected && sshStatus.status !== "Reconnecting") return;
-    const timer = setInterval(loadStatus, 5000);
+    const hasReconnecting = connections.some(c => c.status === "Reconnecting");
+    if (!hasReconnecting) return;
+    const timer = setInterval(async () => {
+      const list = await call("ssh_list_connections") as SshStatus[];
+      setConnections(list);
+    }, 5000);
     return () => clearInterval(timer);
-  }, [sshStatus.connected, sshStatus.status]);
+  }, [connections]);
 
-  const handleConnect = async () => {
-    const hostInput = document.querySelector(".ssh-host-input") as HTMLInputElement;
-    if (!form.host.trim()) {
-      window.WorkTools.FieldError.show(hostInput, "SSH 主机地址不能为空");
-      return;
-    }
+  const handleConnect = async (connectionId: string) => {
     try {
-      await call("ssh_connect", form);
+      await call("ssh_connect", { connection_id: connectionId });
       window.WorkTools.toast.success("SSH 连接成功");
-      loadStatus();
+      loadConnections();
     } catch (e: unknown) { window.WorkTools.toast.error(`连接失败: ${e}`); }
   };
 
-  const handleDisconnect = async () => {
-    const prevStatus = sshStatus;
-    setSshStatus({ connected: false, status: "Disconnected" });
+  const handleDisconnect = async (connectionId: string) => {
     try {
-      await call("ssh_disconnect");
+      await call("ssh_disconnect", { connection_id: connectionId });
       window.WorkTools.toast.info("SSH 已断开");
-    } catch (e: unknown) {
-      setSshStatus(prevStatus);
-      window.WorkTools.toast.error(`断开失败: ${e}`);
-    }
+      loadConnections();
+    } catch (e: unknown) { window.WorkTools.toast.error(`断开失败: ${e}`); }
   };
 
-  const handleAdd = () => {
+  const handleSaveConnection = async () => {
+    if (!editingConn) return;
+    try {
+      if (editingConn.id) {
+        await call("ssh_update_connection", editingConn);
+        window.WorkTools.toast.success("连接已更新");
+      } else {
+        await call("ssh_add_connection", editingConn);
+        window.WorkTools.toast.success("连接已添加");
+      }
+      setEditingConn(null);
+      loadConnections();
+    } catch (e: unknown) { window.WorkTools.toast.error(`保存失败: ${e}`); }
+  };
+
+  const handleRemoveConnection = async (id: string) => {
+    try {
+      const result = await call("ssh_remove_connection", { id }) as { removed_rules: number };
+      if (result.removed_rules > 0) {
+        window.WorkTools.toast.info(`已删除连接及 ${result.removed_rules} 条关联规则`);
+      } else {
+        window.WorkTools.toast.success("连接已删除");
+      }
+      if (selectedConnId === id) setSelectedConnId("");
+      loadConnections();
+      loadRules();
+    } catch (e: unknown) { window.WorkTools.toast.error(`删除失败: ${e}`); }
+  };
+
+  const handleAddRule = () => {
+    if (!selectedConnId && connections.length > 0) {
+      window.WorkTools.toast.warning("请先选择一个 SSH 连接");
+      return;
+    }
     const rule: ForwardRule = {
       id: window.crypto.randomUUID(),
       name: `rule-${Date.now()}`,
@@ -89,27 +101,28 @@ export default function TabSshForward() {
       remote_host: "",
       remote_port: 0,
       rule_type: "Manual" as const,
+      ssh_connection_id: selectedConnId,
     };
-    setEditing(rule);
+    setEditingRule(rule);
     setIsNewRule(true);
   };
 
-  const handleSave = async () => {
-    if (!editing) return;
+  const handleSaveRule = async () => {
+    if (!editingRule) return;
     try {
       if (isNewRule) {
-        await call("add_forward_rule", editing);
+        await call("add_forward_rule", editingRule);
       } else {
-        await call("update_forward_rule", editing);
+        await call("update_forward_rule", editingRule);
       }
       window.WorkTools.toast.success(isNewRule ? "规则已添加" : "已保存");
-      setEditing(null);
+      setEditingRule(null);
       setIsNewRule(false);
       loadRules();
     } catch (e: unknown) { window.WorkTools.toast.error(`保存失败: ${e}`); }
   };
 
-  const handleDelete = async (id: string) => {
+  const handleDeleteRule = async (id: string) => {
     try {
       await call("remove_forward_rule", { id });
       window.WorkTools.toast.success("已删除");
@@ -149,84 +162,144 @@ export default function TabSshForward() {
     } catch (e: unknown) { window.WorkTools.toast.error(`导出失败: ${e}`); }
   };
 
-  const clearHostError = () => {
-    const hostInput = document.querySelector(".ssh-host-input") as HTMLInputElement;
-    if (hostInput) window.WorkTools.FieldError.clear(hostInput);
+  const getConnectionName = (connId: string) => {
+    const conn = connections.find(c => c.connection_id === connId);
+    return conn?.connection_name || connId;
   };
+
+  const filteredRules = selectedConnId
+    ? rules.filter(r => r.ssh_connection_id === selectedConnId)
+    : rules;
 
   return (
     <div>
       <div className="card">
-        <div className="card-header">SSH 连接配置</div>
-        <div className="form-row">
-          <div className="form-group"><label>主机地址</label><input className="ssh-host-input" value={form.host} onChange={e => { setForm({...form, host: e.target.value}); clearHostError(); }} placeholder="10.73.x.x" /></div>
-          <div className="form-group"><label>端口</label><input type="number" value={form.port} onChange={e => setForm({...form, port: +e.target.value})} /></div>
-          <div className="form-group"><label>用户名</label><input value={form.username} onChange={e => setForm({...form, username: e.target.value})} /></div>
-          <div className="form-group"><label>密码</label><input type="password" value={form.password} onChange={e => setForm({...form, password: e.target.value})} /></div>
-          {sshStatus.status === "Connected" ? (
-            <button className="btn btn-danger" onClick={handleDisconnect}>断开</button>
-          ) : sshStatus.status === "Reconnecting" ? (
-            <button className="btn btn-secondary" disabled>重连中...</button>
-          ) : (
-            <button className="btn btn-primary" onClick={handleConnect}>连接</button>
-          )}
+        <div className="card-header" style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+          <span>SSH 连接管理</span>
+          <button className="btn btn-primary btn-sm" onClick={() => setEditingConn({ name: "", host: "", port: 22, username: "", password: "" })}>+ 添加 SSH</button>
         </div>
-        <div style={{marginTop:8}}>
-          <span className={`status-dot ${
-            sshStatus.status === "Connected" ? "online" :
-            sshStatus.status === "Reconnecting" ? "reconnecting" :
-            "offline"
-          }`}></span>
-          {sshStatus.status === "Connected" && `已连接 → ${sshStatus.host}:${sshStatus.port}`}
-          {sshStatus.status === "Reconnecting" && `重连中 (第 ${sshStatus.reconnect_info?.retry_count ?? 0}/${sshStatus.reconnect_info?.max_retries ?? 10} 次)...`}
-          {sshStatus.status === "Disconnected" && "未连接"}
-        </div>
+        {connections.length === 0 ? (
+          <div style={{textAlign:"center",color:"var(--text-tertiary)",padding:20}}>暂无 SSH 连接，点击右上角添加</div>
+        ) : (
+          <table>
+            <thead><tr><th>名称</th><th>地址</th><th>状态</th><th>操作</th></tr></thead>
+            <tbody>
+              {connections.map(c => (
+                <tr key={c.connection_id}>
+                  <td>{c.connection_name}</td>
+                  <td><code>{c.host}:{c.port}</code></td>
+                  <td>
+                    <span className={`status-dot ${
+                      c.status === "Connected" ? "online" :
+                      c.status === "Reconnecting" ? "reconnecting" :
+                      "offline"
+                    }`}></span>
+                    {c.status === "Connected" && "已连接"}
+                    {c.status === "Reconnecting" && `重连中 (${c.reconnect_info?.retry_count ?? 0}/${c.reconnect_info?.max_retries ?? 10})`}
+                    {c.status === "Disconnected" && "未连接"}
+                  </td>
+                  <td style={{whiteSpace:"nowrap"}}>
+                    {c.status === "Connected" ? (
+                      <button className="btn btn-danger btn-sm" onClick={() => handleDisconnect(c.connection_id!)}>断开</button>
+                    ) : c.status === "Reconnecting" ? (
+                      <button className="btn btn-secondary btn-sm" disabled>重连中...</button>
+                    ) : (
+                      <button className="btn btn-primary btn-sm" onClick={() => handleConnect(c.connection_id!)}>连接</button>
+                    )}
+                    <button className="btn btn-secondary btn-sm" style={{marginLeft:4}} onClick={() => setEditingConn({ id: c.connection_id, name: c.connection_name || "", host: c.host || "", port: c.port || 22, username: "", password: "" })}>编辑</button>
+                    <button className="btn btn-danger btn-sm" style={{marginLeft:4}} onClick={() => handleRemoveConnection(c.connection_id!)}>删除</button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
       </div>
 
       <div className="card">
         <div className="card-header" style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-          <span>转发规则</span>
+          <span style={{display:"flex",alignItems:"center",gap:8}}>
+            转发规则
+            <select value={selectedConnId} onChange={e => setSelectedConnId(e.target.value)} style={{fontSize:12,padding:"2px 4px"}}>
+              <option value="">全部连接</option>
+              {connections.map(c => (
+                <option key={c.connection_id} value={c.connection_id}>{c.connection_name}</option>
+              ))}
+            </select>
+          </span>
           <div style={{display:"flex",gap:8}}>
-            <button className="btn btn-primary btn-sm" onClick={handleAdd}>+ 添加规则</button>
+            <button className="btn btn-primary btn-sm" onClick={handleAddRule}>+ 添加规则</button>
             <button className="btn btn-secondary btn-sm" onClick={handleImport}>导入</button>
             <button className="btn btn-secondary btn-sm" onClick={handleExport}>导出</button>
           </div>
         </div>
         <table>
-          <thead><tr><th>名称</th><th>本地地址</th><th>本地端口</th><th>远程地址</th><th>远程端口</th><th>操作</th></tr></thead>
+          <thead>
+            <tr>
+              <th>名称</th>
+              <th>本地地址</th>
+              <th>本地端口</th>
+              <th>远程地址</th>
+              <th>远程端口</th>
+              {!selectedConnId && <th>SSH连接</th>}
+              <th>操作</th>
+            </tr>
+          </thead>
           <tbody>
-            {rules.map(r => (
+            {filteredRules.map(r => (
               <tr key={r.id}>
                 <td>{r.name}</td>
                 <td>{r.local_host}</td>
                 <td>{r.local_port}</td>
                 <td>{r.remote_host}</td>
                 <td>{r.remote_port}</td>
+                {!selectedConnId && <td>{getConnectionName(r.ssh_connection_id)}</td>}
                 <td>
-                  <button className="btn btn-secondary btn-sm" onClick={() => { setEditing(r); setIsNewRule(false); }} style={{marginRight:4}}>编辑</button>
-                  <button className="btn btn-danger btn-sm" onClick={() => handleDelete(r.id)}>删除</button>
+                  <button className="btn btn-secondary btn-sm" onClick={() => { setEditingRule(r); setIsNewRule(false); }} style={{marginRight:4}}>编辑</button>
+                  <button className="btn btn-danger btn-sm" onClick={() => handleDeleteRule(r.id)}>删除</button>
                 </td>
               </tr>
             ))}
-            {rules.length === 0 && <tr><td colSpan={6} style={{textAlign:"center",color:"var(--text-tertiary)",padding:20}}>暂无规则</td></tr>}
+            {filteredRules.length === 0 && <tr><td colSpan={selectedConnId ? 6 : 7} style={{textAlign:"center",color:"var(--text-tertiary)",padding:20}}>暂无规则</td></tr>}
           </tbody>
         </table>
       </div>
 
-      {editing && (
-        <div className="modal-overlay" onClick={() => setEditing(null)}>
+      {editingConn && (
+        <div className="modal-overlay" onClick={() => setEditingConn(null)}>
+          <div className="modal" onClick={e => e.stopPropagation()}>
+            <h3>{editingConn.id ? "编辑 SSH 连接" : "添加 SSH 连接"}</h3>
+            <div className="form-row">
+              <div className="form-group"><label>名称</label><input value={editingConn.name} onChange={e => setEditingConn({...editingConn, name: e.target.value})} placeholder="如：生产环境" /></div>
+              <div className="form-group"><label>主机地址</label><input value={editingConn.host} onChange={e => setEditingConn({...editingConn, host: e.target.value})} placeholder="10.73.x.x" /></div>
+              <div className="form-group"><label>端口</label><input type="number" value={editingConn.port} onChange={e => setEditingConn({...editingConn, port: +e.target.value})} /></div>
+            </div>
+            <div className="form-row">
+              <div className="form-group"><label>用户名</label><input value={editingConn.username} onChange={e => setEditingConn({...editingConn, username: e.target.value})} /></div>
+              <div className="form-group"><label>密码</label><input type="password" value={editingConn.password} onChange={e => setEditingConn({...editingConn, password: e.target.value})} placeholder={editingConn.id ? "留空则不修改" : ""} /></div>
+            </div>
+            <div className="modal-actions">
+              <button className="btn btn-secondary" onClick={() => setEditingConn(null)}>取消</button>
+              <button className="btn btn-primary" onClick={handleSaveConnection}>保存</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {editingRule && (
+        <div className="modal-overlay" onClick={() => setEditingRule(null)}>
           <div className="modal" onClick={e => e.stopPropagation()}>
             <h3>编辑规则</h3>
             <div className="form-row">
-              <div className="form-group"><label>名称</label><input value={editing.name} onChange={e => setEditing({...editing, name: e.target.value})} /></div>
-              <div className="form-group"><label>本地地址</label><input value={editing.local_host} onChange={e => setEditing({...editing, local_host: e.target.value})} /></div>
-              <div className="form-group"><label>本地端口</label><input type="number" value={editing.local_port} onChange={e => setEditing({...editing, local_port: +e.target.value})} /></div>
-              <div className="form-group"><label>远程地址</label><input value={editing.remote_host} onChange={e => setEditing({...editing, remote_host: e.target.value})} /></div>
-              <div className="form-group"><label>远程端口</label><input type="number" value={editing.remote_port} onChange={e => setEditing({...editing, remote_port: +e.target.value})} /></div>
+              <div className="form-group"><label>名称</label><input value={editingRule.name} onChange={e => setEditingRule({...editingRule, name: e.target.value})} /></div>
+              <div className="form-group"><label>本地地址</label><input value={editingRule.local_host} onChange={e => setEditingRule({...editingRule, local_host: e.target.value})} /></div>
+              <div className="form-group"><label>本地端口</label><input type="number" value={editingRule.local_port} onChange={e => setEditingRule({...editingRule, local_port: +e.target.value})} /></div>
+              <div className="form-group"><label>远程地址</label><input value={editingRule.remote_host} onChange={e => setEditingRule({...editingRule, remote_host: e.target.value})} /></div>
+              <div className="form-group"><label>远程端口</label><input type="number" value={editingRule.remote_port} onChange={e => setEditingRule({...editingRule, remote_port: +e.target.value})} /></div>
             </div>
             <div className="modal-actions">
-              <button className="btn btn-secondary" onClick={() => { setEditing(null); setIsNewRule(false); }}>取消</button>
-              <button className="btn btn-primary" onClick={handleSave}>保存</button>
+              <button className="btn btn-secondary" onClick={() => { setEditingRule(null); setIsNewRule(false); }}>取消</button>
+              <button className="btn btn-primary" onClick={handleSaveRule}>保存</button>
             </div>
           </div>
         </div>
