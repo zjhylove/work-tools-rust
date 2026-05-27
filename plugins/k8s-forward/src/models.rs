@@ -38,6 +38,8 @@ pub struct ForwardRule {
     pub pod_name: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub container_name: Option<String>,
+    #[serde(default)]
+    pub ssh_connection_id: String,
 }
 
 fn default_local_host() -> String {
@@ -66,6 +68,18 @@ pub struct SshConfig {
     pub port: u16, // 默认为 SSH 标准端口 22
     pub username: String,
     pub password: String, // 加密后的密码
+}
+
+/// SSH 连接配置（支持多个连接）
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SshConnection {
+    pub id: String,
+    pub name: String,
+    pub host: String,
+    #[serde(default = "default_ssh_port")]
+    pub port: u16,
+    pub username: String,
+    pub password: String, // 加密存储
 }
 
 fn default_ssh_port() -> u16 {
@@ -101,7 +115,9 @@ impl Default for ProxyConfig {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PluginData {
     #[serde(default)]
-    pub ssh: Option<SshConfig>,
+    pub ssh_connections: Vec<SshConnection>,
+    #[serde(default)]
+    pub ssh: Option<SshConfig>, // legacy, kept for migration
     #[serde(default)]
     pub kuboard: Option<KuboardConfig>,
     #[serde(default)]
@@ -110,9 +126,37 @@ pub struct PluginData {
     pub forward_rules: Vec<ForwardRule>,
 }
 
+impl PluginData {
+    /// Migrate legacy single-SSH format to multi-SSH format.
+    /// Returns true if migration occurred.
+    pub fn migrate_legacy(&mut self) -> bool {
+        if !self.ssh_connections.is_empty() || self.ssh.is_none() {
+            return false;
+        }
+        let old = self.ssh.take().unwrap();
+        let conn_id = uuid::Uuid::new_v4().to_string();
+        let conn = SshConnection {
+            name: old.host.clone(),
+            host: old.host,
+            port: old.port,
+            username: old.username,
+            password: old.password,
+            id: conn_id.clone(),
+        };
+        for rule in &mut self.forward_rules {
+            if rule.ssh_connection_id.is_empty() {
+                rule.ssh_connection_id = conn_id.clone();
+            }
+        }
+        self.ssh_connections.push(conn);
+        true
+    }
+}
+
 impl Default for PluginData {
     fn default() -> Self {
         Self {
+            ssh_connections: vec![],
             ssh: None,
             kuboard: None,
             proxy: ProxyConfig { port: 80 },
@@ -182,6 +226,10 @@ pub struct SshStatus {
     pub status: SshConnectionState,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub reconnect_info: Option<ReconnectInfo>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub connection_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub connection_name: Option<String>,
 }
 
 fn default_connection_state() -> SshConnectionState {
