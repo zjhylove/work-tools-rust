@@ -258,8 +258,8 @@ export default function TabK8sForward() {
                 <label>通过 SSH 转发</label>
                 <select value={selectedSshId} onChange={e => setSelectedSshId(e.target.value)}>
                   <option value="">-- 选择 SSH 连接 --</option>
-                  {sshConnections.filter(c => c.connected).map(c => (
-                    <option key={c.connection_id} value={c.connection_id}>{c.connection_name} ({c.host}:{c.port})</option>
+                  {sshConnections.map(c => (
+                    <option key={c.connection_id} value={c.connection_id}>{c.connection_name} ({c.host}:{c.port}){c.connected ? "" : " - 未连接"}</option>
                   ))}
                 </select>
               </div>

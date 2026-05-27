@@ -74,6 +74,16 @@ export default function TabSshForward() {
     } catch (e: unknown) { window.WorkTools.toast.error(`保存失败: ${e}`); }
   };
 
+  const handleEditConnection = async (connectionId: string) => {
+    try {
+      const cfg = await call("get_config") as { ssh_connections?: { id: string; name: string; host: string; port: number; username: string; password: string }[] };
+      const conn = (cfg.ssh_connections || []).find(c => c.id === connectionId);
+      if (conn) {
+        setEditingConn({ id: conn.id, name: conn.name, host: conn.host, port: conn.port, username: conn.username, password: conn.password });
+      }
+    } catch (e: unknown) { window.WorkTools.toast.error(`加载连接信息失败: ${e}`); }
+  };
+
   const handleRemoveConnection = async (id: string) => {
     try {
       const result = await call("ssh_remove_connection", { id }) as { removed_rules: number };
@@ -206,7 +216,7 @@ export default function TabSshForward() {
                     ) : (
                       <button className="btn btn-primary btn-sm" onClick={() => handleConnect(c.connection_id!)}>连接</button>
                     )}
-                    <button className="btn btn-secondary btn-sm" style={{marginLeft:4}} onClick={() => setEditingConn({ id: c.connection_id!, name: c.connection_name || "", host: c.host || "", port: c.port || 22, username: "", password: "" })}>编辑</button>
+                    <button className="btn btn-secondary btn-sm" style={{marginLeft:4}} onClick={() => handleEditConnection(c.connection_id!)}>编辑</button>
                     <button className="btn btn-danger btn-sm" style={{marginLeft:4}} onClick={() => handleRemoveConnection(c.connection_id!)}>删除</button>
                   </td>
                 </tr>
