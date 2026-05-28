@@ -228,6 +228,7 @@ impl SshService {
         let handle = thread::spawn(move || {
             let mut connections: Vec<ActiveConn> = Vec::new();
             let mut buf = [0u8; 8192];
+            let mut channel_fail_count = 0u32;
 
             loop {
                 if *stop.lock().unwrap() {
@@ -250,6 +251,7 @@ impl SshService {
                                 match s.channel_direct_tcpip(&rh, remote_port, None) {
                                     Ok(c) => {
                                         channel = Some(c);
+                                        channel_fail_count = 0;
                                         break;
                                     }
                                     Err(e) => {
@@ -258,6 +260,12 @@ impl SshService {
                                         if io.kind() == std::io::ErrorKind::WouldBlock {
                                             thread::sleep(Duration::from_millis(50));
                                             continue;
+                                        }
+                                        // 非 WouldBlock 错误：SSH 会话可能已断开
+                                        channel_fail_count += 1;
+                                        if channel_fail_count >= 10 {
+                                            tracing::warn!("转发线程连续 {} 次创建 channel 失败，SSH 会话可能已断开", channel_fail_count);
+                                            return;
                                         }
                                         break;
                                     }
@@ -384,6 +392,10 @@ impl SshService {
     }
 
     /// 启动心跳检测线程
+    ///
+    /// 通过实际创建 SSH channel 来探测连接存活，而非仅检查 `authenticated()`。
+    /// `authenticated()` 返回的是初始认证时的缓存状态，TCP 连接断开后仍返回 true，
+    /// 无法检测到防火墙/NAT 空闲超时导致的静默断连。
     pub fn start_heartbeat(&mut self) {
         self.stop_heartbeat();
 
@@ -397,7 +409,6 @@ impl SshService {
                 if *stop.lock().unwrap() {
                     return;
                 }
-                // 每 15 秒检测一次心跳，但每秒检查停止标志以便快速响应断开
                 let sleep_until = std::time::Instant::now() + Duration::from_secs(15);
                 while std::time::Instant::now() < sleep_until {
                     if *stop.lock().unwrap() {
@@ -406,20 +417,15 @@ impl SshService {
                     thread::sleep(Duration::from_secs(1));
                 }
 
-                let alive = session_check
-                    .as_ref()
-                    .map(|s| {
-                        let session = s.lock().unwrap();
-                        session.authenticated()
-                    })
-                    .unwrap_or(false);
+                let alive = probe_connection(&session_check);
 
                 if alive {
                     fail_count = 0;
                 } else {
                     fail_count += 1;
+                    tracing::warn!("SSH 心跳探测失败 ({}/2)", fail_count);
                     if fail_count >= 2 {
-                        tracing::warn!("SSH 心跳检测失败 {} 次，判定连接已断开", fail_count);
+                        tracing::warn!("SSH 心跳探测连续失败 {} 次，判定连接已断开", fail_count);
                         return;
                     }
                 }
@@ -583,4 +589,21 @@ impl SshService {
             }
         }
     }
+}
+
+/// 通过实际创建 SSH channel 来探测连接是否存活
+///
+/// 仅检查 `authenticated()` 不可靠——它返回初始认证的缓存状态，
+/// TCP 连接被防火墙/NAT 静默丢弃后仍返回 true。
+/// 此函数短暂切换到阻塞模式尝试创建 channel，能真正检测 TCP 层断连。
+fn probe_connection(session: &Option<Arc<Mutex<Session>>>) -> bool {
+    session.as_ref().map(|s| {
+        let session = s.lock().unwrap();
+        session.set_blocking(true);
+        session.set_timeout(5000);
+        let result = session.channel_session();
+        session.set_blocking(false);
+        session.set_timeout(0);
+        result.is_ok()
+    }).unwrap_or(false)
 }

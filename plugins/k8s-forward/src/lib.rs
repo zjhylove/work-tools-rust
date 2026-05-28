@@ -798,13 +798,27 @@ impl K8sForwardPlugin {
     fn handle_update_proxy_mapping(&self, params: &Value) -> Result<Value> {
         let rule_id = get_str(params, "rule_id")?;
         let domain = get_str(params, "domain")?;
-        let guard = self.proxy.lock().unwrap();
-        if let Some(ref proxy) = *guard {
-            let mapping = proxy.update_mapping(rule_id, domain)?;
-            Ok(serde_json::to_value(mapping)?)
-        } else {
-            Err(anyhow::anyhow!("代理未启动"))
+
+        // 持久化：更新转发规则中的 pod_name
+        let mut data = self.load_data()?;
+        let rule = data.forward_rules.iter_mut()
+            .find(|r| r.id == rule_id && r.rule_type == RuleType::K8s)
+            .ok_or_else(|| anyhow::anyhow!("未找到对应的 K8s 转发规则"))?;
+        rule.pod_name = Some(domain.to_string());
+        let local_port = rule.local_port;
+        self.save_data(&data)?;
+
+        // 如果代理已运行，同步更新内存中的映射
+        if let Some(ref proxy) = *self.proxy.lock().unwrap() {
+            proxy.update_mapping(rule_id, domain)?;
         }
+
+        Ok(serde_json::to_value(ProxyMapping {
+            domain: domain.to_string(),
+            target: format!("127.0.0.1:{}", local_port),
+            rule_id: rule_id.to_string(),
+            editable: true,
+        })?)
     }
 
     // ── 配置管理 ──

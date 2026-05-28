@@ -14,6 +14,7 @@ export default function TabSshForward() {
   const [editingRule, setEditingRule] = useState<ForwardRule | null>(null);
   const [isNewRule, setIsNewRule] = useState(false);
   const [editingConn, setEditingConn] = useState<{ id?: string; name: string; host: string; port: number; username: string; password: string } | null>(null);
+  const [connectingId, setConnectingId] = useState<string | null>(null);
 
   const call = useCallback(async (method: string, params?: unknown) => {
     return await window.pluginAPI.call(PLUGIN_ID, method, (params ?? {}) as Record<string, unknown>);
@@ -44,11 +45,13 @@ export default function TabSshForward() {
   }, [connections]);
 
   const handleConnect = async (connectionId: string) => {
+    setConnectingId(connectionId);
     try {
       await call("ssh_connect", { connection_id: connectionId });
       window.WorkTools.toast.success("SSH 连接成功");
       loadConnections();
     } catch (e: unknown) { window.WorkTools.toast.error(`连接失败: ${e}`); }
+    finally { setConnectingId(null); }
   };
 
   const handleDisconnect = async (connectionId: string) => {
@@ -213,6 +216,8 @@ export default function TabSshForward() {
                       <button className="btn btn-danger btn-sm" onClick={() => handleDisconnect(c.connection_id!)}>断开</button>
                     ) : c.status === "Reconnecting" ? (
                       <button className="btn btn-secondary btn-sm" disabled>重连中...</button>
+                    ) : connectingId === c.connection_id ? (
+                      <button className="btn btn-primary btn-sm" disabled><span className="wt-spinner"></span> 连接中</button>
                     ) : (
                       <button className="btn btn-primary btn-sm" onClick={() => handleConnect(c.connection_id!)}>连接</button>
                     )}
