@@ -379,3 +379,50 @@ body {
   font-size: 13px;
   color: var(--text-secondary);
 }
+
+/* 上传模态框 */
+.upload-modal-field {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.upload-modal-field label {
+  width: 70px;
+  text-align: right;
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 500;
+  flex-shrink: 0;
+}
+
+.upload-local-path {
+  color: var(--text-primary);
+  font-size: 13px;
+  word-break: break-all;
+}
+
+.upload-target-input {
+  flex: 1;
+  padding: 7px 10px;
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  font-size: 13px;
+  font-family: 'Menlo', 'Consolas', monospace;
+  transition: border-color 0.2s;
+}
+
+.upload-target-input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.upload-modal-hint {
+  margin-left: 80px;
+  font-size: 11px;
+  color: var(--text-tertiary);
+  line-height: 1.5;
+}

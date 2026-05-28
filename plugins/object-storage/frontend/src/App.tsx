@@ -36,6 +36,9 @@ function App() {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState('');
   const [showDeleteConnConfirm, setShowDeleteConnConfirm] = useState(false);
+  const [showUploadModal, setShowUploadModal] = useState(false);
+  const [uploadFilePath, setUploadFilePath] = useState('');
+  const [uploadTargetKey, setUploadTargetKey] = useState('');
 
   const [connForm, setConnForm] = useState(EMPTY_FORM);
 
@@ -129,12 +132,26 @@ function App() {
     const conn = connections.find((c) => c.id === selectedConnId);
     if (!conn?.bucket) return;
     const fileName = filePath.split(/[/\\]/).pop() || 'file';
-    const key = currentPrefix + fileName;
+    setUploadFilePath(filePath);
+    setUploadTargetKey(currentPrefix + fileName);
+    setShowUploadModal(true);
+  };
+
+  const handleConfirmUpload = async () => {
+    const conn = connections.find((c) => c.id === selectedConnId);
+    if (!conn?.bucket || !uploadTargetKey.trim()) return;
+    let key = uploadTargetKey.trim();
+    // OSS key 不带前导 /，统一去除以保持与现有 key 格式一致
+    if (key.startsWith('/')) key = key.substring(1);
+    if (!key) return;
+    setShowUploadModal(false);
     setLoading(true);
     try {
-      await api('upload_object', { connection_id: selectedConnId, bucket: conn.bucket, key, file_path: filePath });
+      await api('upload_object', { connection_id: selectedConnId, bucket: conn.bucket, key, file_path: uploadFilePath });
       WorkTools.toast.success('上传成功');
-      await loadObjects(selectedConnId, conn.bucket, currentPrefix);
+      const prefix = key.substring(0, key.lastIndexOf('/') + 1);
+      setCurrentPrefix(prefix);
+      await loadObjects(selectedConnId, conn.bucket, prefix);
     } catch (e) { WorkTools.toast.error('上传失败: ' + (e as Error).message); } finally { setLoading(false); }
   };
 
@@ -247,6 +264,40 @@ function App() {
             <div className="wt-modal-footer">
               <button className="wt-btn wt-btn--secondary" onClick={() => setShowDeleteConnConfirm(false)}>取消</button>
               <button className="wt-btn wt-btn--danger" onClick={handleConfirmDeleteConn}>删除</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showUploadModal && (
+        <div className="wt-modal-overlay" onClick={() => setShowUploadModal(false)}>
+          <div className="wt-modal" onClick={e => e.stopPropagation()}>
+            <div className="wt-modal-header">
+              <h3>上传文件</h3>
+            </div>
+            <div className="wt-modal-body">
+              <div className="upload-modal-field">
+                <label>本地文件</label>
+                <span className="upload-local-path">{uploadFilePath.split(/[/\\]/).pop()}</span>
+              </div>
+              <div className="upload-modal-field">
+                <label>上传路径</label>
+                <input
+                  className="upload-target-input"
+                  value={uploadTargetKey}
+                  onChange={(e) => setUploadTargetKey(e.target.value)}
+                  placeholder="/path/to/file.txt"
+                  autoFocus
+                  onKeyDown={(e) => { if (e.key === 'Enter') handleConfirmUpload(); }}
+                />
+              </div>
+              <div className="upload-modal-hint">
+                输入完整的上传路径（含文件名），目录不存在会自动创建。例如：/abc/dec/bb.txt
+              </div>
+            </div>
+            <div className="wt-modal-footer">
+              <button className="wt-btn wt-btn--secondary" onClick={() => setShowUploadModal(false)}>取消</button>
+              <button className="wt-btn wt-btn--primary" onClick={handleConfirmUpload} disabled={!uploadTargetKey.trim()}>上传</button>
             </div>
           </div>
         </div>
