@@ -132,6 +132,18 @@
   line-height: 1.5;
 }
 
+.format-badge {
+  margin-left: auto;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  background: var(--bg-secondary);
+  color: var(--text-tertiary);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
 /* ═══ Timeline ═══ */
 .timeline-section {
   margin-bottom: 20px;
@@ -262,12 +274,13 @@
 }
 
 .builder-panel.open {
-  max-height: 200px;
+  max-height: 320px;
   margin-top: 12px;
 }
 
 .field-grid {
   display: flex;
+  flex-wrap: wrap;
   gap: 12px;
   padding: 16px;
   background: var(--bg-secondary);

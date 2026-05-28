@@ -7,7 +7,14 @@ use worktools_plugin_api::Plugin;
 
 pub struct CronTools;
 
-const STANDARD_FIELDS: [(&str, &str); 5] = [
+#[derive(Debug, Clone, Copy, PartialEq)]
+enum CronFormat {
+    Standard5,
+    WithSeconds6,
+    Quartz7,
+}
+
+const FIELDS_5: [(&str, &str); 5] = [
     ("minute", "分钟"),
     ("hour", "小时"),
     ("day_of_month", "日"),
@@ -15,8 +22,27 @@ const STANDARD_FIELDS: [(&str, &str); 5] = [
     ("day_of_week", "周"),
 ];
 
+const FIELDS_6: [(&str, &str); 6] = [
+    ("second", "秒"),
+    ("minute", "分钟"),
+    ("hour", "小时"),
+    ("day_of_month", "日"),
+    ("month", "月"),
+    ("day_of_week", "周"),
+];
+
+const FIELDS_7: [(&str, &str); 7] = [
+    ("second", "秒"),
+    ("minute", "分钟"),
+    ("hour", "小时"),
+    ("day_of_month", "日"),
+    ("month", "月"),
+    ("day_of_week", "周"),
+    ("year", "年"),
+];
+
 fn describe_field(value: &str, field_name: &str) -> String {
-    if value == "*" {
+    if value == "*" || value == "?" {
         return format!("每{}", field_name);
     }
     if value.contains('/') {
@@ -51,24 +77,45 @@ fn describe_field(value: &str, field_name: &str) -> String {
     format!("{}为{}", field_name, value)
 }
 
-/// 将 5 字段标准 cron 转为 cron crate 要求的 7 字段格式
-fn to_7_field(expr: &str) -> String {
-    let fields: Vec<&str> = expr.split_whitespace().collect();
-    if fields.len() == 7 {
-        return expr.to_string();
+fn detect_format(expr: &str) -> Option<CronFormat> {
+    match expr.split_whitespace().count() {
+        5 => Some(CronFormat::Standard5),
+        6 => Some(CronFormat::WithSeconds6),
+        7 => Some(CronFormat::Quartz7),
+        _ => None,
     }
-    format!("0 {} *", expr)
+}
+
+fn normalize_to_7_field(expr: &str) -> Option<String> {
+    let fields: Vec<&str> = expr.split_whitespace().collect();
+    match fields.len() {
+        5 => Some(format!("0 {} *", expr)),
+        6 => Some(format!("{} *", expr)),
+        7 => Some(expr.to_string()),
+        _ => None,
+    }
+}
+
+fn format_name(fmt: CronFormat) -> &'static str {
+    match fmt {
+        CronFormat::Standard5 => "5段 (Unix)",
+        CronFormat::WithSeconds6 => "6段 (含秒)",
+        CronFormat::Quartz7 => "7段 (Quartz)",
+    }
 }
 
 fn describe_cron(expr: &str) -> String {
     let fields: Vec<&str> = expr.split_whitespace().collect();
-    if fields.len() != 5 {
-        return "无效的 cron 表达式（需要5个字段）".to_string();
-    }
+    let field_defs: &[(&str, &str)] = match fields.len() {
+        5 => &FIELDS_5,
+        6 => &FIELDS_6,
+        7 => &FIELDS_7,
+        _ => return "无效的 cron 表达式".to_string(),
+    };
     let parts: Vec<String> = fields
         .iter()
         .enumerate()
-        .map(|(i, f)| describe_field(f, STANDARD_FIELDS[i].1))
+        .map(|(i, f)| describe_field(f, field_defs[i].1))
         .collect();
     parts.join("，")
 }
@@ -106,18 +153,24 @@ impl Plugin for CronTools {
                     .ok_or("缺少 expr 参数")?;
                 let expr = expr.trim();
 
-                if expr.split_whitespace().count() != 5 {
-                    return Ok(serde_json::json!({
-                        "valid": false,
-                        "description": "无效的 cron 表达式（需要5个字段）",
-                        "error": "表达式需要5个空格分隔的字段"
-                    }));
-                }
+                let fmt = match detect_format(expr) {
+                    Some(f) => f,
+                    None => {
+                        return Ok(serde_json::json!({
+                            "valid": false,
+                            "description": "无效的 cron 表达式（需要 5、6 或 7 个字段）",
+                            "error": "表达式需要 5、6 或 7 个空格分隔的字段"
+                        }));
+                    }
+                };
 
-                match Schedule::from_str(&to_7_field(expr)) {
+                let normalized = normalize_to_7_field(expr).unwrap();
+
+                match Schedule::from_str(&normalized) {
                     Ok(_) => Ok(serde_json::json!({
                         "valid": true,
                         "description": describe_cron(expr),
+                        "format": format_name(fmt),
                         "error": null,
                     })),
                     Err(e) => Ok(serde_json::json!({
@@ -136,7 +189,9 @@ impl Plugin for CronTools {
                 let count = params.get("count").and_then(|v| v.as_u64()).unwrap_or(5) as usize;
                 let count = count.min(20);
 
-                let schedule = Schedule::from_str(&to_7_field(expr.trim())).context("cron 表达式解析失败")?;
+                let normalized = normalize_to_7_field(expr.trim())
+                    .ok_or("无效的 cron 表达式（需要 5、6 或 7 个字段）")?;
+                let schedule = Schedule::from_str(&normalized).context("cron 表达式解析失败")?;
 
                 let times: Vec<String> = schedule
                     .upcoming(Local)
@@ -158,6 +213,12 @@ impl Plugin for CronTools {
                     { "label": "工作日上午9点", "expr": "0 9 * * 1-5" },
                     { "label": "每月1号凌晨", "expr": "0 0 1 * *" },
                     { "label": "每周一凌晨", "expr": "0 0 * * 1" },
+                    { "label": "每30秒", "expr": "*/30 * * * * *" },
+                    { "label": "整点每分钟", "expr": "0 * * * * *" },
+                    { "label": "每天零点(Quartz)", "expr": "0 0 0 * * ? *" },
+                    { "label": "每小时整点(Quartz)", "expr": "0 0 * * * ? *" },
+                    { "label": "工作日9:30(Quartz)", "expr": "0 30 9 ? * MON-FRI *" },
+                    { "label": "每月1号零点(Quartz)", "expr": "0 0 0 1 * ? *" },
                 ]
             })),
 
