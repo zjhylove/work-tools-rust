@@ -11,6 +11,13 @@ use zip::ZipArchive;
 
 use crate::models::{ApiInfo, ControllerInfo};
 
+/// 内层泛型类型的解析结果
+struct ResolvedInnerType {
+    short_name: String,
+    fields: Vec<crate::models::ApiField>,
+    nodes: Vec<crate::models::NodeInfo>,
+}
+
 /// JAR 包解析器
 pub struct JarParser {
     /// 主 JAR 中的 class 文件: class_name (com/xxx/Foo) -> Vec<u8>
@@ -269,65 +276,84 @@ impl JarParser {
 
             // ── 1. 解析响应结构 ──
 
-            // 从签名获取响应内层类型（用于替换 wrapper data 字段类型）
-            let inner_resp_type: Option<String> = signature
+            // 从签名获取返回类型完整链（从外到内，如 HrmsAppResponse → PageResponse → DTO）
+            let resp_type_chain: Vec<String> = signature
                 .as_ref()
-                .and_then(|sig| type_resolver::extract_return_type_from_signature(sig));
+                .map(|sig| type_resolver::extract_return_type_chain_from_signature(sig))
+                .unwrap_or_default();
 
-            // 从签名获取响应 wrapper 类型
-            let resp_wrapper_type = signature
-                .as_ref()
-                .and_then(|sig| {
-                    let return_part = sig.split(')').nth(1)?;
-                    let chars: Vec<char> = return_part.chars().collect();
-                    if chars.first() == Some(&'L') {
-                        let end = chars.iter().position(|c| *c == '<' || *c == ';')?;
-                        let outer: String = chars[1..end].iter().collect();
-                        if !outer.starts_with("java/") {
-                            Some(outer.replace('/', "."))
-                        } else {
-                            None
-                        }
-                    } else {
-                        None
-                    }
-                })
-                .filter(|w| self.class_exists(w) && type_resolver::is_custom_type_private(w));
-
-            // 判断 inner_resp_type 是否与 wrapper 不同（如果相同说明没有 wrapper）
-            let has_distinct_inner = inner_resp_type
-                .as_ref()
-                .map(|inner| resp_wrapper_type.as_ref() != Some(inner))
-                .unwrap_or(false);
-
-            if let Some(ref wrapper) = resp_wrapper_type {
+            if resp_type_chain.len() >= 2 {
+                // ── 有 wrapper + 内层类型（支持多层嵌套泛型）──
+                let wrapper = &resp_type_chain[0];
                 let mut wrapper_visited = visited.clone();
                 let (mut wrapper_fields, wrapper_nodes) =
                     type_resolver::extract_dto_fields(wrapper, self, &mut wrapper_visited);
 
-                // 如果有内层类型，替换 data: Object 并解析内层类型
-                if has_distinct_inner {
-                    if let Some(ref inner) = inner_resp_type {
-                        if self.class_exists(inner) && type_resolver::is_custom_type_private(inner)
-                        {
-                            let inner_short = inner.rsplit('.').next().unwrap_or(inner);
-                            for f in &mut wrapper_fields {
-                                if f.field_name == "data" && f.field_type == "Object" {
-                                    f.field_type = inner_short.to_string();
+                // 收集所有内层类型的 fields + nodes
+                let mut resp_inner_visited = wrapper_visited;
+                let mut inner_data: Vec<ResolvedInnerType> = Vec::new();
+
+                for inner_type in &resp_type_chain[1..] {
+                    if self.class_exists(inner_type)
+                        && type_resolver::is_custom_type_private(inner_type)
+                    {
+                        let (inner_fields, inner_nodes) =
+                            type_resolver::extract_dto_fields(
+                                inner_type,
+                                self,
+                                &mut resp_inner_visited,
+                            );
+                        if !inner_fields.is_empty() {
+                            inner_data.push(ResolvedInnerType {
+                                short_name: inner_type.rsplit('.').next().unwrap_or(inner_type).to_string(),
+                                fields: inner_fields,
+                                nodes: inner_nodes,
+                            });
+                        }
+                    }
+                }
+
+                // 逐层链接 + 推入 resp_nodes（单次遍历）
+                // 将当前层的 Object 类型引用替换为下一层的具体类型
+                for i in 0..inner_data.len() {
+                    if i + 1 < inner_data.len() {
+                        // 用 split_at_mut 避免 i 和 i+1 的借用冲突
+                        let (left, right) = inner_data.split_at_mut(i + 1);
+                        let next_short = &right[0].short_name;
+                        for f in &mut left[i].fields {
+                            if f.field_type == "Object" {
+                                f.field_type = next_short.clone();
+                            }
+                            if let Some(ref mut info) = f.collection_info {
+                                if info.element_type == "Object" {
+                                    info.element_type = next_short.clone();
+                                    f.field_type = format!("{}<{}>", info.container, next_short);
                                 }
                             }
-                            let mut inner_visited = visited.clone();
-                            let (inner_fields, inner_nodes) =
-                                type_resolver::extract_dto_fields(inner, self, &mut inner_visited);
-                            if !inner_fields.is_empty() {
-                                resp_nodes.push(crate::models::NodeInfo {
-                                    node_name: inner_short.to_string(),
-                                    node_desc: String::new(),
-                                    resp_fields: inner_fields,
-                                });
-                                resp_nodes.extend(inner_nodes);
-                            }
                         }
+                    }
+                    resp_nodes.push(crate::models::NodeInfo {
+                        node_name: inner_data[i].short_name.clone(),
+                        node_desc: String::new(),
+                        resp_fields: std::mem::take(&mut inner_data[i].fields),
+                    });
+                    resp_nodes.extend(std::mem::take(&mut inner_data[i].nodes));
+                }
+
+                // Level 0 (wrapper) → Level 1: 将 wrapper 的泛型字段（优先 "data"，回退任意 Object）替换为紧邻内层类型
+                if let Some(first) = inner_data.first() {
+                    let data_field = wrapper_fields
+                        .iter_mut()
+                        .find(|f| f.field_name == "data" && f.field_type == "Object");
+                    let data_field = if data_field.is_some() {
+                        data_field
+                    } else {
+                        wrapper_fields
+                            .iter_mut()
+                            .find(|f| f.field_type == "Object")
+                    };
+                    if let Some(f) = data_field {
+                        f.field_type = first.short_name.clone();
                     }
                 }
 
@@ -341,16 +367,33 @@ impl JarParser {
                     },
                 );
                 resp_nodes.extend(wrapper_nodes);
+            } else if resp_type_chain.len() == 1 {
+                // ── 单层类型（wrapper 无泛型内层 或 普通 DTO）──
+                let return_type = &resp_type_chain[0];
+                if self.class_exists(return_type)
+                    && type_resolver::is_custom_type_private(return_type)
+                {
+                    let (dto_fields, nodes) =
+                        type_resolver::extract_dto_fields(return_type, self, visited);
+                    if !dto_fields.is_empty() {
+                        let short_name = return_type
+                            .rsplit('.')
+                            .next()
+                            .unwrap_or(return_type)
+                            .to_string();
+                        resp_nodes.push(crate::models::NodeInfo {
+                            node_name: short_name,
+                            node_desc: String::new(),
+                            resp_fields: dto_fields,
+                        });
+                    }
+                    resp_nodes.extend(nodes);
+                }
             } else {
-                // 没有 wrapper，return_type 本身就是响应类型
-                let return_type = signature
-                    .as_ref()
-                    .and_then(|sig| type_resolver::extract_return_type_from_signature(sig))
-                    .unwrap_or_else(|| {
-                        type_resolver::get_return_type_from_descriptor(
-                            &method.descriptor.to_string(),
-                        )
-                    });
+                // ── 回退：从方法描述符获取返回类型 ──
+                let return_type = type_resolver::get_return_type_from_descriptor(
+                    &method.descriptor.to_string(),
+                );
 
                 if self.class_exists(&return_type)
                     && type_resolver::is_custom_type_private(&return_type)

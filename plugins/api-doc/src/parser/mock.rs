@@ -1,7 +1,8 @@
 use crate::models::{ApiField, NodeInfo};
 
 /// 根据 Java 类型生成模拟值
-fn mock_value_for_type(field: &ApiField, all_nodes: &[NodeInfo]) -> String {
+/// `item_indent` — 用于多行值（如数组）的内容缩进级别
+fn mock_value_for_type(field: &ApiField, all_nodes: &[NodeInfo], item_indent: &str) -> String {
     // 优先使用 example_value
     if !field.example_value.is_empty() {
         return format!("\"{}\"", field.example_value);
@@ -9,33 +10,22 @@ fn mock_value_for_type(field: &ApiField, all_nodes: &[NodeInfo]) -> String {
 
     // 如果是集合类型，生成数组
     if let Some(ref info) = field.collection_info {
-        return mock_collection_value(info, &field.example_value, all_nodes);
+        return mock_collection_value(info, &field.example_value, all_nodes, item_indent);
     }
 
     match field.field_type.as_str() {
-        "String" => "\"string\"".to_string(),
-        "Integer" | "int" => "0".to_string(),
-        "Long" | "long" => "0".to_string(),
-        "Double" | "double" => "0.0".to_string(),
-        "Float" | "float" => "0.0".to_string(),
-        "Boolean" | "boolean" => "true".to_string(),
-        "Byte" | "byte" => "0".to_string(),
-        "Short" | "short" => "0".to_string(),
-        "Character" | "char" => "\"a\"".to_string(),
-        "Date" => "\"2024-01-01\"".to_string(),
-        "LocalDateTime" => "\"2024-01-01T00:00:00\"".to_string(),
-        "LocalDate" => "\"2024-01-01\"".to_string(),
-        "BigDecimal" => "\"0.00\"".to_string(),
         t if t.ends_with("[]") => "[]".to_string(),
-        _ => "{}".to_string(), // 对象类型返回空对象
+        _ => mock_literal(field.field_type.as_str(), "{}"),
     }
 }
 
 /// 为集合类型生成 Mock 值
+/// `item_indent` — 数组中每个元素的缩进级别
 fn mock_collection_value(
     info: &crate::models::CollectionInfo,
     example_value: &str,
     all_nodes: &[NodeInfo],
+    item_indent: &str,
 ) -> String {
     // 如果有 example_value，包装成单元素数组
     if !example_value.is_empty() {
@@ -53,66 +43,34 @@ fn mock_collection_value(
     };
 
     // 检查元素类型是否匹配某个嵌套节点
-    // 需要同时检查短名称（如 "ProcessStep"）和可能的完整名称
     let child_node = all_nodes.iter().find(|n| {
         let node_short = short_name(&n.node_name);
-        // 短名称直接匹配
         node_short == element_short ||
-        // 节点名以短名称结尾（如 "com.example.ProcessStep" 以 "ProcessStep" 结尾）
         n.node_name.ends_with(&format!(".{}", element_short)) ||
         n.node_name.ends_with(&format!("/{}", element_short)) ||
-        // 元素类型可能是完整包名，提取短名称再匹配
         (info.element_type.contains('.') && short_name(&info.element_type) == node_short)
     });
 
     if let Some(child) = child_node {
         // 递归生成嵌套对象的 Mock（多元素数组，展示 2 个示例）
-        let obj_value1 = generate_node_mock(child, all_nodes, "      ");
-        let obj_value2 = generate_node_mock(child, all_nodes, "      ");
-
-        // 清理每行的缩进，保持格式整洁
-        let obj_lines1: Vec<String> = obj_value1
-            .lines()
-            .enumerate()
-            .map(|(i, line)| {
-                let trimmed = line.trim();
-                if i == 0 {
-                    format!("    {}", trimmed)
-                } else {
-                    format!("      {}", trimmed)
-                }
-            })
-            .collect();
-        let obj_lines2: Vec<String> = obj_value2
-            .lines()
-            .enumerate()
-            .map(|(i, line)| {
-                let trimmed = line.trim();
-                if i == 0 {
-                    format!("    {}", trimmed)
-                } else {
-                    format!("      {}", trimmed)
-                }
-            })
-            .collect();
-
-        let obj_str1 = obj_lines1.join("\n");
-        let obj_str2 = obj_lines2.join("\n");
+        // 块级模式：数组元素需要左花括号有独立缩进
+        let obj_value1 = generate_node_mock(child, all_nodes, item_indent, true);
+        let obj_value2 = generate_node_mock(child, all_nodes, item_indent, true);
 
         format!(
-            "[\n{}\n,\n{}\n]",
-            obj_str1,
-            obj_str2
+            "[\n{},\n{}\n{}]",
+            obj_value1,
+            obj_value2,
+            item_indent
         )
     } else {
         // 基础类型值（单元素数组）
-        let primitive = mock_primitive_value(&info.element_type);
-        format!("[{}]", primitive)
+        format!("[{}]", mock_literal(&info.element_type, "\"\""))
     }
 }
 
-/// 生成基础类型的 Mock 值
-fn mock_primitive_value(type_name: &str) -> String {
+/// 生成基本类型的 mock JSON 字面量值
+fn mock_literal(type_name: &str, fallback: &str) -> String {
     match type_name {
         "String" => "\"string\"".to_string(),
         "Integer" | "int" => "0".to_string(),
@@ -127,7 +85,7 @@ fn mock_primitive_value(type_name: &str) -> String {
         "LocalDateTime" => "\"2024-01-01T00:00:00\"".to_string(),
         "LocalDate" => "\"2024-01-01\"".to_string(),
         "BigDecimal" => "\"0.00\"".to_string(),
-        _ => "\"\"".to_string(),
+        _ => fallback.to_string(),
     }
 }
 
@@ -152,7 +110,7 @@ pub fn generate_req_mock_json(fields: &[ApiField], nodes: &[NodeInfo]) -> String
         let value = if let Some(child) = child_node {
             generate_node_mock_inner(child, nodes, "  ")
         } else {
-            mock_value_for_type(field, nodes)
+            mock_value_for_type(field, nodes, "    ")
         };
 
         lines.push(format!("  \"{}\": {}{}", field.field_name, value, comma));
@@ -175,7 +133,7 @@ fn generate_node_mock_inner(node: &NodeInfo, all_nodes: &[NodeInfo], base_indent
         let value = if let Some(child) = child_node {
             generate_node_mock_inner(child, all_nodes, &inner_indent)
         } else {
-            mock_value_for_type(field, all_nodes)
+            mock_value_for_type(field, all_nodes, &inner_indent)
         };
 
         let comma = if i < node.resp_fields.len() - 1 {
@@ -203,7 +161,7 @@ pub fn generate_resp_mock_json(nodes: &[NodeInfo]) -> String {
     // 找到顶层节点：第一个 node 的字段中引用的类型在后续 nodes 中
     // 直接用第一个 node 作为根
     let root = &nodes[0];
-    generate_node_mock(root, nodes, "")
+    generate_node_mock(root, nodes, "", false)
 }
 
 /// 获取类名的简名 (最后一个 . 或 / 之后的部分)
@@ -211,21 +169,28 @@ fn short_name(name: &str) -> &str {
     name.rsplit(['.', '/']).next().unwrap_or(name)
 }
 
-fn generate_node_mock(node: &NodeInfo, all_nodes: &[NodeInfo], indent: &str) -> String {
+/// 生成节点的 mock JSON
+///
+/// `block_mode`: false = 内联模式，左花括号紧跟 ": " 不含缩进（用于对象字段值）;
+///               true  = 块级模式，左花括号有独立缩进（用于数组元素等多行上下文）
+fn generate_node_mock(node: &NodeInfo, all_nodes: &[NodeInfo], indent: &str, block_mode: bool) -> String {
     let inner_indent = format!("  {}", indent);
     let mut lines = Vec::new();
-    lines.push("{".to_string());
+    lines.push(if block_mode {
+        format!("{}{{", indent)
+    } else {
+        "{".to_string()
+    });
 
     for (i, field) in node.resp_fields.iter().enumerate() {
-        // 检查字段是否引用了另一个节点（按简名匹配）
         let field_short = short_name(&field.field_type);
         let child_node = all_nodes
             .iter()
             .find(|n| short_name(&n.node_name) == field_short);
         let value = if let Some(child) = child_node {
-            generate_node_mock(child, all_nodes, &inner_indent)
+            generate_node_mock(child, all_nodes, &inner_indent, false)
         } else {
-            mock_value_for_type(field, all_nodes)
+            mock_value_for_type(field, all_nodes, &inner_indent)
         };
 
         let comma = if i < node.resp_fields.len() - 1 {

@@ -155,14 +155,16 @@ pub fn parse_generic_types(signature: &str) -> Vec<String> {
     types
 }
 
-/// 从泛型签名中提取返回类型的实际类名
-/// 正确处理多层嵌套泛型，如:
-///   `LResult<LPageResponse<LUserDTO;>;>;` -> "UserDTO" (最内层)
-///   `LResult<Ljava/lang/Void;>;` -> "Result" (回退到外层包装器)
-///   `LResult<LUserDTO;>;` -> "UserDTO" (最内层)
-/// 同时将包装器类型也加入候选，确保内层为 Void 时也能解析到包装器
-pub fn extract_return_type_from_signature(signature: &str) -> Option<String> {
-    let return_part = signature.split(')').nth(1)?;
+/// 从泛型签名中提取返回类型的完整类型链，从外到内排序
+/// 例如:
+///   `LResult<LPageResponse<LUserDTO;>;>;` -> ["com.xxx.Result", "com.xxx.PageResponse", "com.xxx.UserDTO"]
+///   `LResult<LUserDTO;>;` -> ["com.xxx.Result", "com.xxx.UserDTO"]
+///   `LResult<Ljava/lang/Void;>;` -> ["com.xxx.Result"]  (java 类型被过滤)
+pub fn extract_return_type_chain_from_signature(signature: &str) -> Vec<String> {
+    let return_part = match signature.split(')').nth(1) {
+        Some(s) => s,
+        None => return Vec::new(),
+    };
     let chars: Vec<char> = return_part.chars().collect();
 
     let mut candidates: Vec<(usize, String)> = Vec::new();
@@ -178,27 +180,24 @@ pub fn extract_return_type_from_signature(signature: &str) -> Option<String> {
         if !outer_class.starts_with("java/") && !outer_class.is_empty() {
             candidates.push((0, outer_class));
         }
-    } else {
-        // 跳过到 '<' 或 ';'
-        while i < chars.len() && chars[i] != '<' && chars[i] != ';' {
-            i += 1;
-        }
     }
 
-    // 递归收集泛型参数中的内层类名 (depth >= 1)
+    // 递归收集泛型参数中的内层类名
     if i < chars.len() && chars[i] == '<' {
         let mut depth = 1usize;
         collect_type_candidates(&chars, &mut i, &mut depth, &mut candidates);
     }
 
-    // 优先返回最深层（最内层）的非 java 类型
-    candidates.sort_by(|a, b| b.0.cmp(&a.0));
+    // 按深度升序排列（外→内），转换为点分隔格式
+    candidates.sort_by(|a, b| a.0.cmp(&b.0));
     candidates
-        .first()
+        .into_iter()
         .map(|(_, class_name)| class_name.replace('/', "."))
+        .collect()
 }
 
 /// 递归收集签名中的非 java 类型候选
+/// 委托 `parse_type_arg` 解析 `L...;` 令牌，本函数只处理外层的 `<` / `>` / 通配符 / 类型变量
 fn collect_type_candidates(
     chars: &[char],
     i: &mut usize,
@@ -208,35 +207,7 @@ fn collect_type_candidates(
     while *i < chars.len() {
         match chars[*i] {
             'L' => {
-                *i += 1;
-                let start = *i;
-                // 扫描类名，跳过嵌套的 <...>
-                let mut nesting = 0;
-                while *i < chars.len() {
-                    match chars[*i] {
-                        '<' => {
-                            nesting += 1;
-                            *i += 1;
-                            // 递归处理泛型参数
-                            collect_type_candidates(chars, i, &mut (*depth + nesting), candidates);
-                        }
-                        ';' => {
-                            if nesting == 0 {
-                                break;
-                            }
-                            nesting -= 1;
-                            *i += 1;
-                        }
-                        _ => {
-                            *i += 1;
-                        }
-                    }
-                }
-                let class_name: String = chars[start..*i].iter().collect();
-                if !class_name.starts_with("java/") && !class_name.contains('<') {
-                    candidates.push((*depth, class_name));
-                }
-                *i += 1; // skip ';'
+                parse_type_arg(chars, i, depth, candidates);
             }
             '<' => {
                 *i += 1;
@@ -247,16 +218,14 @@ fn collect_type_candidates(
                 return;
             }
             '*' | '+' | '-' => {
-                // 通配符: * (=?), + (extends), - (super)
                 *i += 1;
             }
             'T' => {
-                // 类型变量: Tname;
                 *i += 1;
                 while *i < chars.len() && chars[*i] != ';' {
                     *i += 1;
                 }
-                *i += 1; // skip ';'
+                *i += 1;
             }
             '[' => {
                 *i += 1;
