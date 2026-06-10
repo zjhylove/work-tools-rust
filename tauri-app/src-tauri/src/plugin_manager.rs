@@ -51,6 +51,8 @@ pub struct LoadedPlugin {
     /// 只要这个字段存在，动态库就会保持在内存中
     /// 当 LoadedPlugin 被从 HashMap 中移除时，Library 自动 drop，触发动态库卸载
     _library: Library,
+    /// DLL 文件路径，用于检测是否已加载（避免重复加载导致卸载崩溃）
+    pub _library_path: PathBuf,
 }
 
 /// 插件管理器
@@ -253,11 +255,62 @@ impl PluginManager {
                     info,
                     instance: *plugin, // 解引用外层 Box，取回内层 Box<dyn Plugin>
                     _library: library, // Library 的 RAII guard
+                    _library_path: lib_path.to_path_buf(),
                 },
             );
         }
 
         Ok(())
+    }
+
+    // ── 增量加载 ──
+
+    /// 增量加载单个插件目录
+    ///
+    /// 与 `init()` 的区别：
+    /// - `init()` 会先清空所有已加载插件（卸载 DLL），再全量重载 → Windows 上 DLL 卸载/重载会崩溃
+    /// - 本方法只加载一个新插件，不影响已加载的插件 → 安全
+    pub async fn load_plugin_by_dir(&self, plugin_dir: &Path) -> Result<String> {
+        let dir_name = plugin_dir
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("unknown");
+
+        // 查找动态库路径
+        let manifest_path = plugin_dir.join("manifest.json");
+        let lib_path = if manifest_path.exists() {
+            std::fs::read_to_string(&manifest_path)
+                .ok()
+                .and_then(|content| serde_json::from_str::<PluginManifest>(&content).ok())
+                .and_then(|manifest| Self::get_library_from_manifest(&manifest))
+                .map(|name| plugin_dir.join(name))
+        } else {
+            None
+        };
+
+        let lib_path = match lib_path {
+            Some(path) if path.exists() => path,
+            _ => anyhow::bail!("未找到插件动态库: {}", dir_name),
+        };
+
+        // 检查 DLL 路径是否已加载（避免重复加载导致旧 DLL 被卸载崩溃）
+        {
+            let plugins = self.plugins.read().await;
+            let already_loaded = plugins
+                .values()
+                .any(|p| p._library_path == lib_path);
+            if already_loaded {
+                tracing::info!(dir = %dir_name, "插件已加载，跳过重复加载");
+                return Ok(dir_name.to_string());
+            }
+        }
+
+        tracing::info!("增量加载插件: {:?}", lib_path);
+        self.load_plugin(&lib_path).await?;
+
+        let count = self.plugins.read().await.len();
+        tracing::info!("增量加载完成，当前已加载 {} 个插件", count);
+        Ok(dir_name.to_string())
     }
 
     // ── 查询方法 ──

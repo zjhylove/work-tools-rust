@@ -175,11 +175,11 @@ pub async fn import_plugin_package(
         .register(installed_plugin)
         .map_err(|e| format!("注册插件失败: {}", e))?;
 
-    // 6. 重新加载插件管理器，使新插件生效
+    // 6. 增量加载新插件（不卸载已有 DLL，避免 Windows DLL 卸载/重载崩溃）
     manager
-        .init()
+        .load_plugin_by_dir(&plugin_dir)
         .await
-        .map_err(|e| format!("重新加载插件管理器失败: {}", e))?;
+        .map_err(|e| format!("加载插件失败: {}", e))?;
 
     tracing::info!(plugin_id = %pkg.manifest.id, "插件导入成功");
 
@@ -287,11 +287,11 @@ pub async fn install_plugin(
         .register(installed_plugin)
         .map_err(|e| format!("注册插件失败: {}", e))?;
 
-    // 重新加载插件管理器
+    // 增量加载新插件（不卸载已有 DLL，避免 Windows DLL 卸载/重载崩溃）
     manager
-        .init()
+        .load_plugin_by_dir(&plugin_dir)
         .await
-        .map_err(|e| format!("重新加载插件管理器失败: {}", e))?;
+        .map_err(|e| format!("加载插件失败: {}", e))?;
 
     tracing::info!(plugin_id = %manifest.id, "插件安装成功");
 

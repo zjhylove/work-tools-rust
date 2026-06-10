@@ -101,7 +101,10 @@ impl RedisClientPlugin {
                 let node_urls: Vec<String> = seed_nodes
                     .iter()
                     .map(|n| match &password {
-                        Some(p) if !p.is_empty() => format!("redis://:{p}@{n}"),
+                        Some(p) if !p.is_empty() => {
+                            let encoded = urlencoding::encode(p);
+                            format!("redis://:{encoded}@{n}")
+                        }
                         _ => format!("redis://{n}"),
                     })
                     .collect();
@@ -111,9 +114,13 @@ impl RedisClientPlugin {
     }
 
     fn make_redis_url(host: &str, port: u16, db: i64, password: Option<&str>) -> String {
+        let host = urlencoding::encode(host);
         match password {
-            Some(p) if !p.is_empty() => format!("redis://:{}@{}:{}/{}", p, host, port, db),
-            _ => format!("redis://{}:{}/{}", host, port, db),
+            Some(p) if !p.is_empty() => {
+                let p = urlencoding::encode(p);
+                format!("redis://:{p}@{host}:{port}/{db}")
+            }
+            _ => format!("redis://{host}:{port}/{db}"),
         }
     }
 }

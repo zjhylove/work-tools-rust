@@ -96,25 +96,20 @@ impl ConnectionConfig {
 
     /// 构建 JDBC URL (用于 sqlx)
     pub fn to_connection_string(&self) -> String {
+        let username = urlencoding::encode(&self.username);
+        let password = urlencoding::encode(self.password.as_deref().unwrap_or(""));
+        let host = urlencoding::encode(&self.host);
         match self.db_type {
             DatabaseType::MySQL => {
                 format!(
                     "mysql://{}:{}@{}:{}/{}",
-                    self.username,
-                    self.password.as_deref().unwrap_or(""),
-                    self.host,
-                    self.port,
-                    self.database
+                    username, password, host, self.port, self.database
                 )
             }
             DatabaseType::PostgreSQL => {
                 format!(
                     "postgres://{}:{}@{}:{}/{}",
-                    self.username,
-                    self.password.as_deref().unwrap_or(""),
-                    self.host,
-                    self.port,
-                    self.database
+                    username, password, host, self.port, self.database
                 )
             }
         }
