@@ -10,7 +10,6 @@
 //! ```
 //!
 //! ## Rust 知识点
-//! - `once_cell::sync::Lazy`: 延迟初始化的全局单例，线程安全
 //! - `#[no_mangle]`: 禁止 Rust 的名称修饰，使 C 代码可以找到这个函数
 //! - `extern "C"`: 使用 C 语言调用约定（ABI）
 //! - `Box::leak`: 故意"泄漏"内存，将所有权转移给调用方
@@ -21,41 +20,28 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use worktools_plugin_api::{storage::PluginStorage, Plugin};
 mod crypto;
-use crypto::{CryptoConfig, PasswordEncryptor};
-use once_cell::sync::Lazy;
+use crypto::{decrypt_password, encrypt_password};
 
 /// 密码条目（加密存储版本）
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PasswordEntry {
-    pub id: String,                 // UUID，唯一标识每个密码条目
-    pub url: Option<String>,        // 关联的网址（可选）
-    pub service: String,            // 服务名称
-    pub username: String,           // 用户名
-    pub password: String,           // 加密后的密码（存储为十六进制字符串）
-    pub created_at: String,         // 创建时间（RFC 3339 格式）
-    pub updated_at: Option<String>, // 最后更新时间
+    pub id: String,
+    pub url: Option<String>,
+    pub service: String,
+    pub username: String,
+    pub password: String,
+    pub created_at: String,
+    pub updated_at: Option<String>,
 }
 
-/// 数据存储结构（顶层 JSON 结构）
-/// `#[derive(Default)]` 生成 Default 实现：`PasswordData { entries: Vec::new() }`
+/// 数据存储结构
 #[derive(Debug, Default, Serialize, Deserialize)]
 struct PasswordData {
     entries: Vec<PasswordEntry>,
 }
 
 /// 密码管理器插件
-/// 这是一个空结构体（unit-like struct），不包含任何字段
-/// 插件状态通过 `PluginStorage`（文件系统）管理，不需要内存中的字段
 pub struct PasswordManager;
-
-/// 全局共享的加密器实例（单例模式，避免重复创建）
-///
-/// ## Rust 知识点: Lazy 单例
-/// `Lazy<T>` 在第一次访问时才初始化，之后返回同一个实例。
-/// 这比 `static mut` + `unsafe` 更安全和方便。
-/// `static` 变量在整个程序运行期间存在，`Lazy` 保证线程安全的延迟初始化。
-static ENCRYPTOR: Lazy<PasswordEncryptor> =
-    Lazy::new(|| PasswordEncryptor::new(CryptoConfig::default()));
 
 impl PasswordManager {
     /// 获取数据存储实例
@@ -63,24 +49,14 @@ impl PasswordManager {
         PluginStorage::new("password-manager", "password-manager.json")
     }
 
-    /// 获取加密器实例（返回全局单例）
-    /// 返回 `&'static` 引用 — 指向程序生命周期内一直存在的值
-    fn encryptor() -> &'static PasswordEncryptor {
-        &ENCRYPTOR
-    }
-
     /// 加密密码，失败时返回明文（优雅降级）
     fn encrypt_or_plain(password: &str) -> String {
-        Self::encryptor()
-            .encrypt_password(password)
-            .unwrap_or_else(|_| password.to_string()) // 降级：加密失败则存明文
+        encrypt_password(password).unwrap_or_else(|_| password.to_string())
     }
 
     /// 解密密码，失败时返回原始值
     fn decrypt_or_original(encrypted: &str) -> String {
-        Self::encryptor()
-            .decrypt_password(encrypted)
-            .unwrap_or_else(|_| encrypted.to_string())
+        decrypt_password(encrypted).unwrap_or_else(|_| encrypted.to_string())
     }
 
     /// 加载数据

@@ -4,7 +4,7 @@
 //! 提供文件浏览、上传、下载、搜索、删除等功能。
 //!
 //! ## 架构设计
-//! ```
+//! ```text
 //! ObjectStoragePlugin
 //!   ├── ObjectStoreProvider (trait) ← 统一接口
 //!   │   ├── OssClient ← 阿里云 OSS 实现

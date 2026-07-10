@@ -14,14 +14,12 @@
 //! - `Send + Sync`: 标记 trait，表示类型可以安全地在线程间传递和共享
 
 use serde_json::Value;
+use worktools_shared_types::PluginInfo;
 
-pub mod error;
+pub mod crypto;
 pub mod storage;
 pub mod utils;
 
-// `pub use` 将子模块中的类型重新导出到当前模块，
-// 这样外部只需 `use worktools_plugin_api::PluginError` 而不是 `use worktools_plugin_api::error::PluginError`
-pub use error::{PluginError, PluginResult};
 pub use utils::escape_xml;
 
 /// 插件 Trait —— 所有插件必须实现此接口
@@ -54,6 +52,20 @@ pub trait Plugin: Send + Sync {
     /// 获取插件 UI 的 HTML 内容
     /// 返回一段 HTML 字符串，会被嵌入到前端的 iframe 中展示
     fn get_view(&self) -> String;
+
+    /// 构造 PluginInfo（与 shared/types 中的 PluginInfo 结构体对齐）
+    ///
+    /// 默认实现逐个调用 id/name/version/description/icon 并组装。
+    /// 插件可以覆盖此方法以提供额外字段或更快实现。
+    fn info(&self) -> PluginInfo {
+        PluginInfo {
+            id: self.id().to_string(),
+            name: self.name().to_string(),
+            version: self.version().to_string(),
+            description: self.description().to_string(),
+            icon: self.icon().to_string(),
+        }
+    }
 
     // ── 以下方法都有默认实现（default implementation）──
     // 这意味着插件可以选择性地覆盖它们。
@@ -125,5 +137,5 @@ pub trait Plugin: Send + Sync {
 /// `Box<Box<dyn Plugin>>` 看起来多余，实际上是为了：
 /// - 外层 Box: 提供固定大小的指针（fat pointer，包含数据指针 + vtable 指针）
 /// - 内层 Box: 存储实际的插件数据（大小未知，必须在堆上）
-/// 这样 `*mut Box<dyn Plugin>` 就是一个已知大小的指针，可以跨越 FFI 边界
+///   这样 `*mut Box<dyn Plugin>` 就是一个已知大小的指针，可以跨越 FFI 边界
 pub type PluginCreateFn = unsafe extern "C" fn() -> *mut Box<dyn Plugin>;

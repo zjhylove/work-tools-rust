@@ -1,7 +1,6 @@
-use crate::crypto::PasswordEncryptor;
+use crate::crypto::{decrypt, encrypt};
 use crate::models::{ConnectionConfig, ExportHistory};
 use anyhow::Result;
-use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
 use worktools_plugin_api::storage::PluginStorage;
 
@@ -26,8 +25,6 @@ impl DbDocData {
     }
 }
 
-/// 全局加密器实例
-static ENCRYPTOR: Lazy<PasswordEncryptor> = Lazy::new(PasswordEncryptor::new);
 
 /// 数据存储管理器
 pub struct DbDocStorage {
@@ -53,14 +50,13 @@ impl DbDocStorage {
 
     /// 加密密码
     pub fn encrypt_password(&self, password: &str) -> Result<String> {
-        ENCRYPTOR.encrypt(password)
+        encrypt(password)
     }
 
     /// 解密密码
     pub fn decrypt_password(&self, encrypted: &str) -> Result<String> {
-        ENCRYPTOR.decrypt(encrypted)
+        decrypt(encrypted)
     }
-
     /// 获取所有连接配置 (密码解密后)
     pub fn list_connections(&self) -> Result<Vec<ConnectionConfig>> {
         let data = self.load()?;
@@ -69,7 +65,12 @@ impl DbDocStorage {
             .into_iter()
             .map(|mut conn| {
                 if let Some(ref encrypted) = conn.password {
-                    conn.password = self.decrypt_password(encrypted).ok();
+                    match self.decrypt_password(encrypted) {
+                        Ok(plain) => conn.password = Some(plain),
+                        Err(e) => {
+                            tracing::warn!("解密连接密码失败: {e}");
+                        }
+                    }
                 }
                 conn
             })
@@ -97,7 +98,9 @@ impl DbDocStorage {
 
         // 返回时解密密码
         if let Some(ref encrypted) = config.password {
-            config.password = self.decrypt_password(encrypted).ok();
+            config.password = self.decrypt_password(encrypted)
+                .inspect_err(|e| tracing::warn!("解密连接密码失败: {e}"))
+                .ok();
         }
 
         Ok(config)
