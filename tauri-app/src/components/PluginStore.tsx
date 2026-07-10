@@ -1,6 +1,8 @@
 import { useState, useEffect, useMemo } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
+import "./host-toast.css";
+import { toast } from "../utils/toast";
 import "./PluginStore.css";
 import type { PluginManifest, InstalledPlugin, StorePluginInfo } from "../types/plugin";
 
@@ -34,7 +36,7 @@ export default function PluginStore(props: PluginStoreProps) {
       setPlugins(merged);
     } catch (err) {
       console.error("加载插件列表失败:", err);
-      alert("加载插件列表失败: " + err);
+      toast.error("加载插件列表失败: " + err);
     } finally {
       setLoading(false);
     }
@@ -67,7 +69,7 @@ export default function PluginStore(props: PluginStoreProps) {
         filePath: selected,
       });
 
-      alert(result);
+      toast.success(result);
       await loadPlugins(); // 刷新列表
 
       // 通知父组件刷新插件列表
@@ -76,7 +78,7 @@ export default function PluginStore(props: PluginStoreProps) {
       }
     } catch (err) {
       console.error("导入插件失败:", err);
-      alert("导入插件失败: " + err);
+      toast.error("导入插件失败: " + err);
     } finally {
       setImporting(false);
     }
@@ -89,12 +91,12 @@ export default function PluginStore(props: PluginStoreProps) {
         const result = await invoke<string>("uninstall_plugin", {
           pluginId: plugin.id,
         });
-        alert(result);
+        toast.success(result);
       } else {
         const result = await invoke<string>("install_plugin", {
           pluginId: plugin.id,
         });
-        alert(result);
+        toast.success(result);
       }
       await loadPlugins();
 
@@ -104,7 +106,7 @@ export default function PluginStore(props: PluginStoreProps) {
       }
     } catch (err) {
       console.error("操作插件失败:", err);
-      alert("操作插件失败: " + err);
+      toast.error("操作插件失败: " + err);
     }
   };
 

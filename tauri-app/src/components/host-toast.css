@@ -1,0 +1,67 @@
+/* ═══════════════════════════════════════════════════════
+   Host-level Toast — mirrors wt-toast design tokens
+   for consistent look between host app and plugin iframes.
+   ═══════════════════════════════════════════════════════ */
+
+@keyframes host-toast-slide-in {
+  from {
+    opacity: 0;
+    transform: translateX(100%);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.host-toast-container {
+  position: fixed;
+  top: 16px;
+  right: 16px;
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  pointer-events: none;
+}
+
+.host-toast {
+  pointer-events: auto;
+  padding: 10px 16px;
+  border-radius: var(--radius-md, 8px);
+  font-size: var(--font-size-base, 14px);
+  font-weight: 500;
+  font-family: var(--font-sans, system-ui, -apple-system, sans-serif);
+  box-shadow: var(--shadow-md, 0 4px 12px rgba(0, 0, 0, 0.12));
+  cursor: pointer;
+  animation: host-toast-slide-in 0.25s ease-out;
+  max-width: 360px;
+  word-break: break-word;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.host-toast--success {
+  background: var(--success-light, #dcfce7);
+  border: 1px solid var(--success-border, #86efac);
+  color: var(--success-text, #166534);
+}
+
+.host-toast--error {
+  background: var(--error-light, #fef2f2);
+  border: 1px solid var(--error-border, #fca5a5);
+  color: var(--error-text, #991b1b);
+}
+
+.host-toast--info {
+  background: var(--accent-light, #eff6ff);
+  border: 1px solid var(--accent-ring, #93c5fd);
+  color: var(--accent, #2563eb);
+}
+
+.host-toast--warning {
+  background: var(--warning-light, #fefce8);
+  border: 1px solid var(--warning-border, #fde047);
+  color: var(--warning-text, #854d0e);
+}

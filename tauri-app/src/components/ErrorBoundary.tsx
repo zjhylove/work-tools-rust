@@ -1,4 +1,5 @@
 import { Component, ErrorInfo, ReactNode } from "react";
+import "./ErrorBoundary.css";
 
 interface Props {
   children: ReactNode;
@@ -32,54 +33,10 @@ export default class ErrorBoundary extends Component<Props, State> {
       if (this.props.fallback) return this.props.fallback;
 
       return (
-        <div
-          style={{
-            padding: 40,
-            maxWidth: 600,
-            margin: "0 auto",
-            textAlign: "center",
-            fontFamily: "var(--font-sans)",
-          }}
-        >
-          <div
-            style={{
-              width: 56,
-              height: 56,
-              borderRadius: "50%",
-              background: "var(--error-light, #fef2f2)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              margin: "0 auto 16px",
-              fontSize: 24,
-            }}
-          >
-            !
-          </div>
-          <h2
-            style={{
-              margin: "0 0 12px",
-              fontSize: 17,
-              fontWeight: 600,
-              color: "var(--text-primary)",
-            }}
-          >
-            组件渲染错误
-          </h2>
-          <pre
-            style={{
-              textAlign: "left",
-              background: "var(--bg-secondary, #f8f9fa)",
-              padding: 16,
-              borderRadius: "var(--radius-md, 8px)",
-              fontSize: 13,
-              color: "var(--text-secondary, #6b7280)",
-              whiteSpace: "pre-wrap",
-              overflow: "auto",
-              fontFamily: "var(--font-mono)",
-              lineHeight: 1.6,
-            }}
-          >
+        <div className="error-boundary">
+          <div className="error-boundary__icon">!</div>
+          <h2 className="error-boundary__title">组件渲染错误</h2>
+          <pre className="error-boundary__detail">
             <strong>错误信息:</strong>
             {this.state.error?.toString()}
             {"\n\n"}

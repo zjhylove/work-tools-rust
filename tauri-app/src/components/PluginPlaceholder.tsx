@@ -553,6 +553,8 @@ export default function PluginPlaceholder({
               },
             };
             console.log("[PluginPlaceholder] pluginAPI 注入成功");
+            // F5: Inject current theme to newly mounted iframes
+            iframeRef.current?.contentWindow?.postMessage({ type: "theme", theme }, "*");
           }
         }}
         style={{

@@ -7,6 +7,7 @@ import ErrorBoundary from "./components/ErrorBoundary";
 import LogViewer from "./components/LogViewer";
 import { devError, devLog } from "./utils/logger";
 import { isTauri } from "./utils/env";
+import "./components/host-toast.css";
 import {
   IconTerminal,
   IconPackage,

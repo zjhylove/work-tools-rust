@@ -1,0 +1,44 @@
+/* ═══════════════════════════════════════════════════════
+   ErrorBoundary — fallback UI styles using design tokens
+   ═══════════════════════════════════════════════════════ */
+
+.error-boundary {
+  padding: var(--space-xl, 40px);
+  max-width: 600px;
+  margin: 0 auto;
+  text-align: center;
+  font-family: var(--font-sans, system-ui, -apple-system, sans-serif);
+}
+
+.error-boundary__icon {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: var(--error-light, #fef2f2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto var(--space-md, 16px);
+  font-size: 24px;
+  color: var(--error-text, #991b1b);
+}
+
+.error-boundary__title {
+  margin: 0 0 var(--space-xs, 12px);
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--text-primary, #111827);
+}
+
+.error-boundary__detail {
+  text-align: left;
+  background: var(--bg-secondary, #f8f9fa);
+  padding: var(--space-md, 16px);
+  border-radius: var(--radius-md, 8px);
+  font-size: 13px;
+  color: var(--text-secondary, #6b7280);
+  white-space: pre-wrap;
+  overflow: auto;
+  font-family: var(--font-mono, ui-monospace, SFMono-Regular, monospace);
+  line-height: 1.6;
+}
