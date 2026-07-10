@@ -72,6 +72,9 @@ jobs:
           done
         shell: bash
 
+      - name: Run tests
+        run: cargo test --workspace --exclude redis-client
+
       - name: Build Rust workspace (plugins + tauri)
         run: cargo build --release
 
