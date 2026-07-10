@@ -53,13 +53,13 @@ impl TextDiff {
         use std::path::Path;
 
         if !Path::new(file_path).exists() {
-            return Err(anyhow::anyhow!("文件不存在").into());
+            return Err(anyhow::anyhow!("文件不存在"));
         }
 
         // 检查文件大小限制（防止读取超大文件导致内存不足）
         let metadata = std::fs::metadata(file_path)?;
         if metadata.len() > 10 * 1024 * 1024 {
-            return Err(anyhow::anyhow!("文件过大 (最大 10MB)").into());
+            return Err(anyhow::anyhow!("文件过大 (最大 10MB)"));
         }
 
         let content = std::fs::read_to_string(file_path)?;
@@ -329,4 +329,83 @@ impl Plugin for TextDiff {
 pub extern "C" fn plugin_create() -> *mut Box<dyn Plugin> {
     let plugin: Box<Box<dyn Plugin>> = Box::new(Box::new(TextDiff));
     Box::leak(plugin) as *mut Box<dyn Plugin>
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn test_plugin_info() {
+        let plugin = TextDiff;
+        assert_eq!(plugin.id(), "text-diff");
+        assert_eq!(plugin.name(), "文本比对");
+        assert_eq!(plugin.version(), "1.0.0");
+        assert!(!plugin.icon().is_empty());
+        assert!(!plugin.get_view().is_empty());
+    }
+
+    #[test]
+    fn test_unknown_method_returns_error() {
+        let mut plugin = TextDiff;
+        let result = plugin.handle_call("nonexistent", json!({}));
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_count_diff_identical() {
+        let stats = TextDiff::count_diff_lines("hello\nworld", "hello\nworld");
+        assert_eq!(stats.additions, 0);
+        assert_eq!(stats.deletions, 0);
+        assert_eq!(stats.modifications, 0);
+    }
+    #[test]
+    fn test_count_diff_with_changes() {
+        let stats = TextDiff::count_diff_lines("line1\nline2\nline3", "line1\nchanged\nline3\nline4");
+        // Verify some changes are detected (exact counts depend on diff algorithm)
+        assert!(stats.additions + stats.deletions + stats.modifications > 0);
+        // Identical texts would give all zeros; this should not be identical
+        assert_ne!(stats.additions + stats.deletions + stats.modifications, 0);
+    }
+
+    #[test]
+    fn test_preprocess_ignore_whitespace() {
+        let opts = ProcessOptions {
+            ignore_whitespace: true,
+            ignore_case: false,
+        };
+        let result = TextDiff::preprocess_text_impl("hello   world\nfoo    bar", &opts);
+        assert_eq!(result, "hello world\nfoo bar");
+    }
+
+    #[test]
+    fn test_preprocess_ignore_case() {
+        let opts = ProcessOptions {
+            ignore_whitespace: false,
+            ignore_case: true,
+        };
+        let result = TextDiff::preprocess_text_impl("Hello World", &opts);
+        assert_eq!(result, "hello world");
+    }
+    #[test]
+    fn test_export_unified_diff() {
+        let diff = TextDiff::export_unified_diff("line1\nline2", "line1\nline3", "test.txt");
+        assert!(diff.contains("--- a/test.txt"));
+        assert!(diff.contains("+++ b/test.txt"));
+        assert!(diff.contains("line2") || diff.contains("line3"));
+    }
+
+    #[test]
+    fn test_count_diff_via_handle_call() {
+        let mut plugin = TextDiff;
+        let result = plugin.handle_call(
+            "count_diff",
+            json!({"original": "a\nb", "modified": "a\nc\nd"}),
+        );
+        assert!(result.is_ok());
+        let val = result.unwrap();
+        assert_eq!(val.get("additions").unwrap().as_u64().unwrap(), 1);
+        assert_eq!(val.get("modifications").unwrap().as_u64().unwrap(), 1);
+    }
 }

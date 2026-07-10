@@ -232,3 +232,92 @@ pub extern "C" fn plugin_create() -> *mut Box<dyn Plugin> {
     let plugin: Box<Box<dyn Plugin>> = Box::new(Box::new(CronTools));
     Box::leak(plugin) as *mut Box<dyn Plugin>
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn test_plugin_info() {
+        let plugin = CronTools;
+        assert_eq!(plugin.id(), "cron-tools");
+        assert_eq!(plugin.name(), "Cron 表达式");
+        assert_eq!(plugin.version(), "1.0.0");
+        assert!(!plugin.icon().is_empty());
+        assert!(!plugin.get_view().is_empty());
+    }
+
+    #[test]
+    fn test_unknown_method_returns_error() {
+        let mut plugin = CronTools;
+        let result = plugin.handle_call("nonexistent", json!({}));
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_detect_format() {
+        assert_eq!(detect_format("* * * * *"), Some(CronFormat::Standard5));
+        assert_eq!(detect_format("*/30 * * * * *"), Some(CronFormat::WithSeconds6));
+        assert_eq!(detect_format("0 0 0 * * ? *"), Some(CronFormat::Quartz7));
+        assert_eq!(detect_format("bad"), None);
+        assert_eq!(detect_format("1 2 3 4 5 6 7 8"), None);
+    }
+
+    #[test]
+    fn test_normalize_to_7_field() {
+        // 5-field "a b c d e" → prepend "0 " to make 7 fields: "0 a b c d e *"
+        assert_eq!(normalize_to_7_field("* * * * *").unwrap(), "0 * * * * * *");
+        // 6-field "a b c d e f" → append " *" to make 7 fields
+        assert_eq!(normalize_to_7_field("*/30 * * * * *").unwrap(), "*/30 * * * * * *");
+        // 7-field stays the same
+        assert_eq!(normalize_to_7_field("0 0 0 * * ? *").unwrap(), "0 0 0 * * ? *");
+        assert!(normalize_to_7_field("bad").is_none());
+    }
+
+    #[test]
+    fn test_format_name() {
+        assert_eq!(format_name(CronFormat::Standard5), "5段 (Unix)");
+        assert_eq!(format_name(CronFormat::WithSeconds6), "6段 (含秒)");
+        assert_eq!(format_name(CronFormat::Quartz7), "7段 (Quartz)");
+    }
+
+    #[test]
+    fn test_parse_cron_valid() {
+        let mut plugin = CronTools;
+        let result = plugin.handle_call("parse_cron", json!({"expr": "*/5 * * * *"}));
+        assert!(result.is_ok());
+        let val = result.unwrap();
+        assert_eq!(val.get("valid").unwrap().as_bool().unwrap(), true);
+        assert!(val.get("description").unwrap().as_str().unwrap().contains("每"));
+    }
+
+    #[test]
+    fn test_parse_cron_invalid() {
+        let mut plugin = CronTools;
+        let result = plugin.handle_call("parse_cron", json!({"expr": "invalid"}));
+        assert!(result.is_ok());
+        let val = result.unwrap();
+        assert_eq!(val.get("valid").unwrap().as_bool().unwrap(), false);
+    }
+
+    #[test]
+    fn test_next_executions() {
+        let mut plugin = CronTools;
+        let result = plugin.handle_call("next_executions", json!({"expr": "* * * * *", "count": 3}));
+        assert!(result.is_ok());
+        let val = result.unwrap();
+        let times = val.get("times").unwrap().as_array().unwrap();
+        assert_eq!(times.len(), 3);
+    }
+
+    #[test]
+    fn test_get_presets() {
+        let mut plugin = CronTools;
+        let result = plugin.handle_call("get_presets", json!({}));
+        assert!(result.is_ok());
+        let val = result.unwrap();
+        let presets = val.get("presets").unwrap().as_array().unwrap();
+        assert!(!presets.is_empty());
+    }
+}

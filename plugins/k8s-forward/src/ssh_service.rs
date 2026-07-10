@@ -26,7 +26,8 @@ use anyhow::{anyhow, Result};
 use ssh2::Session;
 use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};
-use std::sync::{Arc, Mutex};
+use parking_lot::Mutex;
+use std::sync::Arc;
 use std::thread;
 use std::time::Duration;
 
@@ -68,6 +69,12 @@ pub struct SshService {
     reconnect_exhausted: bool,
 }
 
+impl Default for SshService {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 struct ForwardEntry {
     rule: ForwardRule,
     stop_flag: Arc<Mutex<bool>>,
@@ -95,7 +102,7 @@ impl SshService {
     pub fn is_connected(&self) -> bool {
         self.session
             .as_ref()
-            .map(|s| s.lock().unwrap().authenticated())
+            .map(|s| s.lock().authenticated())
             .unwrap_or(false)
     }
 
@@ -104,7 +111,7 @@ impl SshService {
     }
 
     pub fn is_reconnecting(&self) -> bool {
-        self.reconnect_state.lock().unwrap().is_some()
+        self.reconnect_state.lock().is_some()
     }
 
     pub fn is_reconnect_exhausted(&self) -> bool {
@@ -117,7 +124,7 @@ impl SshService {
     }
 
     pub fn connection_state(&self) -> SshConnectionState {
-        if self.reconnect_state.lock().unwrap().is_some() {
+        if self.reconnect_state.lock().is_some() {
             SshConnectionState::Reconnecting
         } else if self.is_connected() {
             SshConnectionState::Connected
@@ -135,7 +142,7 @@ impl SshService {
     }
 
     pub fn get_reconnect_info(&self) -> Option<ReconnectInfo> {
-        self.reconnect_state.lock().unwrap().as_ref().map(|rs| {
+        self.reconnect_state.lock().as_ref().map(|rs| {
             let duration_until_retry = rs.next_retry_at
                 .checked_duration_since(std::time::Instant::now())
                 .unwrap_or(std::time::Duration::from_secs(0));
@@ -171,7 +178,7 @@ impl SshService {
         self.stop_heartbeat();
 
         for flag in &self.stop_flags {
-            *flag.lock().unwrap() = true;
+            *flag.lock() = true;
         }
         for handle in self.threads.drain(..) {
             let _ = handle.join();
@@ -186,7 +193,7 @@ impl SshService {
     pub fn stop_forwards(&mut self) {
         let count = self.threads.len();
         for flag in &self.stop_flags {
-            *flag.lock().unwrap() = true;
+            *flag.lock() = true;
         }
         for handle in self.threads.drain(..) {
             let _ = handle.join();
@@ -231,7 +238,7 @@ impl SshService {
             let mut channel_fail_count = 0u32;
 
             loop {
-                if *stop.lock().unwrap() {
+                if *stop.lock() {
                     return;
                 }
                 let mut did_work = false;
@@ -244,10 +251,10 @@ impl SshService {
                             let local_write = stream;
                             let mut channel = None;
                             loop {
-                                if *stop.lock().unwrap() {
+                                if *stop.lock() {
                                     return;
                                 }
-                                let s = session.lock().unwrap();
+                                let s = session.lock();
                                 match s.channel_direct_tcpip(&rh, remote_port, None) {
                                     Ok(c) => {
                                         channel = Some(c);
@@ -288,7 +295,7 @@ impl SshService {
                 // 2. 服务所有活跃连接
                 let mut i = 0;
                 while i < connections.len() {
-                    if *stop.lock().unwrap() {
+                    if *stop.lock() {
                         return;
                     }
 
@@ -301,7 +308,7 @@ impl SshService {
                         Ok(n) => {
                             did_work = true;
                             let write_ok = {
-                                let _lock = session.lock().unwrap();
+                                let _lock = session.lock();
                                 conn.channel.write_all(&buf[..n]).is_ok()
                             };
                             if !write_ok {
@@ -315,7 +322,7 @@ impl SshService {
                     // 远程 → 本地
                     if !dead {
                         let channel_result = {
-                            let _lock = session.lock().unwrap();
+                            let _lock = session.lock();
                             conn.channel.read(&mut buf)
                         };
                         match channel_result {
@@ -375,7 +382,7 @@ impl SshService {
             .position(|f| f.rule.local_port == local_port)
         {
             let entry = self.forwards.remove(pos);
-            *entry.stop_flag.lock().unwrap() = true;
+            *entry.stop_flag.lock() = true;
             self.stop_flags.remove(pos);
             let handle = self.threads.remove(pos);
             let _ = handle.join();
@@ -399,19 +406,19 @@ impl SshService {
     pub fn start_heartbeat(&mut self) {
         self.stop_heartbeat();
 
-        *self.heartbeat_stop.lock().unwrap() = false;
+        *self.heartbeat_stop.lock() = false;
         let stop = self.heartbeat_stop.clone();
         let session_check = self.session.clone();
 
         let handle = thread::spawn(move || {
             let mut fail_count = 0u32;
             loop {
-                if *stop.lock().unwrap() {
+                if *stop.lock() {
                     return;
                 }
                 let sleep_until = std::time::Instant::now() + Duration::from_secs(15);
                 while std::time::Instant::now() < sleep_until {
-                    if *stop.lock().unwrap() {
+                    if *stop.lock() {
                         return;
                     }
                     thread::sleep(Duration::from_secs(1));
@@ -437,7 +444,7 @@ impl SshService {
 
     /// 停止心跳检测线程
     pub fn stop_heartbeat(&mut self) {
-        *self.heartbeat_stop.lock().unwrap() = true;
+        *self.heartbeat_stop.lock() = true;
         if let Some(handle) = self.heartbeat_thread.take() {
             let _ = handle.join();
         }
@@ -466,7 +473,7 @@ impl SshService {
             None => return,
         };
 
-        *self.reconnect_state.lock().unwrap() = Some(ReconnectState {
+        *self.reconnect_state.lock() = Some(ReconnectState {
             retry_count: 0,
             max_retries: 10,
             next_retry_at: std::time::Instant::now(),
@@ -486,14 +493,14 @@ impl SshService {
             let max_delay = Duration::from_secs(60);
 
             for attempt in 1..=10u32 {
-                if *stop.lock().unwrap() {
+                if *stop.lock() {
                     tracing::info!("SSH 重连已取消");
                     return;
                 }
 
                 // 更新重试计数
                 {
-                    let mut s = state.lock().unwrap();
+                    let mut s = state.lock();
                     if let Some(ref mut rs) = *s {
                         rs.retry_count = attempt;
                         rs.next_retry_at = std::time::Instant::now() + delay;
@@ -503,7 +510,7 @@ impl SshService {
                 tracing::info!("SSH 重连尝试 {}/10，{} 秒后执行...", attempt, delay.as_secs());
                 let sleep_until = std::time::Instant::now() + delay;
                 while std::time::Instant::now() < sleep_until {
-                    if *stop.lock().unwrap() {
+                    if *stop.lock() {
                         tracing::info!("SSH 重连已取消");
                         return;
                     }
@@ -514,7 +521,7 @@ impl SshService {
                     Ok(session) => {
                         tracing::info!("SSH 重连成功（第 {} 次尝试）", attempt);
                         if let Some(slot) = session_slot.as_ref() {
-                            *slot.lock().unwrap() = session;
+                            *slot.lock() = session;
                         }
                         return;
                     }
@@ -534,12 +541,12 @@ impl SshService {
 
     /// 停止重连
     pub fn stop_reconnect(&mut self) {
-        *self.reconnect_stop.lock().unwrap() = true;
+        *self.reconnect_stop.lock() = true;
         if let Some(handle) = self.reconnect_thread.take() {
             let _ = handle.join();
         }
-        *self.reconnect_stop.lock().unwrap() = false;
-        *self.reconnect_state.lock().unwrap() = None;
+        *self.reconnect_stop.lock() = false;
+        *self.reconnect_state.lock() = None;
     }
 
     fn create_session(host: &str, port: u16, username: &str, password: &str) -> Result<Session> {
@@ -565,7 +572,7 @@ impl SshService {
         let handle = self.reconnect_thread.take().unwrap();
         let _ = handle.join();
         let connected = self.is_connected();
-        *self.reconnect_state.lock().unwrap() = None;
+        *self.reconnect_state.lock() = None;
         if !connected {
             self.reconnect_exhausted = true;
         }
@@ -598,7 +605,7 @@ impl SshService {
 /// 此函数短暂切换到阻塞模式尝试创建 channel，能真正检测 TCP 层断连。
 fn probe_connection(session: &Option<Arc<Mutex<Session>>>) -> bool {
     session.as_ref().map(|s| {
-        let session = s.lock().unwrap();
+        let session = s.lock();
         session.set_blocking(true);
         session.set_timeout(5000);
         let result = session.channel_session();

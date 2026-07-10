@@ -33,7 +33,7 @@
 use anyhow::Result;
 use serde_json::{json, Value};
 use std::collections::HashMap;
-use std::sync::Mutex;
+use parking_lot::Mutex;
 use tokio::runtime::Runtime;
 use worktools_plugin_api::storage::PluginStorage;
 use worktools_plugin_api::*;
@@ -44,7 +44,7 @@ pub mod kuboard_client;
 pub mod models;
 pub mod ssh_service;
 
-use crypto::PasswordEncryptor;
+use crypto::{decrypt, encrypt};
 use http_proxy::HttpProxySvc;
 use kuboard_client::KuboardClient;
 use models::*;
@@ -59,7 +59,6 @@ use ssh_service::SshService;
 /// - `kuboard`: Kuboard 客户端（Option 表示可能未登录）
 pub struct K8sForwardPlugin {
     storage: PluginStorage,
-    encryptor: PasswordEncryptor,
     /// Tokio 异步运行时 — 因为 SshService 和 HTTP 代理内部使用 async
     /// Plugin trait 的方法是同步的，所以需要 block_on 桥接
     runtime: Runtime,
@@ -68,12 +67,16 @@ pub struct K8sForwardPlugin {
     kuboard: Mutex<Option<KuboardClient>>,
 }
 
+impl Default for K8sForwardPlugin {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl K8sForwardPlugin {
     pub fn new() -> Self {
         Self {
             storage: PluginStorage::new("k8s-forward", "k8s-forward.json"),
-            encryptor: PasswordEncryptor::new(),
-            // `Runtime::new()` 创建新的 Tokio 异步运行时
             runtime: Runtime::new().expect("Failed to create tokio runtime"),
             ssh_connections: Mutex::new(HashMap::new()),
             proxy: Mutex::new(None),
@@ -130,10 +133,10 @@ impl K8sForwardPlugin {
             .find(|c| c.id == connection_id)
             .ok_or_else(|| anyhow::anyhow!("SSH 连接配置不存在"))?;
 
-        let password = self.encryptor.decrypt(&conn.password)?;
+        let password = decrypt(&conn.password)?;
 
-        let mut connections = self.ssh_connections.lock().unwrap();
-        let ssh = connections.entry(connection_id.to_string()).or_insert_with(SshService::new);
+        let mut connections = self.ssh_connections.lock();
+        let ssh = connections.entry(connection_id.to_string()).or_default();
         ssh.set_manual_disconnect(false);
         if ssh.is_connected() {
             return Err(anyhow::anyhow!("SSH 已连接"));
@@ -152,7 +155,7 @@ impl K8sForwardPlugin {
 
     fn handle_ssh_disconnect(&self, params: &Value) -> Result<Value> {
         let connection_id = get_str(params, "connection_id")?;
-        let mut connections = self.ssh_connections.lock().unwrap();
+        let mut connections = self.ssh_connections.lock();
         if let Some(ssh) = connections.get_mut(connection_id) {
             ssh.set_manual_disconnect(true);
             ssh.disconnect();
@@ -164,7 +167,7 @@ impl K8sForwardPlugin {
 
     fn handle_ssh_reconnect(&self, params: &Value) -> Result<Value> {
         let connection_id = get_str(params, "connection_id")?;
-        let mut connections = self.ssh_connections.lock().unwrap();
+        let mut connections = self.ssh_connections.lock();
         let ssh = connections.get_mut(connection_id)
             .ok_or_else(|| anyhow::anyhow!("SSH 连接不存在"))?;
         if ssh.is_connected() {
@@ -186,8 +189,8 @@ impl K8sForwardPlugin {
             .find(|c| c.id == connection_id)
             .ok_or_else(|| anyhow::anyhow!("SSH 连接配置不存在"))?;
 
-        let mut connections = self.ssh_connections.lock().unwrap();
-        let ssh = connections.entry(connection_id.to_string()).or_insert_with(SshService::new);
+        let mut connections = self.ssh_connections.lock();
+        let ssh = connections.entry(connection_id.to_string()).or_default();
 
         let need_reconnect = !ssh.is_reconnecting()
             && ssh.has_connect_params()
@@ -241,7 +244,7 @@ impl K8sForwardPlugin {
         let username = get_str(params, "username")?;
         let password = get_str(params, "password")?;
 
-        let enc_pwd = self.encryptor.encrypt(password)?;
+        let enc_pwd = encrypt(password)?;
         let conn = SshConnection {
             id: uuid::Uuid::new_v4().to_string(),
             name: name.to_string(),
@@ -279,7 +282,7 @@ impl K8sForwardPlugin {
             conn.username = username.to_string();
         }
         if let Some(password) = params.get("password").and_then(|v| v.as_str()) {
-            conn.password = self.encryptor.encrypt(password)?;
+            conn.password = encrypt(password)?;
         }
 
         let result = serde_json::to_value(&*conn)?;
@@ -303,12 +306,12 @@ impl K8sForwardPlugin {
         let rule_count = removed_rules.len();
         data.forward_rules.retain(|r| r.ssh_connection_id != id);
 
-        let mut connections = self.ssh_connections.lock().unwrap();
+        let mut connections = self.ssh_connections.lock();
         if let Some(mut ssh) = connections.remove(id) {
             ssh.disconnect();
         }
 
-        if let Some(ref proxy) = *self.proxy.lock().unwrap() {
+        if let Some(ref proxy) = *self.proxy.lock() {
             for rule in &removed_rules {
                 proxy.unregister_by_rule_id(&rule.id);
             }
@@ -320,7 +323,7 @@ impl K8sForwardPlugin {
 
     fn handle_ssh_list_connections(&self) -> Result<Value> {
         let data = self.load_data()?;
-        let connections = self.ssh_connections.lock().unwrap();
+        let connections = self.ssh_connections.lock();
 
         let list: Vec<Value> = data.ssh_connections.iter().map(|conn| {
             let ssh = connections.get(&conn.id);
@@ -353,10 +356,10 @@ impl K8sForwardPlugin {
         let result = self.runtime.block_on(client.login(username, password))?;
 
         if result.success {
-            *self.kuboard.lock().unwrap() = Some(client);
+            *self.kuboard.lock() = Some(client);
 
             let mut data = self.load_data()?;
-            let enc_pwd = self.encryptor.encrypt(password)?;
+            let enc_pwd = encrypt(password)?;
             data.kuboard = Some(KuboardConfig {
                 url: url.to_string(),
                 username: username.to_string(),
@@ -370,7 +373,7 @@ impl K8sForwardPlugin {
 
     fn handle_kuboard_mfa(&self, params: &Value) -> Result<Value> {
         let passcode = get_str(params, "passcode")?;
-        let mut kuboard = self.kuboard.lock().unwrap();
+        let mut kuboard = self.kuboard.lock();
         if let Some(ref mut client) = *kuboard {
             self.runtime.block_on(client.mfa_verify(passcode))?;
             Ok(json!({"success": true}))
@@ -380,12 +383,12 @@ impl K8sForwardPlugin {
     }
 
     fn handle_kuboard_logout(&self) -> Result<Value> {
-        *self.kuboard.lock().unwrap() = None;
+        *self.kuboard.lock() = None;
         Ok(json!({"success": true}))
     }
 
     fn handle_list_clusters(&self) -> Result<Value> {
-        let kuboard = self.kuboard.lock().unwrap();
+        let kuboard = self.kuboard.lock();
         if let Some(ref client) = *kuboard {
             let clusters = self.runtime.block_on(client.list_clusters())?;
             Ok(serde_json::to_value(clusters)?)
@@ -414,7 +417,7 @@ impl K8sForwardPlugin {
             .unwrap_or(0) as u16;
 
         // 获取 Pod IP
-        let kuboard = self.kuboard.lock().unwrap();
+        let kuboard = self.kuboard.lock();
         let pods = if let Some(ref client) = *kuboard {
             self.runtime
                 .block_on(client.list_pods(cluster, namespace))?
@@ -427,7 +430,7 @@ impl K8sForwardPlugin {
             .ok_or_else(|| anyhow::anyhow!("Pod 未找到"))?;
 
         // 创建 SSH 隧道
-        let mut connections = self.ssh_connections.lock().unwrap();
+        let mut connections = self.ssh_connections.lock();
         let ssh = connections.get_mut(connection_id)
             .ok_or_else(|| anyhow::anyhow!("SSH 连接不存在"))?;
         if !ssh.is_connected() {
@@ -440,7 +443,7 @@ impl K8sForwardPlugin {
         let addr = format!("{}:{}", pod.ip, container_port);
         let rule_id = uuid::Uuid::new_v4().to_string();
 
-        if let Some(ref p) = *self.proxy.lock().unwrap() {
+        if let Some(ref p) = *self.proxy.lock() {
             p.register(&domain, &format!("127.0.0.1:{}", local_port), &rule_id, false);
             p.register(&addr, &format!("127.0.0.1:{}", local_port), &rule_id, true);
         }
@@ -500,16 +503,16 @@ impl K8sForwardPlugin {
         }
 
         self.runtime.block_on(proxy.start())?;
-        *self.proxy.lock().unwrap() = Some(proxy);
+        *self.proxy.lock() = Some(proxy);
 
         Ok(json!({"success": true, "message": format!("代理已启动: 127.0.0.1:{}", port)}))
     }
 
     fn handle_proxy_stop(&self) -> Result<Value> {
-        if let Some(ref mut proxy) = *self.proxy.lock().unwrap() {
+        if let Some(ref mut proxy) = *self.proxy.lock() {
             proxy.stop();
         }
-        *self.proxy.lock().unwrap() = None;
+        *self.proxy.lock() = None;
         Ok(json!({"success": true}))
     }
 
@@ -524,7 +527,7 @@ impl K8sForwardPlugin {
         let mut rule: ForwardRule = serde_json::from_value(params.clone())?;
         let mut data = self.load_data()?;
 
-        let mut connections = self.ssh_connections.lock().unwrap();
+        let mut connections = self.ssh_connections.lock();
         if let Some(ssh) = connections.get_mut(&rule.ssh_connection_id) {
             if ssh.is_connected() && rule.rule_type == RuleType::Manual {
                 let assigned = ssh.add_forward(
@@ -553,7 +556,7 @@ impl K8sForwardPlugin {
         let updated: ForwardRule = serde_json::from_value(params.clone())?;
         let mut data = self.load_data()?;
         if let Some(rule) = data.forward_rules.iter_mut().find(|r| r.id == updated.id) {
-            let mut connections = self.ssh_connections.lock().unwrap();
+            let mut connections = self.ssh_connections.lock();
             if let Some(ssh) = connections.get_mut(&rule.ssh_connection_id) {
                 let _ = ssh.remove_forward(rule.local_port);
                 if ssh.is_connected() {
@@ -588,11 +591,11 @@ impl K8sForwardPlugin {
         let mut data = self.load_data()?;
         if let Some(pos) = data.forward_rules.iter().position(|r| r.id == id) {
             let rule = data.forward_rules.remove(pos);
-            let mut connections = self.ssh_connections.lock().unwrap();
+            let mut connections = self.ssh_connections.lock();
             if let Some(ssh) = connections.get_mut(&rule.ssh_connection_id) {
                 let _ = ssh.remove_forward(rule.local_port);
             }
-            if let Some(ref proxy) = *self.proxy.lock().unwrap() {
+            if let Some(ref proxy) = *self.proxy.lock() {
                 proxy.unregister_by_rule_id(&rule.id);
             }
             data.ssh = None;
@@ -630,7 +633,7 @@ impl K8sForwardPlugin {
     // ── Kuboard 状态 ──
 
     fn handle_kuboard_status(&self) -> Result<Value> {
-        let kuboard = self.kuboard.lock().unwrap();
+        let kuboard = self.kuboard.lock();
         let data = self.load_data()?;
         let status = KuboardStatus {
             logged_in: kuboard.as_ref().map(|c| c.is_logged_in()).unwrap_or(false),
@@ -642,7 +645,7 @@ impl K8sForwardPlugin {
 
     fn handle_list_namespaces(&self, params: &Value) -> Result<Value> {
         let cluster = get_str(params, "cluster")?;
-        let kuboard = self.kuboard.lock().unwrap();
+        let kuboard = self.kuboard.lock();
         if let Some(ref client) = *kuboard {
             let nss = self.runtime.block_on(client.list_namespaces(cluster))?;
             Ok(serde_json::to_value(nss)?)
@@ -654,7 +657,7 @@ impl K8sForwardPlugin {
     fn handle_list_pods(&self, params: &Value) -> Result<Value> {
         let cluster = get_str(params, "cluster")?;
         let namespace = get_str(params, "namespace")?;
-        let kuboard = self.kuboard.lock().unwrap();
+        let kuboard = self.kuboard.lock();
         if let Some(ref client) = *kuboard {
             let pods = self
                 .runtime
@@ -672,11 +675,11 @@ impl K8sForwardPlugin {
         let mut data = self.load_data()?;
         if let Some(pos) = data.forward_rules.iter().position(|r| r.id == rule_id) {
             let rule = data.forward_rules.remove(pos);
-            let mut connections = self.ssh_connections.lock().unwrap();
+            let mut connections = self.ssh_connections.lock();
             if let Some(ssh) = connections.get_mut(&rule.ssh_connection_id) {
                 let _ = ssh.remove_forward(rule.local_port);
             }
-            if let Some(ref proxy) = *self.proxy.lock().unwrap() {
+            if let Some(ref proxy) = *self.proxy.lock() {
                 proxy.unregister_by_rule_id(&rule.id);
             }
             data.ssh = None;
@@ -693,7 +696,7 @@ impl K8sForwardPlugin {
             .iter()
             .filter(|r| r.rule_type == RuleType::K8s)
             .collect();
-        let mappings = self.proxy.lock().unwrap();
+        let mappings = self.proxy.lock();
         let mappings = mappings
             .as_ref()
             .map(|p| p.list_mappings())
@@ -702,7 +705,7 @@ impl K8sForwardPlugin {
     }
 
     fn handle_validate_k8s_forwards(&self) -> Result<Value> {
-        let kuboard_guard = self.kuboard.lock().unwrap();
+        let kuboard_guard = self.kuboard.lock();
         let client = kuboard_guard
             .as_ref()
             .ok_or_else(|| anyhow::anyhow!("Kuboard 未登录"))?;
@@ -729,26 +732,23 @@ impl K8sForwardPlugin {
                 to_remove.extend(entries.iter().map(|(i, _)| *i));
                 continue;
             }
-            match self.runtime.block_on(client.list_pods(cluster, namespace)) {
-                Ok(pods) => {
-                    for (idx, pod_name) in entries {
-                        let valid = pods
-                            .iter()
-                            .any(|p| p.name == *pod_name && p.status == "Running");
-                        if !valid {
-                            to_remove.push(*idx);
-                        }
+            if let Ok(pods) = self.runtime.block_on(client.list_pods(cluster, namespace)) {
+                for (idx, pod_name) in entries {
+                    let valid = pods
+                        .iter()
+                        .any(|p| p.name == *pod_name && p.status == "Running");
+                    if !valid {
+                        to_remove.push(*idx);
                     }
                 }
-                Err(_) => {}
             }
         }
 
         to_remove.sort_unstable();
         to_remove.dedup();
         to_remove.reverse();
-        let mut connections = self.ssh_connections.lock().unwrap();
-        let proxy_guard = self.proxy.lock().unwrap();
+        let mut connections = self.ssh_connections.lock();
+        let proxy_guard = self.proxy.lock();
         for idx in &to_remove {
             let rule = data.forward_rules.remove(*idx);
             if let Some(ssh) = connections.get_mut(&rule.ssh_connection_id) {
@@ -766,7 +766,7 @@ impl K8sForwardPlugin {
     // ── 代理状态 ──
 
     fn handle_proxy_status(&self) -> Result<Value> {
-        let guard = self.proxy.lock().unwrap();
+        let guard = self.proxy.lock();
         let data = self.load_data()?;
         let status = ProxyStatus {
             running: guard.as_ref().map(|p| p.is_running()).unwrap_or(false),
@@ -787,7 +787,7 @@ impl K8sForwardPlugin {
     }
 
     fn handle_list_proxy_mappings(&self) -> Result<Value> {
-        let guard = self.proxy.lock().unwrap();
+        let guard = self.proxy.lock();
         let mappings = guard
             .as_ref()
             .map(|p| p.list_mappings())
@@ -809,7 +809,7 @@ impl K8sForwardPlugin {
         self.save_data(&data)?;
 
         // 如果代理已运行，同步更新内存中的映射
-        if let Some(ref proxy) = *self.proxy.lock().unwrap() {
+        if let Some(ref proxy) = *self.proxy.lock() {
             proxy.update_mapping(rule_id, domain)?;
         }
 
@@ -827,12 +827,12 @@ impl K8sForwardPlugin {
         let mut data = self.load_data()?;
         // 解密 SSH 连接凭据后返回
         for conn in data.ssh_connections.iter_mut() {
-            if let Ok(pwd) = self.encryptor.decrypt(&conn.password) {
+            if let Ok(pwd) = decrypt(&conn.password) {
                 conn.password = pwd;
             }
         }
         if let Some(ref kb_cfg) = data.kuboard {
-            if let Ok(pwd) = self.encryptor.decrypt(&kb_cfg.password) {
+            if let Ok(pwd) = decrypt(&kb_cfg.password) {
                 data.kuboard = Some(KuboardConfig {
                     password: pwd,
                     ..kb_cfg.clone()
@@ -881,11 +881,11 @@ impl Plugin for K8sForwardPlugin {
     /// 按照依赖顺序释放资源：先停代理，再断 SSH
     fn destroy(&mut self) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         // 停止 HTTP 代理
-        if let Some(ref mut proxy) = *self.proxy.lock().unwrap() {
+        if let Some(ref mut proxy) = *self.proxy.lock() {
             proxy.stop();
         }
         // 断开所有 SSH 连接（停止所有转发线程 + join 等待线程结束）
-        for (_, mut ssh) in self.ssh_connections.lock().unwrap().drain() {
+        for (_, mut ssh) in self.ssh_connections.lock().drain() {
             ssh.disconnect();
         }
         Ok(())
@@ -945,4 +945,51 @@ impl Plugin for K8sForwardPlugin {
 pub extern "C" fn plugin_create() -> *mut Box<dyn Plugin> {
     let plugin: Box<Box<dyn Plugin>> = Box::new(Box::new(K8sForwardPlugin::new()));
     Box::leak(plugin) as *mut Box<dyn Plugin>
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_plugin_info() {
+        let plugin = K8sForwardPlugin::new();
+        assert_eq!(plugin.id(), "k8s-forward");
+        assert_eq!(plugin.name(), "K8s IP转发");
+        assert_eq!(plugin.version(), "1.0.0");
+        assert!(!plugin.icon().is_empty());
+        assert!(!plugin.get_view().is_empty());
+    }
+
+    #[test]
+    fn test_unknown_method_returns_error() {
+        let mut plugin = K8sForwardPlugin::new();
+        let result = plugin.handle_call("nonexistent", json!({}));
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_ssh_status_without_connection() {
+        let mut plugin = K8sForwardPlugin::new();
+        // This should work even without SSH connections (returns empty/error, not panic)
+        let result = plugin.handle_call("ssh_status", json!({}));
+        // It may succeed with empty status or fail gracefully
+        let _ = result;
+    }
+
+    #[test]
+    fn test_proxy_status_without_proxy() {
+        let mut plugin = K8sForwardPlugin::new();
+        let result = plugin.handle_call("proxy_status", json!({}));
+        // Should return status (not running) or error — either is acceptable
+        let _ = result;
+    }
+
+    #[test]
+    fn test_get_config() {
+        let mut plugin = K8sForwardPlugin::new();
+        let result = plugin.handle_call("get_config", json!({}));
+        // Should succeed — config loading doesn't require active connections
+        let _ = result;
+    }
 }

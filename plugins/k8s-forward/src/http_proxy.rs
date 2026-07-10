@@ -27,7 +27,8 @@ use hyper::{
 };
 use hyper_util::rt::TokioIo;
 use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
+use parking_lot::Mutex;
+use std::sync::Arc;
 use tokio::net::TcpListener;
 use tokio::sync::oneshot;
 
@@ -69,9 +70,8 @@ impl HttpProxySvc {
     pub fn register(&self, domain: &str, target: &str, rule_id: &str, editable: bool) {
         self.mappings
             .lock()
-            .unwrap()
             .insert(domain.to_string(), target.to_string());
-        self.mapping_list.lock().unwrap().push(ProxyMapping {
+        self.mapping_list.lock().push(ProxyMapping {
             domain: domain.to_string(),
             target: target.to_string(),
             rule_id: rule_id.to_string(),
@@ -81,10 +81,9 @@ impl HttpProxySvc {
 
     /// 注销单个域名映射
     pub fn unregister(&self, domain: &str) {
-        self.mappings.lock().unwrap().remove(domain);
+        self.mappings.lock().remove(domain);
         self.mapping_list
             .lock()
-            .unwrap()
             .retain(|m| m.domain != domain);
     }
 
@@ -94,7 +93,6 @@ impl HttpProxySvc {
         let domains: Vec<String> = self
             .mapping_list
             .lock()
-            .unwrap()
             .iter()
             .filter(|m| m.rule_id == rule_id)
             .map(|m| m.domain.clone())
@@ -105,19 +103,18 @@ impl HttpProxySvc {
     }
 
     pub fn list_mappings(&self) -> Vec<ProxyMapping> {
-        self.mapping_list.lock().unwrap().clone()
+        self.mapping_list.lock().clone()
     }
 
     /// 更新可编辑的映射（修改 Pod 地址的域名）
     pub fn update_mapping(&self, rule_id: &str, new_domain: &str) -> Result<ProxyMapping> {
-        let mut list = self.mapping_list.lock().unwrap();
+        let mut list = self.mapping_list.lock();
         if let Some(m) = list.iter_mut().find(|m| m.rule_id == rule_id && m.editable) {
             let old_domain = m.domain.clone();
-            self.mappings.lock().unwrap().remove(&old_domain);
+            self.mappings.lock().remove(&old_domain);
             m.domain = new_domain.to_string();
             self.mappings
                 .lock()
-                .unwrap()
                 .insert(new_domain.to_string(), m.target.clone());
             return Ok(ProxyMapping {
                 domain: new_domain.to_string(),
@@ -219,7 +216,7 @@ async fn proxy_request(
 
     // 按优先级查找映射
     let target = {
-        let map = mappings.lock().unwrap();
+        let map = mappings.lock();
         map.get(host)
             .cloned()
             .or_else(|| map.get(host_without_port).cloned())

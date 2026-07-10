@@ -234,3 +234,63 @@ pub extern "C" fn plugin_create() -> *mut Box<dyn Plugin> {
     let plugin: Box<Box<dyn Plugin>> = Box::new(Box::new(AuthPlugin));
     Box::leak(plugin) as *mut Box<dyn Plugin>
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn test_plugin_info() {
+        let plugin = AuthPlugin;
+        assert_eq!(plugin.id(), "auth");
+        assert_eq!(plugin.name(), "双因素验证");
+        assert_eq!(plugin.version(), "1.0.0");
+        assert!(!plugin.icon().is_empty());
+        assert!(!plugin.get_view().is_empty());
+    }
+
+    #[test]
+    fn test_unknown_method_returns_error() {
+        let mut plugin = AuthPlugin;
+        let result = plugin.handle_call("nonexistent", json!({}));
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_generate_totp_deterministic_key() {
+        // With a known Base32 key, generate_totp_internal should produce
+        // a 6-digit code (exact value depends on current time, but length is fixed)
+        let result = AuthPlugin::generate_totp_internal("JBSWY3DPEHPK3PXP", 6, 30);
+        assert!(result.is_ok());
+        let code = result.unwrap();
+        assert_eq!(code.len(), 6);
+        assert!(code.chars().all(|c| c.is_ascii_digit()));
+    }
+
+    #[test]
+    fn test_generate_totp_invalid_secret() {
+        let result = AuthPlugin::generate_totp_internal("!!!invalid!!!", 6, 30);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_generate_totp_8_digits() {
+        let result = AuthPlugin::generate_totp_internal("JBSWY3DPEHPK3PXP", 8, 30);
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap().len(), 8);
+    }
+
+    #[test]
+    fn test_generate_secret_via_call() {
+        let mut plugin = AuthPlugin;
+        let result = plugin.handle_call("generate_secret", json!({}));
+        assert!(result.is_ok());
+        let val = result.unwrap();
+        let secret = val.as_str().unwrap();
+        // Base32 encoded 20 bytes = 32 chars with padding
+        assert_eq!(secret.len(), 32);
+        // Base32 uses RFC 4648 alphabet (A-Z, 2-7, =)
+        assert!(secret.chars().all(|c| c.is_ascii_alphanumeric() || c == '='));
+    }
+}

@@ -100,7 +100,7 @@ impl KuboardClient {
     async fn fetch_req_id(&self) -> Result<String> {
         let resp = self
             .client
-            .get(&self.url("/kuboard/cluster"))
+            .get(self.url("/kuboard/cluster"))
             .send()
             .await?;
         let mut dummy = None;
@@ -112,7 +112,7 @@ impl KuboardClient {
         }
         let resp = self
             .client
-            .get(&self.url("/login?state=%2Fkuboard%2Fcluster"))
+            .get(self.url("/login?state=%2Fkuboard%2Fcluster"))
             .send()
             .await?;
         let resp =
@@ -199,7 +199,7 @@ impl KuboardClient {
     pub async fn mfa_verify(&mut self, passcode: &str) -> Result<()> {
         let resp = self
             .client
-            .post(&self.url("/login/password"))
+            .post(self.url("/login/password"))
             .header("Content-Type", "application/json")
             .json(&serde_json::json!({
                 "username": self.username,
@@ -233,7 +233,7 @@ impl KuboardClient {
 
     /// 为 API 请求添加认证 Cookie
     fn api_req(&self, path: &str) -> reqwest::RequestBuilder {
-        let mut req = self.client.get(&self.url(path));
+        let mut req = self.client.get(self.url(path));
         if let Some(ref token) = self.kuboard_token {
             req = req.header(
                 "Cookie",

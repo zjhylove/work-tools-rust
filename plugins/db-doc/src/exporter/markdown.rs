@@ -5,6 +5,12 @@ use std::path::Path;
 /// Markdown 文档导出器
 pub struct MarkdownExporter;
 
+impl Default for MarkdownExporter {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl MarkdownExporter {
     pub fn new() -> Self {
         Self

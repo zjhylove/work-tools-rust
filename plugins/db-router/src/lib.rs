@@ -248,3 +248,68 @@ pub extern "C" fn plugin_create() -> *mut Box<dyn Plugin> {
     let plugin: Box<Box<dyn Plugin>> = Box::new(Box::new(DbRouterPlugin));
     Box::leak(plugin) as *mut Box<dyn Plugin>
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    fn make_rule(prefix: &str, length: u32) -> RouteRule {
+        RouteRule {
+            id: "test".to_string(),
+            name: "test".to_string(),
+            description: String::new(),
+            code_prefix: prefix.to_string(),
+            code_length: length,
+            route_script: String::new(),
+            tables: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn test_plugin_info() {
+        let plugin = DbRouterPlugin;
+        assert_eq!(plugin.id(), "db-router");
+        assert_eq!(plugin.name(), "数据库路由");
+        assert_eq!(plugin.version(), "1.0.0");
+        assert!(!plugin.icon().is_empty());
+        assert!(!plugin.get_view().is_empty());
+    }
+
+    #[test]
+    fn test_unknown_method_returns_error() {
+        let mut plugin = DbRouterPlugin;
+        let result = plugin.handle_call("nonexistent", json!({}));
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_match_rule_prefix() {
+        let rule = make_rule("ORD", 0);
+        assert!(match_rule("ORD2024001", &rule));
+        assert!(!match_rule("INV2024001", &rule));
+    }
+
+    #[test]
+    fn test_match_rule_length() {
+        let rule = make_rule("", 10);
+        assert!(match_rule("1234567890", &rule));
+        assert!(!match_rule("12345", &rule));
+    }
+
+    #[test]
+    fn test_match_rule_multi_prefix() {
+        let rule = make_rule("ORD,INV", 0);
+        assert!(match_rule("ORD001", &rule));
+        assert!(match_rule("INV001", &rule));
+        assert!(!match_rule("PAY001", &rule));
+    }
+
+    #[test]
+    fn test_match_rule_prefix_and_length() {
+        let rule = make_rule("ORD", 10);
+        assert!(match_rule("ORD1234567", &rule));
+        assert!(!match_rule("ORD123", &rule));
+        assert!(!match_rule("INV1234567", &rule));
+    }
+}

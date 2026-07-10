@@ -10,7 +10,7 @@ pub fn key_to_display(raw: &[u8]) -> String {
         Err(_) => raw
             .iter()
             .map(|&b| {
-                if b >= 0x20 && b <= 0x7e {
+                if (0x20..=0x7e).contains(&b) {
                     (b as char).to_string()
                 } else {
                     format!("\\x{b:02x}")

@@ -112,10 +112,7 @@ fn register_functions(engine: &mut Engine) {
             s.to_string()
         } else {
             // `std::iter::repeat(fill).take(n)` 生成 n 个填充字符
-            std::iter::repeat(fill)
-                .take(width - s.len())
-                .collect::<String>()
-                + s
+            std::iter::repeat_n(fill, width - s.len()).collect::<String>() + s
         }
     });
     engine.register_fn("pad_right", |s: &str, n: i64, ch: &str| {
@@ -124,11 +121,7 @@ fn register_functions(engine: &mut Engine) {
         if s.len() >= width {
             s.to_string()
         } else {
-            s.to_string()
-                + std::iter::repeat(fill)
-                    .take(width - s.len())
-                    .collect::<String>()
-                    .as_str()
+            format!("{}{}", s, std::iter::repeat_n(fill, width - s.len()).collect::<String>())
         }
     });
 

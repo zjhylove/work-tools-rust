@@ -142,3 +142,32 @@ pub extern "C" fn plugin_create() -> *mut Box<dyn Plugin> {
     let plugin: Box<Box<dyn Plugin>> = Box::new(Box::new(ApiDocPlugin::new()));
     Box::leak(plugin) as *mut Box<dyn Plugin>
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn test_plugin_info() {
+        let plugin = ApiDocPlugin::new();
+        assert_eq!(plugin.id(), "api-doc");
+        assert_eq!(plugin.name(), "API文档");
+        assert_eq!(plugin.version(), "1.0.0");
+        assert!(!plugin.icon().is_empty());
+        assert!(!plugin.get_view().is_empty());
+    }
+
+    #[test]
+    fn test_unknown_method_returns_error() {
+        let mut plugin = ApiDocPlugin::new();
+        let result = plugin.handle_call("nonexistent", json!({}));
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_default_trait() {
+        let plugin = ApiDocPlugin::default();
+        assert_eq!(plugin.id(), "api-doc");
+    }
+}

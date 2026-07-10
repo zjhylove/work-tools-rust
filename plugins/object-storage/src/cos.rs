@@ -75,7 +75,7 @@ impl ObjectStoreProvider for CosClient {
 
         let resp = self
             .client
-            .get(&format!("https://{}", host))
+            .get(format!("https://{}", host))
             .header("Authorization", &auth)
             .header("Host", &host)
             .send()?;
@@ -108,7 +108,7 @@ impl ObjectStoreProvider for CosClient {
 
         let resp = self
             .client
-            .get(&format!("https://{}?{}", host, query))
+            .get(format!("https://{}?{}", host, query))
             .header("Authorization", &auth)
             .header("Host", &host)
             .send()?;
@@ -126,7 +126,7 @@ impl ObjectStoreProvider for CosClient {
 
         let resp = self
             .client
-            .get(&format!("https://{}/{}", host, provider::pct_encode(key)))
+            .get(format!("https://{}/{}", host, provider::pct_encode(key)))
             .header("Authorization", &auth)
             .header("Host", &host)
             .send()?;
@@ -148,7 +148,7 @@ impl ObjectStoreProvider for CosClient {
 
         let resp = self
             .client
-            .head(&format!("https://{}/{}", host, provider::pct_encode(key)))
+            .head(format!("https://{}/{}", host, provider::pct_encode(key)))
             .header("Authorization", &auth)
             .header("Host", &host)
             .send()?;
@@ -194,7 +194,7 @@ impl ObjectStoreProvider for CosClient {
 
         let resp = self
             .client
-            .put(&format!("https://{}/{}", host, provider::pct_encode(key)))
+            .put(format!("https://{}/{}", host, provider::pct_encode(key)))
             .header("Authorization", &auth)
             .header("Host", &host)
             .header("Content-Type", content_type)
@@ -214,7 +214,7 @@ impl ObjectStoreProvider for CosClient {
 
         let resp = self
             .client
-            .delete(&format!("https://{}/{}", host, provider::pct_encode(key)))
+            .delete(format!("https://{}/{}", host, provider::pct_encode(key)))
             .header("Authorization", &auth)
             .header("Host", &host)
             .send()?;

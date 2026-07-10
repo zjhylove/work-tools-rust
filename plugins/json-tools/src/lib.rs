@@ -133,3 +133,71 @@ pub extern "C" fn plugin_create() -> *mut Box<dyn Plugin> {
     let plugin: Box<Box<dyn Plugin>> = Box::new(Box::new(JsonTools));
     Box::leak(plugin) as *mut Box<dyn Plugin>
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn test_plugin_info() {
+        let plugin = JsonTools;
+        assert_eq!(plugin.id(), "json-tools");
+        assert_eq!(plugin.name(), "JSON 工具");
+        assert_eq!(plugin.version(), "1.0.0");
+        assert!(!plugin.icon().is_empty());
+        assert!(!plugin.get_view().is_empty());
+    }
+
+    #[test]
+    fn test_unknown_method_returns_error() {
+        let mut plugin = JsonTools;
+        let result = plugin.handle_call("nonexistent", json!({}));
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_format_json() {
+        let mut plugin = JsonTools;
+        let result = plugin.handle_call("format_json", json!({"json": r#"{"a":1,"b":2}"#}));
+        assert!(result.is_ok());
+        let val = result.unwrap();
+        let formatted = val.get("result").unwrap().as_str().unwrap();
+        assert!(formatted.contains('\n'));
+        assert!(formatted.contains("  "));
+    }
+
+    #[test]
+    fn test_minify_json() {
+        let mut plugin = JsonTools;
+        let result = plugin.handle_call("minify_json", json!({"json": "{\n  \"a\": 1\n}"}));
+        assert!(result.is_ok());
+        let val = result.unwrap();
+        assert_eq!(val.get("result").unwrap().as_str().unwrap(), r#"{"a":1}"#);
+    }
+
+    #[test]
+    fn test_validate_json_valid() {
+        let mut plugin = JsonTools;
+        let result = plugin.handle_call("validate_json", json!({"json": r#"{"ok":true}"#}));
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap().get("valid").unwrap().as_bool().unwrap(), true);
+    }
+    #[test]
+    fn test_validate_json_invalid() {
+        let mut plugin = JsonTools;
+        let result = plugin.handle_call("validate_json", json!({"json": "{bad}"}));
+        assert!(result.is_ok());
+        let val = result.unwrap();
+        assert_eq!(val.get("valid").unwrap().as_bool().unwrap(), false);
+        // Error message should be non-empty (exact wording depends on serde_json version)
+        assert!(val.get("error").unwrap().as_str().unwrap().len() > 0);
+    }
+
+    #[test]
+    fn test_missing_param_returns_error() {
+        let mut plugin = JsonTools;
+        let result = plugin.handle_call("format_json", json!({}));
+        assert!(result.is_err());
+    }
+}

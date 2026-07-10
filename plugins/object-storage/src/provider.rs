@@ -88,7 +88,7 @@ pub fn urlenc(s: &str) -> String {
 /// 1. 按 `/` 分割路径
 /// 2. 对每个段进行 URL 编码
 /// 3. 用 `/` 重新连接
-/// 这样可以保持路径结构的同时编码特殊字符。
+///    这样可以保持路径结构的同时编码特殊字符。
 pub fn pct_encode(s: &str) -> String {
     s.split('/').map(urlenc).collect::<Vec<_>>().join("/")
 }

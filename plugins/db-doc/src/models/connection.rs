@@ -1,9 +1,10 @@
 use serde::{Deserialize, Serialize};
 
 /// 数据库类型
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "lowercase")]
 pub enum DatabaseType {
+    #[default]
     MySQL,
     PostgreSQL,
 }
@@ -71,11 +72,6 @@ fn default_username() -> String {
     "root".to_string()
 }
 
-impl Default for DatabaseType {
-    fn default() -> Self {
-        DatabaseType::MySQL
-    }
-}
 
 impl ConnectionConfig {
     pub fn new(name: impl Into<String>, db_type: DatabaseType) -> Self {

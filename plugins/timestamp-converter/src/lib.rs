@@ -157,3 +157,90 @@ pub extern "C" fn plugin_create() -> *mut Box<dyn Plugin> {
     let plugin: Box<Box<dyn Plugin>> = Box::new(Box::new(TimestampConverter));
     Box::leak(plugin) as *mut Box<dyn Plugin>
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn test_plugin_info() {
+        let plugin = TimestampConverter;
+        assert_eq!(plugin.id(), "timestamp-converter");
+        assert_eq!(plugin.name(), "时间戳转换");
+        assert_eq!(plugin.version(), "1.0.0");
+        assert!(!plugin.icon().is_empty());
+        assert!(!plugin.get_view().is_empty());
+    }
+
+    #[test]
+    fn test_unknown_method_returns_error() {
+        let mut plugin = TimestampConverter;
+        let result = plugin.handle_call("nonexistent", json!({}));
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_parse_timestamp_seconds() {
+        // 10 digits → seconds as-is
+        assert_eq!(parse_timestamp("1700000000").unwrap(), 1700000000);
+    }
+
+    #[test]
+    fn test_parse_timestamp_millis() {
+        // 13 digits → divided by 1000 to get seconds
+        assert_eq!(parse_timestamp("1700000000000").unwrap(), 1700000000000 / 1000);
+    }
+
+    #[test]
+    fn test_parse_timestamp_micros() {
+        // 16 digits → divided by 1_000_000 to get seconds
+        assert_eq!(parse_timestamp("1700000000000000").unwrap(), 1700000000000000 / 1_000_000);
+    }
+
+    #[test]
+    fn test_parse_timestamp_invalid() {
+        // Wrong digit count → error
+        assert!(parse_timestamp("12345").is_err());
+        assert!(parse_timestamp("12345678901234567890").is_err());
+    }
+
+    #[test]
+    fn test_parse_datetime_to_ts() {
+        let tz: Tz = "Asia/Shanghai".parse().unwrap();
+        let ts = parse_datetime_to_ts("2024-01-01 00:00:00", &tz);
+        assert!(ts.is_some());
+    }
+
+    #[test]
+    fn test_format_datetimes() {
+        let tz: Tz = "UTC".parse().unwrap();
+        let result = format_datetimes(1700000000, tz);
+        assert!(result.is_object());
+        assert!(result.get("format_iso").is_some());
+        assert!(result.get("utc").is_some());
+        assert!(result.get("datetime").is_some());
+    }
+
+    #[test]
+    fn test_timestamp_to_datetime_via_call() {
+        let mut plugin = TimestampConverter;
+        let result = plugin.handle_call("timestamp_to_datetime", json!({"ts": "1700000000"}));
+        assert!(result.is_ok());
+        let val = result.unwrap();
+        assert!(val.get("format_iso").is_some());
+    }
+
+    #[test]
+    fn test_datetime_to_timestamp_via_call() {
+        let mut plugin = TimestampConverter;
+        let result = plugin.handle_call(
+            "datetime_to_timestamp",
+            json!({"datetime": "2024-01-01 00:00:00", "timezone": "Asia/Shanghai"}),
+        );
+        assert!(result.is_ok());
+        let val = result.unwrap();
+        assert!(val.get("ts_sec").is_some());
+        assert!(val.get("ts_ms").is_some());
+    }
+}
