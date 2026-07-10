@@ -24,7 +24,7 @@ use anyhow::Result;
 use chrono::Utc;
 use serde::Serialize;
 use std::collections::VecDeque;
-use std::sync::Mutex;
+use parking_lot::Mutex;
 use tracing::Subscriber;
 use tracing_subscriber::layer::{Context, Layer};
 use tracing_subscriber::prelude::*;
@@ -89,13 +89,12 @@ where
         };
 
         // 写入环形缓冲区
-        if let Ok(mut ring) = LOG_RING.lock() {
-            // 达到容量上限时移除最旧的条目
-            if ring.len() >= MAX_LOG_ENTRIES {
-                ring.pop_front(); // 移除最旧的
-            }
-            ring.push_back(entry); // 添加最新的
+        let mut ring = LOG_RING.lock();
+        // 达到容量上限时移除最旧的条目
+        if ring.len() >= MAX_LOG_ENTRIES {
+            ring.pop_front(); // 移除最旧的
         }
+        ring.push_back(entry); // 添加最新的
     }
 }
 

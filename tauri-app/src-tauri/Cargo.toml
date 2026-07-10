@@ -38,6 +38,7 @@ aes = "0.8"
 sha2 = "0.10"
 hex = "0.4"
 libloading = "0.9.0"
+parking_lot = "0.12"
 zip = "8.2.0"
 chrono = { version = "0.4", features = ["serde"] }
 tempfile = "3"

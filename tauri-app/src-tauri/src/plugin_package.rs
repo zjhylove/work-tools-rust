@@ -3,7 +3,7 @@
 //! 处理 `.wtplugin.zip` 格式的插件包：解析、验证、安装。
 //!
 //! ## 插件包格式
-//! ```
+//! ```text
 //! plugin.zip
 //! ├── manifest.json          # 插件元数据（必须）
 //! ├── libplugin.dll/.so/.dylib # 动态库（按平台）
@@ -151,8 +151,49 @@ impl PluginPackage {
         // 确保目标目录存在
         std::fs::create_dir_all(plugin_dir).context("创建插件目录失败")?;
 
-        // `extract` 递归解压所有文件到目标目录
-        archive.extract(plugin_dir).context("解压插件包失败")?;
+        // 逐条目解压，防止 ZIP Slip 路径穿越攻击
+        let canonical_dir = plugin_dir
+            .canonicalize()
+            .context("无法解析插件目录绝对路径")?;
+
+        for i in 0..archive.len() {
+            let mut entry = archive
+                .by_index(i)
+                .with_context(|| format!("读取 ZIP 条目 {} 失败", i))?;
+
+            // enclosed_name() 拒绝以 /.. 或 .. 开头的条目
+            let Some(enclosed) = entry.enclosed_name() else {
+                anyhow::bail!(
+                    "插件包包含非法路径条目 (ZIP Slip): {}",
+                    entry.name()
+                );
+            };
+
+            let target = canonical_dir.join(enclosed);
+
+            // 验证解压目标仍在插件目录内
+            if !target.starts_with(&canonical_dir) {
+                anyhow::bail!(
+                    "插件包包含路径穿越条目: {} -> {:?}",
+                    entry.name(),
+                    target
+                );
+            }
+
+            if entry.is_dir() {
+                std::fs::create_dir_all(&target)
+                    .with_context(|| format!("创建目录 {:?} 失败", target))?;
+            } else {
+                if let Some(parent) = target.parent() {
+                    std::fs::create_dir_all(parent)
+                        .with_context(|| format!("创建父目录 {:?} 失败", parent))?;
+                }
+                let mut out = std::fs::File::create(&target)
+                    .with_context(|| format!("创建文件 {:?} 失败", target))?;
+                std::io::copy(&mut entry, &mut out)
+                    .with_context(|| format!("写入文件 {:?} 失败", target))?;
+            }
+        }
 
         tracing::info!("插件 {} 安装成功", self.manifest.id);
         Ok(())
@@ -172,6 +213,7 @@ impl PluginPackage {
     }
 
     /// 获取动态库的完整路径（插件目录 + 库文件名）
+    #[allow(dead_code)]
     pub fn get_library_path(&self, plugin_dir: &Path) -> Result<PathBuf> {
         let lib_name = self
             .get_library_filename()
@@ -181,6 +223,7 @@ impl PluginPackage {
     }
 
     /// 获取前端资源目录路径
+    #[allow(dead_code)]
     pub fn get_assets_dir(&self, plugin_dir: &Path) -> PathBuf {
         plugin_dir.join("assets")
     }
@@ -253,5 +296,234 @@ impl PluginPackage {
 
         tracing::info!("插件包 {} 验证通过", self.manifest.id);
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::io::Write;
+    use tempfile::TempDir;
+
+    /// Create a minimal valid ZIP with manifest.json + dummy lib + assets/index.html
+    fn make_test_zip(dir: &TempDir, id: &str, extra_entry: Option<(&str, &[u8])>) -> Vec<u8> {
+        let zip_path = dir.path().join("test.zip");
+        let mut zip = zip::ZipWriter::new(std::fs::File::create(&zip_path).unwrap());
+
+        let manifest = serde_json::json!({
+            "id": id,
+            "name": "Test Plugin",
+            "version": "1.0.0",
+            "description": "A test plugin",
+            "entry": "index.html",
+            "files": {
+                "windows": format!("{id}.dll")
+            },
+            "assets": { "entry": "index.html" }
+        });
+        zip.start_file("manifest.json", zip::write::FileOptions::<()>::default());
+        zip.write_all(serde_json::to_string(&manifest).unwrap().as_bytes()).unwrap();
+
+        let lib_name = format!("{id}.dll");
+        zip.start_file(&lib_name, zip::write::FileOptions::<()>::default());
+        zip.write_all(b"dll_data").unwrap();
+
+        zip.start_file("assets/index.html", zip::write::FileOptions::<()>::default());
+        zip.write_all(b"<html></html>").unwrap();
+
+        if let Some((name, data)) = extra_entry {
+            zip.start_file(name, zip::write::FileOptions::<()>::default()).unwrap();
+            zip.write_all(data).unwrap();
+        }
+
+        zip.finish().unwrap();
+        std::fs::read(&zip_path).unwrap()
+    }
+
+    #[test]
+    fn test_validate_normal_package() {
+        let dir = TempDir::new().unwrap();
+        let data = make_test_zip(&dir, "test-plugin", None);
+        let pkg = PluginPackage::from_zip_bytes(&data).unwrap();
+        assert!(pkg.validate().is_ok());
+    }
+
+    #[test]
+    fn test_validate_missing_manifest() {
+        let dir = TempDir::new().unwrap();
+        let zip_path = dir.path().join("test.zip");
+        let mut zip = zip::ZipWriter::new(std::fs::File::create(&zip_path).unwrap());
+        zip.start_file("dummy.txt", zip::write::FileOptions::<()>::default());
+        zip.write_all(b"hello").unwrap();
+        zip.finish().unwrap();
+        let data = std::fs::read(&zip_path).unwrap();
+        let result = PluginPackage::from_zip_bytes(&data);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_validate_invalid_id_uppercase() {
+        let dir = TempDir::new().unwrap();
+        let data = make_test_zip(&dir, "TestPlugin", None);
+        let pkg = PluginPackage::from_zip_bytes(&data).unwrap();
+        assert!(pkg.validate().is_err());
+    }
+
+    #[test]
+    fn test_validate_invalid_id_spaces() {
+        let dir = TempDir::new().unwrap();
+        // Manually create with bad ID
+        let zip_path = dir.path().join("test.zip");
+        let mut zip = zip::ZipWriter::new(std::fs::File::create(&zip_path).unwrap());
+        let manifest = serde_json::json!({
+            "id": "has spaces",
+            "name": "Bad Plugin",
+            "version": "1.0.0",
+            "description": "bad",
+            "entry": "index.html",
+            "files": { "windows": "has_spaces.dll" },
+            "assets": { "entry": "index.html" }
+        });
+        zip.start_file("manifest.json", zip::write::FileOptions::<()>::default());
+        zip.write_all(serde_json::to_string(&manifest).unwrap().as_bytes()).unwrap();
+        zip.start_file("has_spaces.dll", zip::write::FileOptions::<()>::default());
+        zip.write_all(b"dll").unwrap();
+        zip.start_file("assets/index.html", zip::write::FileOptions::<()>::default());
+        zip.write_all(b"<html></html>").unwrap();
+        zip.finish().unwrap();
+        let data = std::fs::read(&zip_path).unwrap();
+        let pkg = PluginPackage::from_zip_bytes(&data).unwrap();
+        assert!(pkg.validate().is_err());
+    }
+
+    #[test]
+    fn test_install_zip_slip_rejected() {
+        let dir = TempDir::new().unwrap();
+        // Create a ZIP with a path traversal entry
+        let zip_path = dir.path().join("test.zip");
+        let mut zip = zip::ZipWriter::new(std::fs::File::create(&zip_path).unwrap());
+        let manifest = serde_json::json!({
+            "id": "evil-plugin",
+            "name": "Evil",
+            "version": "1.0.0",
+            "description": "bad",
+            "entry": "index.html",
+            "files": { "windows": "evil.dll" },
+            "assets": { "entry": "index.html" }
+        });
+        zip.start_file("manifest.json", zip::write::FileOptions::<()>::default()).unwrap();
+        zip.write_all(serde_json::to_string(&manifest).unwrap().as_bytes()).unwrap();
+        zip.start_file("evil.dll", zip::write::FileOptions::<()>::default()).unwrap();
+        zip.write_all(b"dll").unwrap();
+        zip.start_file("assets/index.html", zip::write::FileOptions::<()>::default()).unwrap();
+        zip.write_all(b"<html></html>").unwrap();
+        // ZIP Slip entry: try to write outside plugin dir
+        zip.start_file("../../etc/crontab", zip::write::FileOptions::<()>::default()).unwrap();
+        zip.write_all(b"malicious").unwrap();
+        zip.finish().unwrap();
+
+        let data = std::fs::read(&zip_path).unwrap();
+        let pkg = PluginPackage::from_zip_bytes(&data).unwrap();
+        let install_dir = dir.path().join("plugins").join("evil-plugin");
+        let result = pkg.install(&install_dir);
+        let err_msg = result.unwrap_err().to_string();
+        assert!(
+            err_msg.contains("非法路径条目") || err_msg.contains("ZIP Slip"),
+            "Expected ZIP Slip rejection message, got: {}",
+            err_msg
+        );
+        assert!(
+            !dir.path().join("etc").join("crontab").exists(),
+            "File should not escape plugin dir"
+        );
+    }
+
+    #[test]
+    fn test_validate_rejects_path_traversal_id() {
+        let dir = TempDir::new().unwrap();
+        let zip_path = dir.path().join("test.zip");
+        let mut zip = zip::ZipWriter::new(std::fs::File::create(&zip_path).unwrap());
+        let manifest = serde_json::json!({
+            "id": "../evil",
+            "name": "Evil",
+            "version": "1.0.0",
+            "description": "bad",
+            "entry": "index.html",
+            "files": { "windows": "../evil.dll" },
+            "assets": { "entry": "index.html" }
+        });
+        zip.start_file("manifest.json", zip::write::FileOptions::<()>::default()).unwrap();
+        zip.write_all(serde_json::to_string(&manifest).unwrap().as_bytes()).unwrap();
+        zip.start_file("../evil.dll", zip::write::FileOptions::<()>::default()).unwrap();
+        zip.write_all(b"dll").unwrap();
+        zip.start_file("assets/index.html", zip::write::FileOptions::<()>::default()).unwrap();
+        zip.write_all(b"<html></html>").unwrap();
+        zip.finish().unwrap();
+
+        let data = std::fs::read(&zip_path).unwrap();
+        let pkg = PluginPackage::from_zip_bytes(&data).unwrap();
+        let result = pkg.validate();
+        assert!(result.is_err(), "validate() should reject path traversal ID '../evil'");
+        let err_msg = result.unwrap_err().to_string();
+        assert!(
+            err_msg.contains("小写字母") || err_msg.contains("非法") || err_msg.contains("连字符"),
+            "Expected ID format error, got: {}",
+            err_msg
+        );
+    }
+
+    #[test]
+    fn test_validate_rejects_dotdot_in_id() {
+        let dir = TempDir::new().unwrap();
+        let zip_path = dir.path().join("test.zip");
+        let mut zip = zip::ZipWriter::new(std::fs::File::create(&zip_path).unwrap());
+        let manifest = serde_json::json!({
+            "id": "foo..bar",
+            "name": "Dot Dot",
+            "version": "1.0.0",
+            "description": "bad",
+            "entry": "index.html",
+            "files": { "windows": "foo..bar.dll" },
+            "assets": { "entry": "index.html" }
+        });
+        zip.start_file("manifest.json", zip::write::FileOptions::<()>::default()).unwrap();
+        zip.write_all(serde_json::to_string(&manifest).unwrap().as_bytes()).unwrap();
+        zip.start_file("foo..bar.dll", zip::write::FileOptions::<()>::default()).unwrap();
+        zip.write_all(b"dll").unwrap();
+        zip.start_file("assets/index.html", zip::write::FileOptions::<()>::default()).unwrap();
+        zip.write_all(b"<html></html>").unwrap();
+        zip.finish().unwrap();
+
+        let data = std::fs::read(&zip_path).unwrap();
+        let pkg = PluginPackage::from_zip_bytes(&data).unwrap();
+        let result = pkg.validate();
+        // "foo..bar" contains '.' which is not lowercase/digit/hyphen
+        assert!(result.is_err(), "validate() should reject ID with '..'");
+    }
+
+    #[test]
+    fn test_install_zip_slip_rejects_deep_traversal() {
+        let dir = TempDir::new().unwrap();
+        let data = make_test_zip(&dir, "evil-plugin", Some(("./../../tmp/pwned", b"pwn")));
+        let pkg = PluginPackage::from_zip_bytes(&data).unwrap();
+        let install_dir = dir.path().join("plugins").join("evil-plugin");
+        let result = pkg.install(&install_dir);
+        assert!(result.is_err(), "Deep traversal entry should be rejected");
+        assert!(
+            !dir.path().join("tmp").join("pwned").exists(),
+            "Traversal file should not exist outside plugin dir"
+        );
+    }
+
+    #[test]
+    fn test_install_normal_succeeds() {
+        let dir = TempDir::new().unwrap();
+        let data = make_test_zip(&dir, "normal-plugin", None);
+        let pkg = PluginPackage::from_zip_bytes(&data).unwrap();
+        let install_dir = dir.path().join("plugins").join("normal-plugin");
+        pkg.install(&install_dir).unwrap();
+        assert!(install_dir.join("manifest.json").exists());
+        assert!(install_dir.join("assets/index.html").exists());
+        assert!(install_dir.join("normal-plugin.dll").exists());
     }
 }

@@ -100,7 +100,7 @@ pub fn run() {
             // 初始化系统托盘（失败不影响应用正常启动）
             tray::start_tray(app);
 
-            println!("Work Tools 应用启动成功");
+            tracing::info!("Work Tools 应用启动成功");
             Ok(())
         })
         // `invoke_handler` 注册所有 Tauri 命令

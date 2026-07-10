@@ -31,6 +31,8 @@ use libloading::{Library, Symbol};
 use serde_json::Value;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
+use parking_lot::Mutex;
 use tokio::sync::RwLock;
 use worktools_plugin_api::{Plugin, PluginCreateFn};
 use worktools_shared_types::PluginInfo;
@@ -63,8 +65,7 @@ pub struct LoadedPlugin {
 /// - `Mutex`: 所有操作（包括读）都是互斥的
 /// - 选择 RwLock 因为"列出插件"比"修改插件列表"频繁得多
 pub struct PluginManager {
-    /// 已加载的插件映射表：plugin_id → LoadedPlugin
-    plugins: RwLock<HashMap<String, LoadedPlugin>>,
+    plugins: RwLock<HashMap<String, Arc<Mutex<LoadedPlugin>>>>,
     /// 插件目录路径
     plugin_dir: PathBuf,
 }
@@ -194,18 +195,22 @@ impl PluginManager {
 
     /// 加载单个插件动态库
     ///
+    /// 所有耗时操作（Library::new、符号查找、工厂函数调用、init）都在无锁状态下执行，
+    /// 仅在最终插入 HashMap 时短暂持有写锁。
+    ///
     /// ## Rust 知识点: unsafe 块
-    /// 整个函数体都在 `unsafe { ... }` 中，因为：
+    /// 仅包含以下 unsafe 操作：
     /// 1. `Library::new()` — 加载任意动态库，可能有恶意代码
     /// 2. `library.get()` — 查找符号，类型安全性由程序员保证
     /// 3. `create()` — 调用 FFI 函数，可能违反 Rust 的安全保证
     /// 4. `Box::from_raw()` — 从原始指针重建 Box
-    ///
-    /// unsafe 不代表不安全，而是说"编译器无法验证，由程序员负责"。
     async fn load_plugin(&self, lib_path: &Path) -> Result<()> {
         tracing::info!("加载插件: {:?}", lib_path);
 
-        unsafe {
+        // ── 阶段 1: 无锁加载（耗时操作） ──
+        // Library::new, 符号查找, 工厂函数, init 全部在锁外完成，
+        // 避免慢速插件初始化阻塞所有其他操作
+        let loaded = unsafe {
             // ── 步骤1: 加载动态库 ──
             // `Library::new()` 调用操作系统的动态库加载函数
             // 返回的 Library 对象会在 drop 时自动调用 dlclose/FreeLibrary
@@ -236,29 +241,31 @@ impl PluginManager {
                 anyhow::bail!("插件初始化失败: {}", e);
             }
 
-            // ── 步骤6: 构建插件信息并保存 ──
-            let info = PluginInfo {
-                id: plugin.id().to_string(),
-                name: plugin.name().to_string(),
-                description: plugin.description().to_string(),
-                version: plugin.version().to_string(),
-                icon: plugin.icon().to_string(),
-            };
+            // ── 步骤6: 构建插件信息 ──
+            let info = plugin.info();
 
             tracing::info!("插件加载成功: {} (v{})", info.name, info.version);
 
-            // 将插件注册到 HashMap
-            let mut plugins = self.plugins.write().await;
-            plugins.insert(
-                info.id.clone(),
-                LoadedPlugin {
-                    info,
-                    instance: *plugin, // 解引用外层 Box，取回内层 Box<dyn Plugin>
-                    _library: library, // Library 的 RAII guard
-                    _library_path: lib_path.to_path_buf(),
-                },
+            LoadedPlugin {
+                info,
+                instance: *plugin,
+                _library: library,
+                _library_path: lib_path.to_path_buf(),
+            }
+        };
+
+        // ── 阶段 2: 短暂写锁仅用于 HashMap::insert ──
+        let plugin_id = loaded.info.id.clone();
+        let mut plugins = self.plugins.write().await;
+        if plugins.contains_key(&plugin_id) {
+            tracing::warn!(
+                id = %plugin_id,
+                "插件已存在，跳过重复加载"
             );
+            // loaded 在此处 drop，自动卸载动态库
+            return Ok(());
         }
+        plugins.insert(plugin_id, Arc::new(Mutex::new(loaded)));
 
         Ok(())
     }
@@ -298,7 +305,7 @@ impl PluginManager {
             let plugins = self.plugins.read().await;
             let already_loaded = plugins
                 .values()
-                .any(|p| p._library_path == lib_path);
+                .any(|p| p.lock()._library_path == lib_path);
             if already_loaded {
                 tracing::info!(dir = %dir_name, "插件已加载，跳过重复加载");
                 return Ok(dir_name.to_string());
@@ -319,30 +326,28 @@ impl PluginManager {
     /// 只返回 PluginInfo（不包含实例），前端展示用
     pub async fn get_installed_plugins(&self) -> Vec<PluginInfo> {
         self.plugins
-            .read() // 获取读锁
-            .await // 异步等待
-            .values() // 获取所有值（HashMap 的迭代器）
-            .map(|p| p.info.clone()) // 克隆 PluginInfo
-            .collect() // 收集到 Vec
+            .read().await
+            .values()
+            .map(|p| p.lock().info.clone())
+            .collect()
     }
 
     /// 根据 ID 获取单个插件信息
     pub async fn get_plugin(&self, plugin_id: &str) -> Option<PluginInfo> {
         self.plugins
-            .read()
-            .await
-            .get(plugin_id) // HashMap::get 返回 Option<&V>
-            .map(|p| p.info.clone())
+            .read().await
+            .get(plugin_id)
+            .map(|p| p.lock().info.clone())
     }
-
     /// 获取插件视图 HTML
     pub async fn get_plugin_view(&self, plugin_id: &str) -> Result<String> {
-        let plugins = self.plugins.read().await;
-
-        let plugin = plugins
+        let plugin_arc = self.plugins
+            .read().await
             .get(plugin_id)
+            .cloned()
             .ok_or_else(|| anyhow::anyhow!("插件不存在: {}", plugin_id))?;
 
+        let plugin = plugin_arc.lock();
         Ok(plugin.instance.get_view())
     }
 
@@ -354,16 +359,12 @@ impl PluginManager {
     /// 当 LoadedPlugin 被 drop 时，_library 也被 drop，触发动态库卸载。
     pub async fn unload_plugin(&self, plugin_id: &str) -> Result<()> {
         let mut plugins = self.plugins.write().await;
-        if let Some(mut loaded) = plugins.remove(plugin_id) {
+        if let Some(plugin_arc) = plugins.remove(plugin_id) {
             tracing::info!("卸载插件: {}", plugin_id);
-            // 调用插件的清理方法
+            let mut loaded = plugin_arc.lock();
             if let Err(e) = loaded.instance.destroy() {
                 tracing::warn!("插件 {} destroy 失败: {}", plugin_id, e);
             }
-            // loaded 离开作用域后被 drop
-            // → loaded.instance 被 drop（释放插件实例）
-            // → loaded._library 被 drop（卸载动态库）
-            // → 操作系统释放 DLL 文件锁
         }
         Ok(())
     }
@@ -372,25 +373,23 @@ impl PluginManager {
 
     /// 调用插件方法
     ///
-    /// 这是插件系统的核心数据通路：前端请求 → 路由到插件 → 执行 → 返回结果
-    ///
-    /// ## 为什么用 write() 而非 read()？
-    /// `handle_call(&mut self, ...)` 需要 `&mut self`（可变引用）。
-    /// 虽然大多数插件操作不需要修改自身，但 trait 定义使用了 `&mut self`
-    /// 以支持插件可以修改内部状态。
+    /// 使用 per-plugin Mutex：只锁定目标插件，不阻塞其他插件的并发调用。
+    /// 读锁用于查找 Arc，然后释放读锁；仅持有目标插件的 Mutex。
     pub async fn call_plugin_method(
         &self,
         plugin_id: &str,
         method: &str,
         params: Value,
     ) -> Result<Value> {
-        // 获取写锁（因为 handle_call 需要 &mut self）
-        let mut plugins = self.plugins.write().await;
-
-        let plugin = plugins
-            .get_mut(plugin_id) // 可变引用访问
+        // 读锁查找 + clone Arc（立即释放读锁）
+        let plugin_arc = self.plugins
+            .read().await
+            .get(plugin_id)
+            .cloned()
             .ok_or_else(|| anyhow::anyhow!("插件不存在: {}", plugin_id))?;
 
+        // 仅锁定目标插件
+        let mut plugin = plugin_arc.lock();
         plugin
             .instance
             .handle_call(method, params)

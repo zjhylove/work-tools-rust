@@ -3,7 +3,7 @@
 //! 集中管理所有应用目录，遵循各平台的约定。
 //!
 //! ## 目录结构
-//! ```
+//! ```text
 //! ~/.worktools/              # 应用根目录
 //! ├── plugins/               # 已安装插件
 //! ├── config/                # 配置文件 (注册表等)
@@ -20,6 +20,13 @@
 
 use anyhow::Result;
 use std::path::PathBuf;
+use std::sync::LazyLock;
+
+static BASE_DIR: LazyLock<Result<PathBuf>> = LazyLock::new(|| {
+    let user_dirs = directories::UserDirs::new()
+        .ok_or_else(|| anyhow::anyhow!("无法找到用户主目录"))?;
+    Ok(user_dirs.home_dir().join(".worktools"))
+});
 
 /// 获取应用基础目录: `~/.worktools`
 ///
@@ -28,12 +35,12 @@ use std::path::PathBuf;
 /// - macOS: `/Users/<用户名>/.worktools`
 /// - Linux: `/home/<用户名>/.worktools`
 ///
-/// `directories::UserDirs::new()` 返回用户主目录的包装。
-/// 在极少数情况下（如系统配置异常）可能返回 None。
-fn worktools_base() -> Result<PathBuf> {
-    let user_dirs =
-        directories::UserDirs::new().ok_or_else(|| anyhow::anyhow!("无法找到用户主目录"))?;
-    Ok(user_dirs.home_dir().join(".worktools"))
+/// 使用 `LazyLock` 缓存结果，首次调用时初始化，后续直接返回缓存值。
+pub fn worktools_base() -> Result<PathBuf> {
+    BASE_DIR
+        .as_ref()
+        .map(|p| p.clone())
+        .map_err(|e| anyhow::anyhow!("{e}"))
 }
 
 /// 插件目录: `~/.worktools/plugins`
