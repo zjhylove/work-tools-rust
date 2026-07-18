@@ -672,6 +672,11 @@ async fn register_and_load_plugin(
 mod tests {
     use super::*;
     use std::path::PathBuf;
+    use parking_lot::Mutex;
+
+    // Serialization lock for tests that share global LOG_RING state.
+    // Prevents parallel test interference.
+    static LOG_TEST_LOCK: Mutex<()> = Mutex::new(());
 
     // ── validate_plugin_id ───────────────────────────────────────────
 
@@ -863,6 +868,7 @@ mod tests {
 
     #[test]
     fn get_logs_returns_empty_when_no_entries() {
+        let _lock = LOG_TEST_LOCK.lock();
         // Clear any entries that might exist from other tests
         let mut ring = LOG_RING.lock();
         ring.clear();
@@ -874,6 +880,7 @@ mod tests {
 
     #[test]
     fn get_logs_filters_by_level() {
+        let _lock = LOG_TEST_LOCK.lock();
         let mut ring = LOG_RING.lock();
         ring.clear();
         ring.push_back(LogEntry {
@@ -903,6 +910,7 @@ mod tests {
 
     #[test]
     fn get_logs_filters_by_plugin() {
+        let _lock = LOG_TEST_LOCK.lock();
         let mut ring = LOG_RING.lock();
         ring.clear();
         ring.push_back(LogEntry {
@@ -929,9 +937,9 @@ mod tests {
         assert_eq!(result.len(), 1);
         assert!(result[0].message.contains("password manager"));
     }
-
     #[test]
     fn get_logs_filters_by_since() {
+        let _lock = LOG_TEST_LOCK.lock();
         let mut ring = LOG_RING.lock();
         ring.clear();
         ring.push_back(LogEntry {
@@ -958,9 +966,9 @@ mod tests {
         assert_eq!(result.len(), 1);
         assert_eq!(result[0].message, "new");
     }
-
     #[test]
     fn get_logs_respects_default_limit() {
+        let _lock = LOG_TEST_LOCK.lock();
         let mut ring = LOG_RING.lock();
         ring.clear();
         for i in 0..150 {
@@ -976,9 +984,9 @@ mod tests {
         let result = get_logs(None).unwrap();
         assert_eq!(result.len(), 100);
     }
-
     #[test]
     fn clear_logs_works() {
+        let _lock = LOG_TEST_LOCK.lock();
         let mut ring = LOG_RING.lock();
         ring.push_back(LogEntry {
             timestamp: "2026-01-01T00:00:00.000Z".into(),
