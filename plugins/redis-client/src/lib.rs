@@ -697,4 +697,124 @@ fn parse_optional_struct<T: serde::de::DeserializeOwned>(params: &Value, key: &s
 }
 
 #[cfg(test)]
+mod utility_tests {
+    use super::*;
+    use serde::Deserialize;
+    use serde_json::json;
+
+
+    #[derive(Debug, PartialEq, Deserialize)]
+    struct TestStruct {
+        name: String,
+        value: i32,
+    }
+
+    #[test]
+    fn require_str_returns_value_when_key_exists() {
+        let params = json!({"key": "hello"});
+        assert_eq!(require_str(&params, "key").unwrap(), "hello");
+    }
+
+    #[test]
+    fn require_str_errors_when_key_missing() {
+        let params = json!({});
+        let err = require_str(&params, "key").unwrap_err();
+        assert!(err.to_string().contains("缺少"));
+    }
+
+    #[test]
+    fn require_str_errors_on_wrong_type() {
+        let params = json!({"key": 42});
+        let err = require_str(&params, "key").unwrap_err();
+        assert!(err.to_string().contains("缺少"));
+    }
+
+    #[test]
+    fn opt_str_returns_some_for_valid_string() {
+        let params = json!({"key": "hello"});
+        assert_eq!(opt_str(&params, "key"), Some("hello".to_string()));
+    }
+
+    #[test]
+    fn opt_str_returns_none_for_missing_key() {
+        let params = json!({});
+        assert_eq!(opt_str(&params, "key"), None);
+    }
+
+    #[test]
+    fn opt_str_returns_none_for_empty_string() {
+        let params = json!({"key": ""});
+        assert_eq!(opt_str(&params, "key"), None);
+    }
+
+    #[test]
+    fn opt_str_returns_none_for_null() {
+        let params = json!({"key": null});
+        assert_eq!(opt_str(&params, "key"), None);
+    }
+
+    #[test]
+    fn parse_optional_struct_returns_some_for_valid_json() {
+        let params = json!({"data": {"name": "test", "value": 42}});
+        let result: Option<TestStruct> = parse_optional_struct(&params, "data");
+        assert_eq!(result, Some(TestStruct { name: "test".into(), value: 42 }));
+    }
+
+    #[test]
+    fn parse_optional_struct_returns_none_for_null() {
+        let params = json!({"data": null});
+        let result: Option<TestStruct> = parse_optional_struct(&params, "data");
+        assert_eq!(result, None);
+    }
+
+    #[test]
+    fn parse_optional_struct_returns_none_for_missing_key() {
+        let params = json!({});
+        let result: Option<TestStruct> = parse_optional_struct(&params, "data");
+        assert_eq!(result, None);
+    }
+
+    #[test]
+    fn make_redis_url_without_password() {
+        let url = RedisClientPlugin::make_redis_url("localhost", 6379, 0, None);
+        assert_eq!(url, "redis://localhost:6379/0");
+    }
+
+    #[test]
+    fn make_redis_url_with_password() {
+        let url = RedisClientPlugin::make_redis_url("localhost", 6379, 0, Some("pass"));
+        assert_eq!(url, "redis://:pass@localhost:6379/0");
+    }
+
+    #[test]
+    fn make_redis_url_encodes_special_chars() {
+        let url = RedisClientPlugin::make_redis_url("example.com", 6380, 1, Some("p@ss"));
+        assert_eq!(url, "redis://:p%40ss@example.com:6380/1");
+    }
+
+    #[test]
+    fn resolve_password_uses_params_when_present() {
+        let params = json!({"password": "from_params"});
+        let result = RedisClientPlugin::resolve_password(&params, "obfuscated_here");
+        assert_eq!(result, Some("from_params".to_string()));
+    }
+
+    #[test]
+    fn resolve_password_uses_obfuscated_when_params_empty() {
+        let params = json!({});
+        let obfuscated = crate::hex::obfuscate("from_storage");
+        let result = RedisClientPlugin::resolve_password(&params, &obfuscated);
+        assert_eq!(result, Some("from_storage".to_string()));
+    }
+
+    #[test]
+    fn resolve_password_uses_obfuscated_when_params_null() {
+        let params = json!({"password": ""});
+        let obfuscated = crate::hex::obfuscate("from_storage_2");
+        let result = RedisClientPlugin::resolve_password(&params, &obfuscated);
+        assert_eq!(result, Some("from_storage_2".to_string()));
+    }
+    }
+
+#[cfg(test)]
 mod tests;

@@ -32,3 +32,56 @@ pub fn deobfuscate(s: &str) -> Option<String> {
         .collect();
     String::from_utf8(decoded).ok()
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn encode_empty() {
+        assert_eq!(encode(b""), "");
+    }
+
+    #[test]
+    fn encode_hello() {
+        assert_eq!(encode(b"hello"), "68656c6c6f");
+    }
+
+    #[test]
+    fn decode_empty() {
+        assert_eq!(decode(""), Ok(vec![]));
+    }
+
+    #[test]
+    fn decode_hello() {
+        assert_eq!(decode("68656c6c6f"), Ok(b"hello".to_vec()));
+    }
+
+    #[test]
+    fn decode_invalid_length() {
+        assert_eq!(decode("abc"), Err(()));
+    }
+
+    #[test]
+    fn decode_invalid_hex() {
+        assert_eq!(decode("zz"), Err(()));
+    }
+
+    #[test]
+    fn obfuscate_deobfuscate_roundtrip() {
+        let original = "password123!@#";
+        let obs = obfuscate(original);
+        assert_ne!(obs, original);
+        assert_eq!(deobfuscate(&obs), Some(original.to_string()));
+    }
+
+    #[test]
+    fn obfuscate_empty() {
+        assert_eq!(obfuscate(""), "");
+    }
+
+    #[test]
+    fn deobfuscate_invalid_hex() {
+        assert_eq!(deobfuscate("gg"), None);
+    }
+}

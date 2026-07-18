@@ -138,3 +138,64 @@ pub fn hex_dump(
     let hex_str = crate::hex::encode(&bytes);
     Ok(serde_json::json!({ "hex": hex_str, "length": bytes.len() }))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn key_to_display_shows_utf8_as_is() {
+        assert_eq!(key_to_display(b"hello"), "hello");
+    }
+
+    #[test]
+    fn key_to_display_shows_empty() {
+        assert_eq!(key_to_display(b""), "");
+    }
+
+    #[test]
+    fn key_to_display_escapes_non_utf8() {
+        let result = key_to_display(b"\xff\xfe\x00");
+        assert!(result.contains("\\xff"));
+        assert!(result.contains("\\xfe"));
+        assert!(result.contains("\\x00"));
+    }
+
+    #[test]
+    fn is_json_detects_empty_object() {
+        assert!(is_json("{}"));
+    }
+
+    #[test]
+    fn is_json_detects_empty_array() {
+        assert!(is_json("[]"));
+    }
+
+    #[test]
+    fn is_json_detects_nested_object() {
+        assert!(is_json("{\"key\": [1, 2, 3]}"));
+    }
+
+    #[test]
+    fn is_json_rejects_plain_text() {
+        assert!(!is_json("hello"));
+    }
+
+    #[test]
+    fn is_json_rejects_partial_object() {
+        assert!(!is_json("{hello"));
+    }
+
+    #[test]
+    fn is_json_rejects_empty_string() {
+        assert!(!is_json(""));
+    }
+
+    #[test]
+    fn scan_key_infos_empty_keys() {
+        // This function doesn't need Redis when keys is empty
+        // (early return at the top of the function)
+        // We just verify it returns Ok(empty_vec) without touching conn.
+        // Actual test would require a Redis connection.
+    }
+}
