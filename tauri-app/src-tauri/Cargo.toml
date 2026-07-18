@@ -25,10 +25,10 @@ tauri-plugin-dialog = "2"
 tauri-plugin-fs = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-tokio = { version = "1", features = ["full"] }
+tokio = { version = "1", features = ["rt", "rt-multi-thread", "macros", "sync", "fs", "time"] }
 anyhow = "1.0"
 tracing = "0.1"
-tracing-subscriber = { version = "0.3", features = ["fmt", "json", "registry"] }
+tracing-subscriber = { version = "0.3", features = ["fmt", "registry"] }
 tracing-appender = "0.2"
 directories = "6.0.0"
 libloading = "0.9.0"
