@@ -535,4 +535,41 @@ mod tests {
         let registry = PluginRegistry::with_path_async(registry_file).await.unwrap();
         assert!(registry.get_installed().is_empty());
     }
+
+    #[tokio::test]
+    async fn test_register_async_persists() {
+        let temp_dir = TempDir::new().unwrap();
+        let registry_file = temp_dir.path().join("reg-async.json");
+
+        let mut registry = PluginRegistry {
+            registry_file: registry_file.clone(),
+            installed: HashMap::new(),
+        };
+
+        let plugin = make_test_plugin("async-reg", temp_dir.path());
+        registry.register_async(plugin).await.unwrap();
+
+        // Verify persistence: reload from file
+        let reloaded = PluginRegistry::with_path(registry_file).unwrap();
+        assert!(reloaded.is_installed("async-reg"));
+        assert_eq!(reloaded.get("async-reg").unwrap().name, "Test async-reg");
+    }
+
+    #[tokio::test]
+    async fn test_unregister_async_persists() {
+        let temp_dir = TempDir::new().unwrap();
+        let registry_file = temp_dir.path().join("unreg-async.json");
+
+        let mut registry = PluginRegistry {
+            registry_file: registry_file.clone(),
+            installed: HashMap::new(),
+        };
+
+        registry.register(make_test_plugin("to-remove", temp_dir.path())).unwrap();
+        registry.unregister_async("to-remove").await.unwrap();
+
+        // Verify persistence: reload from file
+        let reloaded = PluginRegistry::with_path(registry_file).unwrap();
+        assert!(!reloaded.is_installed("to-remove"));
+    }
 }
