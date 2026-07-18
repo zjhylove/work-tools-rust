@@ -164,7 +164,7 @@ mod tests {
         let data = plaintext.as_bytes();
         let padding_len = 16 - (data.len() % 16);
         let mut padded = data.to_vec();
-        padded.extend(std::iter::repeat(padding_len as u8).take(padding_len));
+        padded.extend(std::iter::repeat_n(padding_len as u8, padding_len));
 
         // ECB: encrypt each 16-byte block independently
         for chunk in padded.chunks_mut(16) {

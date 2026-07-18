@@ -372,13 +372,19 @@ impl PluginManager {
     /// 调用插件的 destroy() 方法进行清理，然后从 HashMap 中移除。
     /// 当 LoadedPlugin 被 drop 时，_library 也被 drop，触发动态库卸载。
     pub async fn unload_plugin(&self, plugin_id: &str) -> Result<()> {
-        let mut plugins = self.plugins.write().await;
-        if let Some(plugin_arc) = plugins.remove(plugin_id) {
+        // 先从 HashMap 移除（短暂写锁），再在无锁状态下调用 destroy()
+        let plugin_arc = {
+            let mut plugins = self.plugins.write().await;
+            plugins.remove(plugin_id)
+        };
+
+        if let Some(arc) = plugin_arc {
             tracing::info!("卸载插件: {}", plugin_id);
-            let mut loaded = plugin_arc.write();
+            let mut loaded = arc.write();
             if let Err(e) = loaded.instance.destroy() {
                 tracing::warn!("插件 {} destroy 失败: {}", plugin_id, e);
             }
+            // loaded 和 arc 在此处 drop，自动卸载动态库
         }
         Ok(())
     }

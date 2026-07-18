@@ -181,7 +181,7 @@ mod tests {
         let mut plugin = JsonTools;
         let result = plugin.handle_call("validate_json", json!({"json": r#"{"ok":true}"#}));
         assert!(result.is_ok());
-        assert_eq!(result.unwrap().get("valid").unwrap().as_bool().unwrap(), true);
+        assert!(result.unwrap().get("valid").unwrap().as_bool().unwrap());
     }
     #[test]
     fn test_validate_json_invalid() {
@@ -189,9 +189,9 @@ mod tests {
         let result = plugin.handle_call("validate_json", json!({"json": "{bad}"}));
         assert!(result.is_ok());
         let val = result.unwrap();
-        assert_eq!(val.get("valid").unwrap().as_bool().unwrap(), false);
+        assert!(!val.get("valid").unwrap().as_bool().unwrap());
         // Error message should be non-empty (exact wording depends on serde_json version)
-        assert!(val.get("error").unwrap().as_str().unwrap().len() > 0);
+        assert!(!val.get("error").unwrap().as_str().unwrap().is_empty());
     }
 
     #[test]

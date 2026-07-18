@@ -288,7 +288,7 @@ mod tests {
         let result = plugin.handle_call("parse_cron", json!({"expr": "*/5 * * * *"}));
         assert!(result.is_ok());
         let val = result.unwrap();
-        assert_eq!(val.get("valid").unwrap().as_bool().unwrap(), true);
+        assert!(val.get("valid").unwrap().as_bool().unwrap());
         assert!(val.get("description").unwrap().as_str().unwrap().contains("每"));
     }
 
@@ -298,7 +298,7 @@ mod tests {
         let result = plugin.handle_call("parse_cron", json!({"expr": "invalid"}));
         assert!(result.is_ok());
         let val = result.unwrap();
-        assert_eq!(val.get("valid").unwrap().as_bool().unwrap(), false);
+        assert!(!val.get("valid").unwrap().as_bool().unwrap());
     }
 
     #[test]

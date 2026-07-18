@@ -287,7 +287,6 @@ pub extern "C" fn plugin_create() -> *mut Box<dyn Plugin> {
 #[cfg(test)]
 mod tests {
     use crate::models::ConnectionConfig;
-    use serde_json;
 
     #[test]
     fn test_deserialize_without_id() {
