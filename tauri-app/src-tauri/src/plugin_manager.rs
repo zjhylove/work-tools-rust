@@ -91,11 +91,26 @@ fn scan_plugin_dir(plugin_dir: &Path) -> anyhow::Result<Vec<PathBuf>> {
         let lib_path = if manifest_path.exists() {
             std::fs::read_to_string(&manifest_path)
                 .ok()
-                .and_then(|content| serde_json::from_str::<PluginManifest>(&content).ok())
+                .and_then(|content| {
+                    serde_json::from_str::<PluginManifest>(&content)
+                        .map_err(|e| {
+                            tracing::warn!(
+                                path = %manifest_path.display(),
+                                "解析 manifest.json 失败: {}",
+                                e
+                            );
+                            e
+                        })
+                        .ok()
+                })
                 .and_then(|manifest| manifest.get_library_filename().cloned())
                 .map(|name| path.join(name))
         } else {
             // 旧版方式：根据目录名推测动态库名
+            tracing::warn!(
+                dir = %path.display(),
+                "插件目录缺少 manifest.json，使用旧版名称推测"
+            );
             path.file_name()
                 .and_then(|n| n.to_str())
                 .map(|plugin_name| {
