@@ -568,6 +568,20 @@ mod tests {
     }
 
     #[test]
+    fn scan_plugin_dir_skips_corrupted_manifest() {
+        let dir = tempfile::tempdir().unwrap();
+        let plugin_dir = dir.path().join("corrupted-plugin");
+        std::fs::create_dir_all(&plugin_dir).unwrap();
+
+        // Write invalid JSON as manifest
+        std::fs::write(plugin_dir.join("manifest.json"), "{invalid json").unwrap();
+
+        // Should not panic or error — just skip the plugin
+        let result = scan_plugin_dir(dir.path()).unwrap();
+        assert!(result.is_empty());
+    }
+
+    #[test]
     fn scan_plugin_dir_fallback_without_manifest() {
         let dir = tempfile::tempdir().unwrap();
         let plugin_dir = dir.path().join("legacy-plugin");
