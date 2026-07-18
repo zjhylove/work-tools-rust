@@ -150,10 +150,6 @@ impl PluginManager {
         }
     }
 
-    /// 从 manifest 读取当前平台的动态库文件名
-    fn get_library_from_manifest(manifest: &PluginManifest) -> Option<String> {
-        manifest.get_library_filename().cloned()
-    }
 
     // ── 构造与初始化 ──
 
@@ -298,19 +294,23 @@ impl PluginManager {
             .and_then(|n| n.to_str())
             .unwrap_or("unknown");
 
-        // 查找动态库路径
-        let manifest_path = plugin_dir.join("manifest.json");
-        let lib_path = if manifest_path.exists() {
-            std::fs::read_to_string(&manifest_path)
+        // 将 manifest 读取移到 spawn_blocking，避免阻塞 async runtime
+        let plugin_dir_owned = plugin_dir.to_path_buf();
+        let scan_result = tokio::task::spawn_blocking(move || {
+            let manifest_path = plugin_dir_owned.join("manifest.json");
+            if !manifest_path.exists() {
+                return Ok::<Option<PathBuf>, anyhow::Error>(None);
+            }
+            Ok(std::fs::read_to_string(&manifest_path)
                 .ok()
                 .and_then(|content| serde_json::from_str::<PluginManifest>(&content).ok())
-                .and_then(|manifest| Self::get_library_from_manifest(&manifest))
-                .map(|name| plugin_dir.join(name))
-        } else {
-            None
-        };
+                .and_then(|manifest| manifest.get_library_filename().cloned())
+                .map(|name| plugin_dir_owned.join(name)))
+        })
+        .await
+        .map_err(|e| anyhow::anyhow!("任务执行失败: {}", e))??;
 
-        let lib_path = match lib_path {
+        let lib_path = match scan_result {
             Some(path) if path.exists() => path,
             _ => anyhow::bail!("未找到插件动态库: {}", dir_name),
         };

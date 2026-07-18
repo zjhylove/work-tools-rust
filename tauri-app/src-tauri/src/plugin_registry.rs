@@ -255,4 +255,198 @@ mod tests {
         registry.unregister("test-plugin").unwrap();
         assert!(!registry.is_installed("test-plugin"));
     }
+
+    /// Helper to create a test InstalledPlugin with minimal fields.
+    fn make_test_plugin(id: &str, temp_dir: &std::path::Path) -> InstalledPlugin {
+        InstalledPlugin {
+            id: id.to_string(),
+            name: format!("Test {}", id),
+            description: "Test plugin".to_string(),
+            version: "1.0.0".to_string(),
+            icon: None,
+            author: None,
+            homepage: None,
+            installed_at: chrono::Utc::now(),
+            enabled: true,
+            assets_path: temp_dir.join(id).join("assets"),
+            library_path: temp_dir.join(id).join("lib.so"),
+        }
+    }
+
+    #[test]
+    fn test_register_persists_to_file() {
+        let temp_dir = TempDir::new().unwrap();
+        let registry_file = temp_dir.path().join("registry.json");
+
+        let mut registry = PluginRegistry {
+            registry_file: registry_file.clone(),
+            installed: HashMap::new(),
+        };
+        registry.register(make_test_plugin("persist-test", temp_dir.path())).unwrap();
+
+        // File should exist
+        assert!(registry_file.exists());
+
+        // Reload from file
+        let reloaded = PluginRegistry::with_path(registry_file).unwrap();
+        assert!(reloaded.is_installed("persist-test"));
+        let p = reloaded.get("persist-test").unwrap();
+        assert_eq!(p.name, "Test persist-test");
+    }
+
+    #[test]
+    fn test_with_path_loads_existing_file() {
+        let temp_dir = TempDir::new().unwrap();
+        let registry_file = temp_dir.path().join("existing.json");
+
+        // Pre-write a valid registry file
+        let data = serde_json::json!({
+            "alpha": {
+                "id": "alpha",
+                "name": "Alpha Plugin",
+                "description": "desc",
+                "version": "2.0.0",
+                "installed_at": "2026-01-01T00:00:00Z",
+                "enabled": true,
+                "assets_path": "/tmp/assets",
+                "library_path": "/tmp/lib.so"
+            }
+        });
+        std::fs::write(&registry_file, serde_json::to_string_pretty(&data).unwrap()).unwrap();
+
+        let registry = PluginRegistry::with_path(registry_file).unwrap();
+        assert!(registry.is_installed("alpha"));
+        assert_eq!(registry.get("alpha").unwrap().version, "2.0.0");
+    }
+
+    #[test]
+    fn test_with_path_empty_when_missing() {
+        let temp_dir = TempDir::new().unwrap();
+        let registry_file = temp_dir.path().join("nonexistent.json");
+
+        let registry = PluginRegistry::with_path(registry_file).unwrap();
+        assert!(!registry.is_installed("anything"));
+        assert!(registry.get_installed().is_empty());
+    }
+
+    #[test]
+    fn test_get_installed_returns_all() {
+        let temp_dir = TempDir::new().unwrap();
+        let registry_file = temp_dir.path().join("multi.json");
+
+        let mut registry = PluginRegistry {
+            registry_file,
+            installed: HashMap::new(),
+        };
+        registry.register(make_test_plugin("a", temp_dir.path())).unwrap();
+        registry.register(make_test_plugin("b", temp_dir.path())).unwrap();
+        registry.register(make_test_plugin("c", temp_dir.path())).unwrap();
+
+        let all = registry.get_installed();
+        assert_eq!(all.len(), 3);
+        let ids: Vec<&str> = all.iter().map(|p| p.id.as_str()).collect();
+        assert!(ids.contains(&"a"));
+        assert!(ids.contains(&"b"));
+        assert!(ids.contains(&"c"));
+    }
+
+    #[test]
+    fn test_set_enabled() {
+        let temp_dir = TempDir::new().unwrap();
+        let registry_file = temp_dir.path().join("toggle.json");
+
+        let mut registry = PluginRegistry {
+            registry_file,
+            installed: HashMap::new(),
+        };
+        registry.register(make_test_plugin("toggle-test", temp_dir.path())).unwrap();
+        assert!(registry.is_enabled("toggle-test"));
+
+        registry.set_enabled("toggle-test", false).unwrap();
+        assert!(!registry.is_enabled("toggle-test"));
+
+        registry.set_enabled("toggle-test", true).unwrap();
+        assert!(registry.is_enabled("toggle-test"));
+    }
+
+    #[test]
+    fn test_set_enabled_nonexistent_is_noop() {
+        let temp_dir = TempDir::new().unwrap();
+        let registry_file = temp_dir.path().join("noop.json");
+
+        let mut registry = PluginRegistry {
+            registry_file,
+            installed: HashMap::new(),
+        };
+        // Should not panic or error
+        registry.set_enabled("ghost", false).unwrap();
+    }
+
+    #[test]
+    fn test_verify_installations_removes_missing() {
+        let temp_dir = TempDir::new().unwrap();
+        let registry_file = temp_dir.path().join("verify.json");
+
+        let mut registry = PluginRegistry {
+            registry_file: registry_file.clone(),
+            installed: HashMap::new(),
+        };
+
+        // Plugin with existing files
+        let good_dir = temp_dir.path().join("good-plugin");
+        std::fs::create_dir_all(good_dir.join("assets")).unwrap();
+        std::fs::write(good_dir.join("lib.so"), "fake").unwrap();
+        let good_plugin = InstalledPlugin {
+            id: "good".to_string(),
+            name: "Good".to_string(),
+            description: "Good plugin".to_string(),
+            version: "1.0.0".to_string(),
+            icon: None,
+            author: None,
+            homepage: None,
+            installed_at: chrono::Utc::now(),
+            enabled: true,
+            assets_path: good_dir.join("assets"),
+            library_path: good_dir.join("lib.so"),
+        };
+        registry.register(good_plugin).unwrap();
+
+        // Plugin with missing files
+        registry.register(make_test_plugin("bad", temp_dir.path())).unwrap();
+
+        assert_eq!(registry.installed.len(), 2);
+        registry.verify_installations().unwrap();
+
+        // Only "good" should remain
+        assert_eq!(registry.installed.len(), 1);
+        assert!(registry.is_installed("good"));
+        assert!(!registry.is_installed("bad"));
+    }
+
+    #[test]
+    fn test_get_returns_none_for_missing() {
+        let temp_dir = TempDir::new().unwrap();
+        let registry_file = temp_dir.path().join("empty.json");
+
+        let registry = PluginRegistry {
+            registry_file,
+            installed: HashMap::new(),
+        };
+        assert!(registry.get("nonexistent").is_none());
+        assert!(!registry.is_installed("nonexistent"));
+        assert!(!registry.is_enabled("nonexistent"));
+    }
+
+    #[test]
+    fn test_unregister_nonexistent_is_noop() {
+        let temp_dir = TempDir::new().unwrap();
+        let registry_file = temp_dir.path().join("noop-unreg.json");
+
+        let mut registry = PluginRegistry {
+            registry_file,
+            installed: HashMap::new(),
+        };
+        // Should not error on unregistering nonexistent
+        registry.unregister("ghost").unwrap();
+    }
 }
