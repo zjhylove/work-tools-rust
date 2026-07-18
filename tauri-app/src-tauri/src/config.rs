@@ -139,4 +139,37 @@ mod tests {
         let result = load_plugin_config("");
         assert!(result.is_err());
     }
+
+    #[test]
+    fn save_and_load_plugin_config_round_trip() {
+        let config = serde_json::json!({"theme": "dark", "fontSize": 14});
+        save_plugin_config("round-trip-test", &config).unwrap();
+
+        let loaded = load_plugin_config("round-trip-test").unwrap();
+        assert_eq!(loaded["theme"], "dark");
+        assert_eq!(loaded["fontSize"], 14);
+
+        // Cleanup
+        let history_dir = crate::paths::history_dir().unwrap();
+        let config_path = history_dir.join("plugins/round-trip-test.json");
+        let _ = std::fs::remove_file(config_path);
+    }
+
+    #[test]
+    fn save_plugin_config_overwrites_existing() {
+        let config1 = serde_json::json!({"v": 1});
+        save_plugin_config("overwrite-test", &config1).unwrap();
+
+        let config2 = serde_json::json!({"v": 2, "extra": true});
+        save_plugin_config("overwrite-test", &config2).unwrap();
+
+        let loaded = load_plugin_config("overwrite-test").unwrap();
+        assert_eq!(loaded["v"], 2);
+        assert_eq!(loaded["extra"], true);
+
+        // Cleanup
+        let history_dir = crate::paths::history_dir().unwrap();
+        let config_path = history_dir.join("plugins/overwrite-test.json");
+        let _ = std::fs::remove_file(config_path);
+    }
 }
