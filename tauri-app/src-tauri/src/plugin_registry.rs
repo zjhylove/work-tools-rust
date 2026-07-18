@@ -113,6 +113,10 @@ impl PluginRegistry {
 
     /// 注册已安装的插件（添加或更新）
     /// `HashMap::insert` 会覆盖已存在的同 ID 条目
+    ///
+    /// 同步版本，适用于非 async 上下文（如测试）。
+    /// async 上下文请使用 `register_async()`。
+    #[allow(dead_code)] // 保留为同步 API（测试和未来同步调用方）
     pub fn register(&mut self, plugin: InstalledPlugin) -> Result<()> {
         tracing::info!("注册插件: {} ({})", plugin.name, plugin.id);
 
@@ -131,6 +135,38 @@ impl PluginRegistry {
         self.save()?;
 
         Ok(())
+    }
+
+    /// 异步版本的 register()，将 sync I/O (save) 移到 spawn_blocking。
+    /// 用于从 async 上下文调用时避免阻塞 tokio 运行时。
+    pub async fn register_async(&mut self, plugin: InstalledPlugin) -> Result<()> {
+        tracing::info!("注册插件: {} ({})", plugin.name, plugin.id);
+        self.installed.insert(plugin.id.clone(), plugin);
+        let registry_file = self.registry_file.clone();
+        let content = serde_json::to_string_pretty(&self.installed).context("序列化注册表失败")?;
+        tokio::task::spawn_blocking(move || {
+            let tmp_path = registry_file.with_extension("tmp");
+            fs::write(&tmp_path, &content).context("写入临时注册表文件失败")?;
+            fs::rename(&tmp_path, registry_file).context("重命名注册表文件失败")?;
+            Ok(())
+        })
+        .await
+        .map_err(|e| anyhow::anyhow!("注册表写入任务失败: {}", e))?
+    }
+
+    pub async fn unregister_async(&mut self, plugin_id: &str) -> Result<()> {
+        tracing::info!("注销插件: {}", plugin_id);
+        self.installed.remove(plugin_id);
+        let registry_file = self.registry_file.clone();
+        let content = serde_json::to_string_pretty(&self.installed).context("序列化注册表失败")?;
+        tokio::task::spawn_blocking(move || {
+            let tmp_path = registry_file.with_extension("tmp");
+            fs::write(&tmp_path, &content).context("写入临时注册表文件失败")?;
+            fs::rename(&tmp_path, registry_file).context("重命名注册表文件失败")?;
+            Ok(())
+        })
+        .await
+        .map_err(|e| anyhow::anyhow!("注册表写入任务失败: {}", e))?
     }
 
     // ── 查询操作 ──

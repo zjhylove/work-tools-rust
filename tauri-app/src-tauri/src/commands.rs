@@ -337,7 +337,8 @@ pub async fn uninstall_plugin(
         .map_err(|e| format!("打开插件注册表失败: {}", e))?;
 
     registry
-        .unregister(&plugin_id)
+        .unregister_async(&plugin_id)
+        .await
         .map_err(|e| format!("从注册表移除插件失败: {}", e))?;
 
     tracing::info!(plugin_id = %plugin_id, "插件卸载成功");
@@ -656,7 +657,8 @@ async fn register_and_load_plugin(
     };
 
     registry
-        .register(installed_plugin)
+        .register_async(installed_plugin)
+        .await
         .map_err(|e| format!("注册插件失败: {}", e))?;
 
     manager
