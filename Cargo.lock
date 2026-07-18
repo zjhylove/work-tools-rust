@@ -865,7 +865,6 @@ dependencies = [
  "anyhow",
  "chrono",
  "cron",
- "serde",
  "serde_json",
  "tracing",
  "worktools-plugin-api",
@@ -2527,7 +2526,6 @@ name = "json-tools"
 version = "1.0.0"
 dependencies = [
  "anyhow",
- "serde",
  "serde_json",
  "tracing",
  "worktools-plugin-api",
@@ -5541,7 +5539,6 @@ dependencies = [
  "anyhow",
  "chrono",
  "chrono-tz",
- "serde",
  "serde_json",
  "tracing",
  "worktools-plugin-api",
