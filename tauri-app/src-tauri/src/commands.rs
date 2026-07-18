@@ -95,7 +95,10 @@ pub async fn call_plugin_method(
 /// 从 JSON 文件中读取插件的持久化配置
 #[tauri::command]
 pub async fn get_plugin_config(plugin_id: String) -> Result<Value, String> {
-    load_plugin_config(&plugin_id)
+    let id = plugin_id.clone();
+    tokio::task::spawn_blocking(move || load_plugin_config(&id))
+        .await
+        .map_err(|e| format!("配置加载任务失败: {}", e))?
         .inspect_err(|e| tracing::error!(plugin_id = %plugin_id, "读取插件配置失败: {}", e))
         .map_err(|e| e.to_string())
 }
@@ -104,7 +107,11 @@ pub async fn get_plugin_config(plugin_id: String) -> Result<Value, String> {
 /// 将配置序列化为 JSON 并写入文件
 #[tauri::command]
 pub async fn set_plugin_config(plugin_id: String, config: Value) -> Result<(), String> {
-    save_plugin_config(&plugin_id, &config)
+    let id = plugin_id.clone();
+    let cfg = config.clone();
+    tokio::task::spawn_blocking(move || save_plugin_config(&id, &cfg))
+        .await
+        .map_err(|e| format!("配置保存任务失败: {}", e))?
         .inspect_err(|e| {
             tracing::error!(
                 plugin_id = %plugin_id,
@@ -205,7 +212,9 @@ pub async fn get_available_plugins() -> Result<Vec<PluginManifest>, String> {
 /// 获取已安装插件列表（从注册表文件中读取）
 #[tauri::command]
 pub async fn get_installed_plugins_from_registry() -> Result<Vec<InstalledPlugin>, String> {
-    let registry = PluginRegistry::new().map_err(|e| format!("打开插件注册表失败: {}", e))?;
+    let registry = PluginRegistry::new_async()
+        .await
+        .map_err(|e| format!("打开插件注册表失败: {}", e))?;
 
     Ok(registry.get_installed())
 }
@@ -319,7 +328,9 @@ pub async fn uninstall_plugin(
     }
 
     // 3. 从注册表移除（持久化的元数据）
-    let mut registry = PluginRegistry::new().map_err(|e| format!("打开插件注册表失败: {}", e))?;
+    let mut registry = PluginRegistry::new_async()
+        .await
+        .map_err(|e| format!("打开插件注册表失败: {}", e))?;
 
     registry
         .unregister(&plugin_id)
@@ -373,7 +384,9 @@ pub async fn read_plugin_asset(plugin_id: String, asset_path: String) -> Result<
         return Err("资源路径不允许包含 ..".into());
     }
 
-    let registry = PluginRegistry::new().map_err(|e| format!("打开插件注册表失败: {}", e))?;
+    let registry = PluginRegistry::new_async()
+        .await
+        .map_err(|e| format!("打开插件注册表失败: {}", e))?;
 
     let plugin = registry
         .get(&plugin_id)
@@ -620,7 +633,9 @@ async fn register_and_load_plugin(
     let library_path = plugin_dir.join(lib_name);
     let assets_dir = plugin_dir.join("assets");
 
-    let mut registry = PluginRegistry::new().map_err(|e| format!("打开插件注册表失败: {}", e))?;
+    let mut registry = PluginRegistry::new_async()
+        .await
+        .map_err(|e| format!("打开插件注册表失败: {}", e))?;
 
     let installed_plugin = InstalledPlugin {
         id: manifest.id.clone(),

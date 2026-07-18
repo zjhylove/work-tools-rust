@@ -69,6 +69,22 @@ impl PluginRegistry {
         Self::with_path(Self::default_registry_path()?)
     }
 
+    /// 异步版本的 new()，将同步 I/O 移到 spawn_blocking。
+    /// 用于从 async 上下文调用时避免阻塞 tokio 运行时。
+    pub async fn new_async() -> Result<Self> {
+        let path = Self::default_registry_path()?;
+        Self::with_path_async(path).await
+    }
+
+    /// 异步版本的 with_path()。
+    pub async fn with_path_async(registry_file: PathBuf) -> Result<Self> {
+        let rf = registry_file.clone();
+        tokio::task::spawn_blocking(move || Self::with_path(rf))
+            .await
+            .map_err(|e| anyhow::anyhow!("注册表加载任务失败: {}", e))?
+    }
+
+
     /// 使用指定路径创建注册表
     ///
     /// 如果文件已存在，从中加载；否则初始化为空的 HashMap。
