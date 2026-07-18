@@ -64,7 +64,7 @@ impl AuthPlugin {
     /// 这样做的优势：如果函数被删除，相关的导入也会被清理，减少无用依赖。
     fn generate_totp_internal(secret: &str, digits: u32, period: u64) -> Result<String> {
         use base32::Alphabet;
-        use hmac::{Hmac, Mac};
+        use hmac::{Hmac, Mac, KeyInit};
         use sha1::Sha1;
         use std::time::{SystemTime, UNIX_EPOCH};
 
