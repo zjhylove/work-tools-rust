@@ -20,6 +20,7 @@
 mod commands;
 mod config;
 mod logger;
+mod path_safety;
 mod paths;
 pub mod plugin_manager; // pub: 可能被外部 crate 引用
 mod plugin_package;

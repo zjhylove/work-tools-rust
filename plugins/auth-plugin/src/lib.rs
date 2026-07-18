@@ -64,7 +64,7 @@ impl AuthPlugin {
     /// 这样做的优势：如果函数被删除，相关的导入也会被清理，减少无用依赖。
     fn generate_totp_internal(secret: &str, digits: u32, period: u64) -> Result<String> {
         use base32::Alphabet;
-        use hmac::{Hmac, Mac};
+        use hmac::{Hmac, Mac, KeyInit};
         use sha1::Sha1;
         use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -291,6 +291,8 @@ mod tests {
         // Base32 encoded 20 bytes = 32 chars with padding
         assert_eq!(secret.len(), 32);
         // Base32 uses RFC 4648 alphabet (A-Z, 2-7, =)
-        assert!(secret.chars().all(|c| c.is_ascii_alphanumeric() || c == '='));
+        assert!(secret
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '='));
     }
 }

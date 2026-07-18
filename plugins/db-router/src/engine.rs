@@ -121,7 +121,11 @@ fn register_functions(engine: &mut Engine) {
         if s.len() >= width {
             s.to_string()
         } else {
-            format!("{}{}", s, std::iter::repeat_n(fill, width - s.len()).collect::<String>())
+            format!(
+                "{}{}",
+                s,
+                std::iter::repeat_n(fill, width - s.len()).collect::<String>()
+            )
         }
     });
 

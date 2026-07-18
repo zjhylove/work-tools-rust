@@ -72,7 +72,6 @@ fn default_username() -> String {
     "root".to_string()
 }
 
-
 impl ConnectionConfig {
     pub fn new(name: impl Into<String>, db_type: DatabaseType) -> Self {
         let now = chrono::Utc::now().timestamp() as u64;

@@ -37,10 +37,14 @@ fn test_connect_params() -> serde_json::Value {
         .ok()
         .unwrap_or_else(load_saved_password);
 
-    let use_ssh = std::env::var("REDIS_USE_SSH").map(|v| v == "1").unwrap_or(false);
+    let use_ssh = std::env::var("REDIS_USE_SSH")
+        .map(|v| v == "1")
+        .unwrap_or(false);
 
     let remote_host = env_or("REDIS_TEST_HOST", "10.73.70.213");
-    let remote_port = env_or("REDIS_TEST_PORT", "6379").parse::<u16>().unwrap_or(6379);
+    let remote_port = env_or("REDIS_TEST_PORT", "6379")
+        .parse::<u16>()
+        .unwrap_or(6379);
 
     if use_ssh {
         let ssh_password = env_or("REDIS_SSH_PASSWORD", "");
@@ -126,13 +130,17 @@ fn test_saved_connections_lifecycle() {
     let before_count = before["connections"].as_array().unwrap().len();
 
     // 保存
-    call(&mut p, "save_connection", json!({
-        "name": "test-conn",
-        "host": host,
-        "port": params["port"],
-        "db": params["db"],
-        "password": "s3cret!"
-    }));
+    call(
+        &mut p,
+        "save_connection",
+        json!({
+            "name": "test-conn",
+            "host": host,
+            "port": params["port"],
+            "db": params["db"],
+            "password": "s3cret!"
+        }),
+    );
 
     let list = call(&mut p, "list_connections", json!({}));
     let conns = list["connections"].as_array().unwrap();
@@ -160,13 +168,21 @@ fn test_string_ops() {
     let mut p = mkplugin();
     let k = tk("str");
 
-    call(&mut p, "set_string", json!({ "key": k, "value": "hello world" }));
+    call(
+        &mut p,
+        "set_string",
+        json!({ "key": k, "value": "hello world" }),
+    );
 
     let r = call(&mut p, "get_string", json!({ "key": k }));
     assert_eq!(r["value"].as_str().unwrap(), "hello world");
 
     // 覆盖
-    call(&mut p, "set_string", json!({ "key": k, "value": "updated" }));
+    call(
+        &mut p,
+        "set_string",
+        json!({ "key": k, "value": "updated" }),
+    );
     let r = call(&mut p, "get_string", json!({ "key": k }));
     assert_eq!(r["value"].as_str().unwrap(), "updated");
 }
@@ -180,9 +196,21 @@ fn test_hash_ops() {
     let mut p = mkplugin();
     let k = tk("hash");
 
-    call(&mut p, "set_hash_field", json!({ "key": k, "field": "name", "value": "Alice" }));
-    call(&mut p, "set_hash_field", json!({ "key": k, "field": "age", "value": "30" }));
-    call(&mut p, "set_hash_field", json!({ "key": k, "field": "city", "value": "Shanghai" }));
+    call(
+        &mut p,
+        "set_hash_field",
+        json!({ "key": k, "field": "name", "value": "Alice" }),
+    );
+    call(
+        &mut p,
+        "set_hash_field",
+        json!({ "key": k, "field": "age", "value": "30" }),
+    );
+    call(
+        &mut p,
+        "set_hash_field",
+        json!({ "key": k, "field": "city", "value": "Shanghai" }),
+    );
 
     let r = call(&mut p, "get_hash", json!({ "key": k }));
     let fields = r["fields"].as_object().unwrap();
@@ -190,7 +218,11 @@ fn test_hash_ops() {
     assert_eq!(fields["age"], "30");
     assert_eq!(fields.len(), 3);
 
-    call(&mut p, "del_hash_field", json!({ "key": k, "field": "age" }));
+    call(
+        &mut p,
+        "del_hash_field",
+        json!({ "key": k, "field": "age" }),
+    );
     let r = call(&mut p, "get_hash", json!({ "key": k }));
     let fields = r["fields"].as_object().unwrap();
     assert_eq!(fields.len(), 2);
@@ -214,18 +246,37 @@ fn test_list_ops() {
 
     // 应该: a, b, c
     let r = call(&mut p, "get_list", json!({ "key": k }));
-    let items: Vec<&str> = r["items"].as_array().unwrap().iter().map(|v| v.as_str().unwrap()).collect();
+    let items: Vec<&str> = r["items"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|v| v.as_str().unwrap())
+        .collect();
     assert_eq!(items, vec!["a", "b", "c"]);
 
     // 范围查询
-    let r = call(&mut p, "get_list", json!({ "key": k, "start": 0, "stop": 1 }));
-    let items: Vec<&str> = r["items"].as_array().unwrap().iter().map(|v| v.as_str().unwrap()).collect();
+    let r = call(
+        &mut p,
+        "get_list",
+        json!({ "key": k, "start": 0, "stop": 1 }),
+    );
+    let items: Vec<&str> = r["items"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|v| v.as_str().unwrap())
+        .collect();
     assert_eq!(items.len(), 2);
 
     // 按索引删除
     call(&mut p, "lrem", json!({ "key": k, "index": 1 }));
     let r = call(&mut p, "get_list", json!({ "key": k }));
-    let items: Vec<&str> = r["items"].as_array().unwrap().iter().map(|v| v.as_str().unwrap()).collect();
+    let items: Vec<&str> = r["items"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|v| v.as_str().unwrap())
+        .collect();
     assert_eq!(items, vec!["a", "c"]);
 }
 
@@ -264,9 +315,21 @@ fn test_zset_ops() {
     let mut p = mkplugin();
     let k = tk("zset");
 
-    call(&mut p, "zadd", json!({ "key": k, "score": 100.0, "member": "gold" }));
-    call(&mut p, "zadd", json!({ "key": k, "score": 50.0, "member": "silver" }));
-    call(&mut p, "zadd", json!({ "key": k, "score": 10.0, "member": "bronze" }));
+    call(
+        &mut p,
+        "zadd",
+        json!({ "key": k, "score": 100.0, "member": "gold" }),
+    );
+    call(
+        &mut p,
+        "zadd",
+        json!({ "key": k, "score": 50.0, "member": "silver" }),
+    );
+    call(
+        &mut p,
+        "zadd",
+        json!({ "key": k, "score": 10.0, "member": "bronze" }),
+    );
 
     let r = call(&mut p, "get_zset", json!({ "key": k }));
     let members = r["members"].as_array().unwrap();
@@ -338,7 +401,11 @@ fn test_rename_key() {
     let old = tk("old");
     let new = tk("new");
 
-    call(&mut p, "set_string", json!({ "key": old, "value": "renamed" }));
+    call(
+        &mut p,
+        "set_string",
+        json!({ "key": old, "value": "renamed" }),
+    );
     call(&mut p, "rename_key", json!({ "old": old, "new": new }));
 
     // 旧 key 不存在
@@ -355,7 +422,11 @@ fn test_set_ttl_and_scan() {
     let mut p = mkplugin();
     let k = tk("ttl");
 
-    call(&mut p, "set_string", json!({ "key": k, "value": "expiring" }));
+    call(
+        &mut p,
+        "set_string",
+        json!({ "key": k, "value": "expiring" }),
+    );
     call(&mut p, "set_ttl", json!({ "key": k, "seconds": 3600 }));
 
     let r = call(&mut p, "get_key_info", json!({ "key": k }));
@@ -363,7 +434,11 @@ fn test_set_ttl_and_scan() {
     assert!(r["ttl"].as_i64().unwrap() > 0);
 
     // scan 返回结构验证 (集群模式下 SCAN 结果取决于 hash slot 分布)
-    let r = call(&mut p, "scan_keys", json!({ "pattern": tk("*"), "count": 100 }));
+    let r = call(
+        &mut p,
+        "scan_keys",
+        json!({ "pattern": tk("*"), "count": 100 }),
+    );
     assert!(r["keys"].is_array());
     assert!(r["cursor"].is_number());
 }
@@ -390,7 +465,9 @@ fn test_hex_dump() {
 #[test]
 fn test_missing_required_param() {
     let mut p = mkplugin();
-    let err = p.handle_call("set_string", json!({ "key": "x" })).unwrap_err();
+    let err = p
+        .handle_call("set_string", json!({ "key": "x" }))
+        .unwrap_err();
     assert!(err.to_string().contains("缺少"));
 }
 
@@ -422,7 +499,11 @@ fn test_hash_empty() {
     let mut p = mkplugin();
     let k = tk("emptyhash");
     // 空 hash (无字段时 HGETALL 行为)
-    call(&mut p, "set_hash_field", json!({ "key": k, "field": "f", "value": "v" }));
+    call(
+        &mut p,
+        "set_hash_field",
+        json!({ "key": k, "field": "f", "value": "v" }),
+    );
     call(&mut p, "del_hash_field", json!({ "key": k, "field": "f" }));
     let r = call(&mut p, "get_hash", json!({ "key": k }));
     assert!(r["fields"].as_object().unwrap().is_empty());
@@ -440,7 +521,11 @@ fn test_key_info_missing_key() {
 #[test]
 fn test_scan_empty_pattern() {
     let mut p = mkplugin();
-    let r = call(&mut p, "scan_keys", json!({ "pattern": "__wt_test__:nonexistent_xyz", "count": 10 }));
+    let r = call(
+        &mut p,
+        "scan_keys",
+        json!({ "pattern": "__wt_test__:nonexistent_xyz", "count": 10 }),
+    );
     let keys = r["keys"].as_array().unwrap();
     assert!(keys.is_empty());
 }

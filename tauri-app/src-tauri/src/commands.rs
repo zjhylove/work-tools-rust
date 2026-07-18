@@ -27,9 +27,9 @@ use crate::plugin_package::{PluginManifest, PluginPackage};
 use crate::plugin_registry::{InstalledPlugin, PluginRegistry};
 use serde::Deserialize;
 use serde_json::Value;
-use tokio::fs as tfs;
 use std::sync::Arc;
 use tauri::{Manager, State};
+use tokio::fs as tfs;
 
 /// 校验插件 ID 格式：只允许小写字母、数字和连字符。
 ///
@@ -95,7 +95,10 @@ pub async fn call_plugin_method(
 /// 从 JSON 文件中读取插件的持久化配置
 #[tauri::command]
 pub async fn get_plugin_config(plugin_id: String) -> Result<Value, String> {
-    load_plugin_config(&plugin_id)
+    let id = plugin_id.clone();
+    tokio::task::spawn_blocking(move || load_plugin_config(&id))
+        .await
+        .map_err(|e| format!("配置加载任务失败: {}", e))?
         .inspect_err(|e| tracing::error!(plugin_id = %plugin_id, "读取插件配置失败: {}", e))
         .map_err(|e| e.to_string())
 }
@@ -104,7 +107,11 @@ pub async fn get_plugin_config(plugin_id: String) -> Result<Value, String> {
 /// 将配置序列化为 JSON 并写入文件
 #[tauri::command]
 pub async fn set_plugin_config(plugin_id: String, config: Value) -> Result<(), String> {
-    save_plugin_config(&plugin_id, &config)
+    let id = plugin_id.clone();
+    let cfg = config.clone();
+    tokio::task::spawn_blocking(move || save_plugin_config(&id, &cfg))
+        .await
+        .map_err(|e| format!("配置保存任务失败: {}", e))?
         .inspect_err(|e| {
             tracing::error!(
                 plugin_id = %plugin_id,
@@ -136,10 +143,13 @@ pub async fn import_plugin_package(
 ) -> Result<String, String> {
     tracing::info!(file_path = %file_path, "开始导入插件包");
 
-    // 1. 从 ZIP 文件加载插件包
-    let pkg = PluginPackage::from_zip(std::path::Path::new(&file_path))
-        .inspect_err(|e| tracing::error!(file_path = %file_path, "加载插件包失败: {}", e))
-        .map_err(|e| format!("加载插件包失败: {}", e))?;
+    let fp = file_path.clone();
+    let pkg =
+        tokio::task::spawn_blocking(move || PluginPackage::from_zip(std::path::Path::new(&fp)))
+            .await
+            .map_err(|e| format!("插件包加载任务失败: {}", e))?
+            .inspect_err(|e| tracing::error!(file_path = %file_path, "加载插件包失败: {}", e))
+            .map_err(|e| format!("加载插件包失败: {}", e))?;
 
     // 2. 验证插件包完整性
     pkg.validate()
@@ -153,11 +163,15 @@ pub async fn import_plugin_package(
 
     tracing::info!(plugin_dir = %plugin_dir.display(), "目标插件目录");
 
-    pkg.install(&plugin_dir)
+    let manifest = pkg.manifest.clone();
+    let install_dir = plugin_dir.clone();
+    tokio::task::spawn_blocking(move || pkg.install(&install_dir))
+        .await
+        .map_err(|e| format!("插件解压任务失败: {}", e))?
         .map_err(|e| format!("安装插件失败: {}", e))?;
 
     // 4. 注册 + 加载（共享逻辑）
-    register_and_load_plugin(&pkg.manifest, &plugin_dir, &manager).await
+    register_and_load_plugin(&manifest, &plugin_dir, &manager).await
 }
 
 /// 获取所有可用的插件（已安装 + 可安装）
@@ -205,7 +219,9 @@ pub async fn get_available_plugins() -> Result<Vec<PluginManifest>, String> {
 /// 获取已安装插件列表（从注册表文件中读取）
 #[tauri::command]
 pub async fn get_installed_plugins_from_registry() -> Result<Vec<InstalledPlugin>, String> {
-    let registry = PluginRegistry::new().map_err(|e| format!("打开插件注册表失败: {}", e))?;
+    let registry = PluginRegistry::new_async()
+        .await
+        .map_err(|e| format!("打开插件注册表失败: {}", e))?;
 
     Ok(registry.get_installed())
 }
@@ -290,9 +306,7 @@ pub async fn uninstall_plugin(
                 if metadata.is_dir() {
                     let manifest_path = path.join("manifest.json");
                     if let Ok(content) = tfs::read_to_string(&manifest_path).await {
-                        if let Ok(manifest) =
-                            serde_json::from_str::<serde_json::Value>(&content)
-                        {
+                        if let Ok(manifest) = serde_json::from_str::<serde_json::Value>(&content) {
                             // 检查 manifest 中的 id 是否匹配目标插件
                             if manifest
                                 .get("id")
@@ -319,10 +333,13 @@ pub async fn uninstall_plugin(
     }
 
     // 3. 从注册表移除（持久化的元数据）
-    let mut registry = PluginRegistry::new().map_err(|e| format!("打开插件注册表失败: {}", e))?;
+    let mut registry = PluginRegistry::new_async()
+        .await
+        .map_err(|e| format!("打开插件注册表失败: {}", e))?;
 
     registry
-        .unregister(&plugin_id)
+        .unregister_async(&plugin_id)
+        .await
         .map_err(|e| format!("从注册表移除插件失败: {}", e))?;
 
     tracing::info!(plugin_id = %plugin_id, "插件卸载成功");
@@ -373,7 +390,9 @@ pub async fn read_plugin_asset(plugin_id: String, asset_path: String) -> Result<
         return Err("资源路径不允许包含 ..".into());
     }
 
-    let registry = PluginRegistry::new().map_err(|e| format!("打开插件注册表失败: {}", e))?;
+    let registry = PluginRegistry::new_async()
+        .await
+        .map_err(|e| format!("打开插件注册表失败: {}", e))?;
 
     let plugin = registry
         .get(&plugin_id)
@@ -423,17 +442,13 @@ pub async fn write_file(path: String, content: String) -> Result<(), String> {
     let canonical_path = tfs::canonicalize(std::path::Path::new(&path))
         .await
         .map_err(|e| format!("解析路径失败: {}", e))?;
-    let base = crate::paths::worktools_base()
-        .map_err(|e| format!("获取应用目录失败: {}", e))?;
+    let base = crate::paths::worktools_base().map_err(|e| format!("获取应用目录失败: {}", e))?;
     let canonical_base = tfs::canonicalize(&base)
         .await
         .map_err(|e| format!("解析应用目录失败: {}", e))?;
 
     if !canonical_path.starts_with(&canonical_base) {
-        return Err(format!(
-            "写入路径超出应用目录范围: {:?}",
-            canonical_path
-        ));
+        return Err(format!("写入路径超出应用目录范围: {:?}", canonical_path));
     }
 
     tfs::write(&canonical_path, &content)
@@ -483,11 +498,7 @@ pub async fn open_file_dialog(
             let name = filter["name"].as_str().unwrap_or("Files");
             let extensions: Vec<&str> = filter["extensions"]
                 .as_array()
-                .map(|arr| {
-                    arr.iter()
-                        .filter_map(|v| v.as_str())
-                        .collect()
-                })
+                .map(|arr| arr.iter().filter_map(|v| v.as_str()).collect())
                 .unwrap_or_default();
             if !extensions.is_empty() {
                 builder = builder.add_filter(name, &extensions);
@@ -595,8 +606,8 @@ pub async fn set_window_theme(theme: String, app: tauri::AppHandle) -> Result<()
         #[cfg(target_os = "macos")]
         {
             let color = match theme.as_str() {
-                "dark" => tauri::window::Color(26, 27, 30, 255),   // matches --bg-primary: #1a1b1e
-                _ => tauri::window::Color(248, 249, 250, 255),      // matches --bg-secondary: #f8f9fa
+                "dark" => tauri::window::Color(26, 27, 30, 255), // matches --bg-primary: #1a1b1e
+                _ => tauri::window::Color(248, 249, 250, 255),   // matches --bg-secondary: #f8f9fa
             };
             w.set_background_color(Some(color))
                 .map_err(|e| e.to_string())?;
@@ -604,7 +615,6 @@ pub async fn set_window_theme(theme: String, app: tauri::AppHandle) -> Result<()
     }
     Ok(())
 }
-
 
 /// 注册插件到注册表并增量加载。
 ///
@@ -620,7 +630,9 @@ async fn register_and_load_plugin(
     let library_path = plugin_dir.join(lib_name);
     let assets_dir = plugin_dir.join("assets");
 
-    let mut registry = PluginRegistry::new().map_err(|e| format!("打开插件注册表失败: {}", e))?;
+    let mut registry = PluginRegistry::new_async()
+        .await
+        .map_err(|e| format!("打开插件注册表失败: {}", e))?;
 
     let installed_plugin = InstalledPlugin {
         id: manifest.id.clone(),
@@ -637,7 +649,8 @@ async fn register_and_load_plugin(
     };
 
     registry
-        .register(installed_plugin)
+        .register_async(installed_plugin)
+        .await
         .map_err(|e| format!("注册插件失败: {}", e))?;
 
     manager
@@ -652,7 +665,12 @@ async fn register_and_load_plugin(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use parking_lot::Mutex;
     use std::path::PathBuf;
+
+    // Serialization lock for tests that share global LOG_RING state.
+    // Prevents parallel test interference.
+    static LOG_TEST_LOCK: Mutex<()> = Mutex::new(());
 
     // ── validate_plugin_id ───────────────────────────────────────────
 
@@ -714,21 +732,9 @@ mod tests {
     // which reads $HOME at runtime, we test the *validation logic* in
     // isolation by constructing the check directly.
 
-    /// Core sandbox check extracted from write_file logic.
-    /// Returns Ok(()) if `target` is inside or equal to `base_dir`.
+    /// Delegate to the shared path_safety::sandbox_check implementation.
     fn sandbox_check(target: &std::path::Path, base_dir: &std::path::Path) -> Result<(), String> {
-        let canonical_target = std::fs::canonicalize(target)
-            .map_err(|e| format!("解析路径失败: {}", e))?;
-        let canonical_base = std::fs::canonicalize(base_dir)
-            .map_err(|e| format!("解析应用目录失败: {}", e))?;
-
-        if !canonical_target.starts_with(&canonical_base) {
-            return Err(format!(
-                "写入路径超出应用目录范围: {:?}",
-                canonical_target
-            ));
-        }
-        Ok(())
+        crate::path_safety::sandbox_check(target, base_dir)
     }
 
     #[test]
@@ -736,7 +742,6 @@ mod tests {
         let base = tempfile::tempdir().unwrap();
         let inner = base.path().join("subdir");
         std::fs::create_dir_all(&inner).unwrap();
-
         assert!(sandbox_check(&inner, base.path()).is_ok());
     }
 
@@ -745,7 +750,6 @@ mod tests {
         let base = tempfile::tempdir().unwrap();
         let file = base.path().join("file.txt");
         std::fs::write(&file, "hello").unwrap();
-
         assert!(sandbox_check(&file, base.path()).is_ok());
     }
 
@@ -753,12 +757,12 @@ mod tests {
     fn sandbox_rejects_path_outside_base() {
         let base = tempfile::tempdir().unwrap();
         let other = tempfile::tempdir().unwrap();
-
         assert!(sandbox_check(other.path(), base.path()).is_err());
     }
 
     #[test]
     fn sandbox_rejects_symlink_escape() {
+        // Duplicated here for regression safety; canonical implementation lives in path_safety.rs
         let base = tempfile::tempdir().unwrap();
         let other = tempfile::tempdir().unwrap();
 
@@ -773,13 +777,9 @@ mod tests {
                 std::os::windows::fs::symlink_dir(other.path(), &symlink_path)
             }
         };
-
-        // Skip if symlink creation fails (e.g. no privilege on Windows)
         if symlink_result.is_err() {
             return;
         }
-
-        // canonicalize resolves the symlink to `other`, which is outside `base`
         let canonical = std::fs::canonicalize(&symlink_path).unwrap();
         let canonical_base = std::fs::canonicalize(base.path()).unwrap();
         if !canonical.starts_with(&canonical_base) {
@@ -791,8 +791,6 @@ mod tests {
     fn sandbox_rejects_nonexistent_path() {
         let base = tempfile::tempdir().unwrap();
         let ghost = PathBuf::from("/this/absolutely/does/not/exist");
-
-        // canonicalize of a nonexistent path fails → sandbox_check returns Err
         assert!(sandbox_check(&ghost, base.path()).is_err());
     }
 
@@ -853,7 +851,10 @@ mod tests {
     #[tokio::test]
     async fn open_url_rejects_custom_scheme() {
         let result = open_url("custom-protocol://do-evil".into()).await;
-        assert!(result.is_err(), "custom-protocol: scheme should be rejected");
+        assert!(
+            result.is_err(),
+            "custom-protocol: scheme should be rejected"
+        );
     }
 
     // Note: We do NOT test http/https/mailto acceptance here because
@@ -868,6 +869,7 @@ mod tests {
 
     #[test]
     fn get_logs_returns_empty_when_no_entries() {
+        let _lock = LOG_TEST_LOCK.lock();
         // Clear any entries that might exist from other tests
         let mut ring = LOG_RING.lock();
         ring.clear();
@@ -879,6 +881,7 @@ mod tests {
 
     #[test]
     fn get_logs_filters_by_level() {
+        let _lock = LOG_TEST_LOCK.lock();
         let mut ring = LOG_RING.lock();
         ring.clear();
         ring.push_back(LogEntry {
@@ -908,6 +911,7 @@ mod tests {
 
     #[test]
     fn get_logs_filters_by_plugin() {
+        let _lock = LOG_TEST_LOCK.lock();
         let mut ring = LOG_RING.lock();
         ring.clear();
         ring.push_back(LogEntry {
@@ -934,9 +938,9 @@ mod tests {
         assert_eq!(result.len(), 1);
         assert!(result[0].message.contains("password manager"));
     }
-
     #[test]
     fn get_logs_filters_by_since() {
+        let _lock = LOG_TEST_LOCK.lock();
         let mut ring = LOG_RING.lock();
         ring.clear();
         ring.push_back(LogEntry {
@@ -963,9 +967,9 @@ mod tests {
         assert_eq!(result.len(), 1);
         assert_eq!(result[0].message, "new");
     }
-
     #[test]
     fn get_logs_respects_default_limit() {
+        let _lock = LOG_TEST_LOCK.lock();
         let mut ring = LOG_RING.lock();
         ring.clear();
         for i in 0..150 {
@@ -981,9 +985,9 @@ mod tests {
         let result = get_logs(None).unwrap();
         assert_eq!(result.len(), 100);
     }
-
     #[test]
     fn clear_logs_works() {
+        let _lock = LOG_TEST_LOCK.lock();
         let mut ring = LOG_RING.lock();
         ring.push_back(LogEntry {
             timestamp: "2026-01-01T00:00:00.000Z".into(),

@@ -77,7 +77,9 @@ fn create_authenticated_session(config: &SshConfig) -> Result<Session, String> {
             continue;
         }
         match &config.auth {
-            SshAuth::Password { password_obfuscated } => {
+            SshAuth::Password {
+                password_obfuscated,
+            } => {
                 let pass = crate::hex::deobfuscate(password_obfuscated)
                     .unwrap_or_else(|| password_obfuscated.clone());
                 if let Err(e) = session.userauth_password(&config.username, &pass) {
@@ -85,8 +87,12 @@ fn create_authenticated_session(config: &SshConfig) -> Result<Session, String> {
                     continue;
                 }
             }
-            SshAuth::KeyPath { key_path, passphrase_obfuscated } => {
-                let passphrase = passphrase_obfuscated.as_ref()
+            SshAuth::KeyPath {
+                key_path,
+                passphrase_obfuscated,
+            } => {
+                let passphrase = passphrase_obfuscated
+                    .as_ref()
                     .and_then(|p| crate::hex::deobfuscate(p).or_else(|| Some(p.clone())));
                 if let Err(e) = session.userauth_pubkey_file(
                     &config.username,
@@ -177,9 +183,10 @@ impl SshTunnel {
         let session = create_authenticated_session(config)?;
         let session = Arc::new(Mutex::new(session));
 
-        let listener = TcpListener::bind("127.0.0.1:0")
-            .map_err(|e| format!("Local port bind failed: {e}"))?;
-        let local_port = listener.local_addr()
+        let listener =
+            TcpListener::bind("127.0.0.1:0").map_err(|e| format!("Local port bind failed: {e}"))?;
+        let local_port = listener
+            .local_addr()
             .map_err(|e| format!("Get local port failed: {e}"))?
             .port();
 

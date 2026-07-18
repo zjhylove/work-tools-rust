@@ -2,6 +2,7 @@ use crate::models::{BucketInfo, ObjectInfo};
 use crate::provider::{self, HmacSha1, ObjectStoreProvider};
 use anyhow::Result;
 use hmac::Mac;
+use hmac::KeyInit;
 
 pub struct CosClient {
     access_key: String,
@@ -51,7 +52,7 @@ impl CosClient {
 
         use sha1::Digest;
         let http_string = format!("{}\n{}\n{}\n{}\n", verb.to_lowercase(), path, "", "");
-        let sha1_http = format!("{:x}", sha1::Sha1::digest(http_string.as_bytes()));
+        let sha1_http = hex::encode(sha1::Sha1::digest(http_string.as_bytes()));
         let string_to_sign = format!("sha1\n{}\n{}\n", key_time, sha1_http);
 
         let mut mac = HmacSha1::new_from_slice(&sign_key).expect("HMAC");

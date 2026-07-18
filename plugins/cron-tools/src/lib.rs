@@ -258,7 +258,10 @@ mod tests {
     #[test]
     fn test_detect_format() {
         assert_eq!(detect_format("* * * * *"), Some(CronFormat::Standard5));
-        assert_eq!(detect_format("*/30 * * * * *"), Some(CronFormat::WithSeconds6));
+        assert_eq!(
+            detect_format("*/30 * * * * *"),
+            Some(CronFormat::WithSeconds6)
+        );
         assert_eq!(detect_format("0 0 0 * * ? *"), Some(CronFormat::Quartz7));
         assert_eq!(detect_format("bad"), None);
         assert_eq!(detect_format("1 2 3 4 5 6 7 8"), None);
@@ -269,9 +272,15 @@ mod tests {
         // 5-field "a b c d e" → prepend "0 " to make 7 fields: "0 a b c d e *"
         assert_eq!(normalize_to_7_field("* * * * *").unwrap(), "0 * * * * * *");
         // 6-field "a b c d e f" → append " *" to make 7 fields
-        assert_eq!(normalize_to_7_field("*/30 * * * * *").unwrap(), "*/30 * * * * * *");
+        assert_eq!(
+            normalize_to_7_field("*/30 * * * * *").unwrap(),
+            "*/30 * * * * * *"
+        );
         // 7-field stays the same
-        assert_eq!(normalize_to_7_field("0 0 0 * * ? *").unwrap(), "0 0 0 * * ? *");
+        assert_eq!(
+            normalize_to_7_field("0 0 0 * * ? *").unwrap(),
+            "0 0 0 * * ? *"
+        );
         assert!(normalize_to_7_field("bad").is_none());
     }
 
@@ -288,8 +297,13 @@ mod tests {
         let result = plugin.handle_call("parse_cron", json!({"expr": "*/5 * * * *"}));
         assert!(result.is_ok());
         let val = result.unwrap();
-        assert_eq!(val.get("valid").unwrap().as_bool().unwrap(), true);
-        assert!(val.get("description").unwrap().as_str().unwrap().contains("每"));
+        assert!(val.get("valid").unwrap().as_bool().unwrap());
+        assert!(val
+            .get("description")
+            .unwrap()
+            .as_str()
+            .unwrap()
+            .contains("每"));
     }
 
     #[test]
@@ -298,13 +312,14 @@ mod tests {
         let result = plugin.handle_call("parse_cron", json!({"expr": "invalid"}));
         assert!(result.is_ok());
         let val = result.unwrap();
-        assert_eq!(val.get("valid").unwrap().as_bool().unwrap(), false);
+        assert!(!val.get("valid").unwrap().as_bool().unwrap());
     }
 
     #[test]
     fn test_next_executions() {
         let mut plugin = CronTools;
-        let result = plugin.handle_call("next_executions", json!({"expr": "* * * * *", "count": 3}));
+        let result =
+            plugin.handle_call("next_executions", json!({"expr": "* * * * *", "count": 3}));
         assert!(result.is_ok());
         let val = result.unwrap();
         let times = val.get("times").unwrap().as_array().unwrap();

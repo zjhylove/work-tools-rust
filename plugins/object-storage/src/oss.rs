@@ -3,6 +3,7 @@ use crate::provider::{self, HmacSha1, ObjectStoreProvider};
 use anyhow::Result;
 use base64::Engine;
 use hmac::Mac;
+use hmac::KeyInit;
 
 pub struct OssClient {
     access_key: String,

@@ -47,10 +47,7 @@ impl DocumentExporter for HtmlExporter {
                 "<div class=\"table-section\" id=\"table-{}\">\n",
                 escape_xml(&table.name)
             ));
-            html.push_str(&format!(
-                "<h2>{}</h2>\n",
-                escape_xml(&table.name)
-            ));
+            html.push_str(&format!("<h2>{}</h2>\n", escape_xml(&table.name)));
 
             if let Some(ref comment) = table.comment {
                 if !comment.is_empty() {
@@ -89,7 +86,9 @@ impl DocumentExporter for HtmlExporter {
             // 索引信息
             if !table.indexes.is_empty() {
                 html.push_str("<h3>索引列表</h3>\n");
-                html.push_str("<table><tr><th>索引名</th><th>列</th><th>唯一</th><th>类型</th></tr>\n");
+                html.push_str(
+                    "<table><tr><th>索引名</th><th>列</th><th>唯一</th><th>类型</th></tr>\n",
+                );
                 for idx in &table.indexes {
                     let unique = if idx.is_unique { "是" } else { "否" };
                     let idx_type = if idx.is_primary { "主键" } else { "普通" };
@@ -111,10 +110,7 @@ impl DocumentExporter for HtmlExporter {
 
         html.push_str("</body>\n</html>");
 
-        let filename = format!(
-            "数据库文档_{}.html",
-            chrono::Local::now().format("%Y%m%d")
-        );
+        let filename = format!("数据库文档_{}.html", chrono::Local::now().format("%Y%m%d"));
         let filepath = dir.join(&filename);
         fs::write(&filepath, &html)?;
         Ok(vec![filepath.to_string_lossy().to_string()])

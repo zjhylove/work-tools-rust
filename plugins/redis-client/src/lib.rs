@@ -91,13 +91,15 @@ impl RedisClientPlugin {
                 let tunnel = ssh_tunnel::SshTunnel::connect(&ssh, &remote_host, remote_port)
                     .map_err(|e| format!("SSH tunnel failed: {e}"))?;
                 let local_port = tunnel.local_port();
-                let url =
-                    Self::make_redis_url("127.0.0.1", local_port, db, password.as_deref());
+                let url = Self::make_redis_url("127.0.0.1", local_port, db, password.as_deref());
                 let client = Client::open(url.as_str()).map_err(|e| e.into());
                 *ssh_tunnel = Some(tunnel);
                 client
             }
-            connection::ConnectionMode::Cluster { seed_nodes, password } => {
+            connection::ConnectionMode::Cluster {
+                seed_nodes,
+                password,
+            } => {
                 let node_urls: Vec<String> = seed_nodes
                     .iter()
                     .map(|n| match &password {
@@ -165,43 +167,44 @@ impl Plugin for RedisClientPlugin {
                 self.ssh_tunnel = None;
                 self.current_config = None;
 
-                let (conn_cfg, password) =
-                    if let Some(id) = params.get("id").and_then(|v| v.as_str()).filter(|s| !s.is_empty()) {
-                        self.ensure_connections_loaded();
-                        let cfg = self
-                            .saved_connections
-                            .iter()
-                            .find(|c| c.id == id)
-                            .ok_or("连接配置不存在")?
-                            .clone();
-                        let pw = Self::resolve_password(&params, &cfg.password_obfuscated);
-                        (cfg, pw)
-                    } else {
-                        let host = params
-                            .get("host")
-                            .and_then(|v| v.as_str())
-                            .unwrap_or("127.0.0.1");
-                        let port =
-                            params.get("port").and_then(|v| v.as_u64()).unwrap_or(6379) as u16;
-                        let db = params.get("db").and_then(|v| v.as_i64()).unwrap_or(0);
-                        let cfg = connection::ConnectionConfig {
-                            id: String::new(),
-                            name: format!("{host}:{port}"),
-                            color: None,
-                            host: host.to_string(),
-                            port,
-                            db,
-                            password_obfuscated: String::new(),
-                            ssh: parse_optional_struct(&params, "ssh"),
-                            cluster: parse_optional_struct(&params, "cluster"),
-                        };
-                        (cfg, opt_str(&params, "password"))
+                let (conn_cfg, password) = if let Some(id) = params
+                    .get("id")
+                    .and_then(|v| v.as_str())
+                    .filter(|s| !s.is_empty())
+                {
+                    self.ensure_connections_loaded();
+                    let cfg = self
+                        .saved_connections
+                        .iter()
+                        .find(|c| c.id == id)
+                        .ok_or("连接配置不存在")?
+                        .clone();
+                    let pw = Self::resolve_password(&params, &cfg.password_obfuscated);
+                    (cfg, pw)
+                } else {
+                    let host = params
+                        .get("host")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("127.0.0.1");
+                    let port = params.get("port").and_then(|v| v.as_u64()).unwrap_or(6379) as u16;
+                    let db = params.get("db").and_then(|v| v.as_i64()).unwrap_or(0);
+                    let cfg = connection::ConnectionConfig {
+                        id: String::new(),
+                        name: format!("{host}:{port}"),
+                        color: None,
+                        host: host.to_string(),
+                        port,
+                        db,
+                        password_obfuscated: String::new(),
+                        ssh: parse_optional_struct(&params, "ssh"),
+                        cluster: parse_optional_struct(&params, "cluster"),
                     };
+                    (cfg, opt_str(&params, "password"))
+                };
 
-                let client =
-                    Self::connect_client(&conn_cfg, password, &mut self.ssh_tunnel)?;
-                let _: String =
-                    redis::cmd("PING").query(&mut client.get_connection().context("Redis 连接失败")?)?;
+                let client = Self::connect_client(&conn_cfg, password, &mut self.ssh_tunnel)?;
+                let _: String = redis::cmd("PING")
+                    .query(&mut client.get_connection().context("Redis 连接失败")?)?;
 
                 self.client = Some(client);
                 self.current_config = Some(conn_cfg.clone());
@@ -212,7 +215,9 @@ impl Plugin for RedisClientPlugin {
                     db = conn_cfg.db,
                     "Redis 连接成功"
                 );
-                Ok(serde_json::json!({ "ok": true, "host": conn_cfg.host, "port": conn_cfg.port, "db": conn_cfg.db }))
+                Ok(
+                    serde_json::json!({ "ok": true, "host": conn_cfg.host, "port": conn_cfg.port, "db": conn_cfg.db }),
+                )
             }
 
             "disconnect" => {
@@ -235,12 +240,17 @@ impl Plugin for RedisClientPlugin {
                     temp_cfg.id = id;
                     (temp_cfg, password)
                 } else {
-                    let host = params.get("host").and_then(|v| v.as_str()).unwrap_or("127.0.0.1").to_string();
+                    let host = params
+                        .get("host")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("127.0.0.1")
+                        .to_string();
                     let port = params.get("port").and_then(|v| v.as_u64()).unwrap_or(6379) as u16;
                     let db = params.get("db").and_then(|v| v.as_i64()).unwrap_or(0);
                     let password = opt_str(&params, "password");
                     let ssh: Option<connection::SshConfig> = parse_optional_struct(&params, "ssh");
-                    let cluster: Option<connection::ClusterConfig> = parse_optional_struct(&params, "cluster");
+                    let cluster: Option<connection::ClusterConfig> =
+                        parse_optional_struct(&params, "cluster");
                     let cfg = connection::ConnectionConfig {
                         id: String::new(),
                         name: String::new(),
@@ -257,8 +267,7 @@ impl Plugin for RedisClientPlugin {
 
                 let mut temp_tunnel: Option<ssh_tunnel::SshTunnel> = None;
                 let client = Self::connect_client(&cfg.0, cfg.1, &mut temp_tunnel)?;
-                let _: String =
-                    redis::cmd("PING").query(&mut client.get_connection()?)?;
+                let _: String = redis::cmd("PING").query(&mut client.get_connection()?)?;
                 Ok(serde_json::json!({ "ok": true }))
             }
 
@@ -286,8 +295,7 @@ impl Plugin for RedisClientPlugin {
                     .get("host")
                     .and_then(|v| v.as_str())
                     .unwrap_or("127.0.0.1");
-                let port =
-                    params.get("port").and_then(|v| v.as_u64()).unwrap_or(6379) as u16;
+                let port = params.get("port").and_then(|v| v.as_u64()).unwrap_or(6379) as u16;
                 let db = params.get("db").and_then(|v| v.as_i64()).unwrap_or(0);
                 let color = params
                     .get("color")
@@ -335,8 +343,12 @@ impl Plugin for RedisClientPlugin {
                                 connection::SshAuth::KeyPath { .. } => "key",
                             };
                             let has_auth = match &s.auth {
-                                connection::SshAuth::Password { password_obfuscated } => !password_obfuscated.is_empty(),
-                                connection::SshAuth::KeyPath { key_path, .. } => !key_path.is_empty(),
+                                connection::SshAuth::Password {
+                                    password_obfuscated,
+                                } => !password_obfuscated.is_empty(),
+                                connection::SshAuth::KeyPath { key_path, .. } => {
+                                    !key_path.is_empty()
+                                }
                             };
                             serde_json::json!({
                                 "host": s.host,
@@ -391,9 +403,13 @@ impl Plugin for RedisClientPlugin {
                 } else {
                     hex::deobfuscate(&conn.password_obfuscated).unwrap_or_default()
                 };
-                let ssh_password = conn.ssh.as_ref().and_then(|s| {
-                    match &s.auth {
-                        connection::SshAuth::Password { password_obfuscated } => {
+                let ssh_password = conn
+                    .ssh
+                    .as_ref()
+                    .and_then(|s| match &s.auth {
+                        connection::SshAuth::Password {
+                            password_obfuscated,
+                        } => {
                             if password_obfuscated.is_empty() {
                                 None
                             } else {
@@ -401,15 +417,16 @@ impl Plugin for RedisClientPlugin {
                             }
                         }
                         _ => None,
-                    }
-                }).unwrap_or_default();
-                let ssh_key_passphrase = conn.ssh.as_ref().and_then(|s| {
-                    match &s.auth {
-                        connection::SshAuth::KeyPath { passphrase_obfuscated, .. } => {
-                            passphrase_obfuscated.as_ref().and_then(|p| hex::deobfuscate(p))
-                        }
-                        _ => None,
-                    }
+                    })
+                    .unwrap_or_default();
+                let ssh_key_passphrase = conn.ssh.as_ref().and_then(|s| match &s.auth {
+                    connection::SshAuth::KeyPath {
+                        passphrase_obfuscated,
+                        ..
+                    } => passphrase_obfuscated
+                        .as_ref()
+                        .and_then(|p| hex::deobfuscate(p)),
+                    _ => None,
                 });
                 Ok(serde_json::json!({
                     "password": pass,
@@ -422,8 +439,12 @@ impl Plugin for RedisClientPlugin {
             "scan_keys" => {
                 let mut conn = self.get_conn()?;
                 let cursor: u64 = params.get("cursor").and_then(|v| v.as_u64()).unwrap_or(0);
-                let pattern = params.get("pattern").and_then(|v| v.as_str()).unwrap_or("*");
-                let count: usize = params.get("count").and_then(|v| v.as_u64()).unwrap_or(50) as usize;
+                let pattern = params
+                    .get("pattern")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("*");
+                let count: usize =
+                    params.get("count").and_then(|v| v.as_u64()).unwrap_or(50) as usize;
                 let max_keys = count.min(2000);
 
                 let mut all_keys: Vec<Vec<u8>> = Vec::new();
@@ -682,18 +703,157 @@ pub extern "C" fn plugin_create() -> *mut Box<dyn Plugin> {
     Box::leak(plugin) as *mut Box<dyn Plugin>
 }
 
-fn require_str<'a>(params: &'a Value, key: &str) -> Result<&'a str, Box<dyn std::error::Error + Send + Sync>> {
-    params.get(key).and_then(|v| v.as_str()).ok_or(format!("缺少 {key}").into())
+fn require_str<'a>(
+    params: &'a Value,
+    key: &str,
+) -> Result<&'a str, Box<dyn std::error::Error + Send + Sync>> {
+    params
+        .get(key)
+        .and_then(|v| v.as_str())
+        .ok_or(format!("缺少 {key}").into())
 }
 
 fn opt_str(params: &Value, key: &str) -> Option<String> {
-    params.get(key).and_then(|v| v.as_str()).filter(|s| !s.is_empty()).map(|s| s.to_string())
+    params
+        .get(key)
+        .and_then(|v| v.as_str())
+        .filter(|s| !s.is_empty())
+        .map(|s| s.to_string())
 }
 
 fn parse_optional_struct<T: serde::de::DeserializeOwned>(params: &Value, key: &str) -> Option<T> {
     params.get(key).and_then(|v| {
-        if v.is_null() { None } else { serde_json::from_value(v.clone()).ok() }
+        if v.is_null() {
+            None
+        } else {
+            serde_json::from_value(v.clone()).ok()
+        }
     })
+}
+
+#[cfg(test)]
+mod utility_tests {
+    use super::*;
+    use serde::Deserialize;
+    use serde_json::json;
+
+    #[derive(Debug, PartialEq, Deserialize)]
+    struct TestStruct {
+        name: String,
+        value: i32,
+    }
+
+    #[test]
+    fn require_str_returns_value_when_key_exists() {
+        let params = json!({"key": "hello"});
+        assert_eq!(require_str(&params, "key").unwrap(), "hello");
+    }
+
+    #[test]
+    fn require_str_errors_when_key_missing() {
+        let params = json!({});
+        let err = require_str(&params, "key").unwrap_err();
+        assert!(err.to_string().contains("缺少"));
+    }
+
+    #[test]
+    fn require_str_errors_on_wrong_type() {
+        let params = json!({"key": 42});
+        let err = require_str(&params, "key").unwrap_err();
+        assert!(err.to_string().contains("缺少"));
+    }
+
+    #[test]
+    fn opt_str_returns_some_for_valid_string() {
+        let params = json!({"key": "hello"});
+        assert_eq!(opt_str(&params, "key"), Some("hello".to_string()));
+    }
+
+    #[test]
+    fn opt_str_returns_none_for_missing_key() {
+        let params = json!({});
+        assert_eq!(opt_str(&params, "key"), None);
+    }
+
+    #[test]
+    fn opt_str_returns_none_for_empty_string() {
+        let params = json!({"key": ""});
+        assert_eq!(opt_str(&params, "key"), None);
+    }
+
+    #[test]
+    fn opt_str_returns_none_for_null() {
+        let params = json!({"key": null});
+        assert_eq!(opt_str(&params, "key"), None);
+    }
+
+    #[test]
+    fn parse_optional_struct_returns_some_for_valid_json() {
+        let params = json!({"data": {"name": "test", "value": 42}});
+        let result: Option<TestStruct> = parse_optional_struct(&params, "data");
+        assert_eq!(
+            result,
+            Some(TestStruct {
+                name: "test".into(),
+                value: 42
+            })
+        );
+    }
+
+    #[test]
+    fn parse_optional_struct_returns_none_for_null() {
+        let params = json!({"data": null});
+        let result: Option<TestStruct> = parse_optional_struct(&params, "data");
+        assert_eq!(result, None);
+    }
+
+    #[test]
+    fn parse_optional_struct_returns_none_for_missing_key() {
+        let params = json!({});
+        let result: Option<TestStruct> = parse_optional_struct(&params, "data");
+        assert_eq!(result, None);
+    }
+
+    #[test]
+    fn make_redis_url_without_password() {
+        let url = RedisClientPlugin::make_redis_url("localhost", 6379, 0, None);
+        assert_eq!(url, "redis://localhost:6379/0");
+    }
+
+    #[test]
+    fn make_redis_url_with_password() {
+        let url = RedisClientPlugin::make_redis_url("localhost", 6379, 0, Some("pass"));
+        assert_eq!(url, "redis://:pass@localhost:6379/0");
+    }
+
+    #[test]
+    fn make_redis_url_encodes_special_chars() {
+        let url = RedisClientPlugin::make_redis_url("example.com", 6380, 1, Some("p@ss"));
+        assert_eq!(url, "redis://:p%40ss@example.com:6380/1");
+    }
+
+    #[test]
+    fn resolve_password_uses_params_when_present() {
+        let params = json!({"password": "from_params"});
+        let result = RedisClientPlugin::resolve_password(&params, "obfuscated_here");
+        assert_eq!(result, Some("from_params".to_string()));
+    }
+
+    #[test]
+    fn resolve_password_uses_obfuscated_when_params_empty() {
+        let params = json!({});
+        let obfuscated = crate::hex::obfuscate("from_storage");
+        let result = RedisClientPlugin::resolve_password(&params, &obfuscated);
+        assert_eq!(result, Some("from_storage".to_string()));
+    }
+
+    #[test]
+    fn resolve_password_uses_obfuscated_when_params_null() {
+        let params = json!({"password": ""});
+        let obfuscated = crate::hex::obfuscate("from_storage_2");
+        let result = RedisClientPlugin::resolve_password(&params, &obfuscated);
+        assert_eq!(result, Some("from_storage_2".to_string()));
+    }
 }
 
 #[cfg(test)]

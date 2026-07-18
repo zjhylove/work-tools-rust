@@ -8,7 +8,7 @@ default-run = "work-tools"
 
 [lib]
 name = "work_tools_lib"
-crate-type = ["staticlib", "cdylib", "rlib"]
+crate-type = ["cdylib", "rlib"]
 
 [[bin]]
 name = "work-tools"
@@ -25,25 +25,21 @@ tauri-plugin-dialog = "2"
 tauri-plugin-fs = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-tokio = { version = "1", features = ["full"] }
+tokio = { version = "1", features = ["rt", "rt-multi-thread", "macros", "sync", "fs", "time"] }
 anyhow = "1.0"
 tracing = "0.1"
-tracing-subscriber = { version = "0.3", features = ["fmt", "json", "registry"] }
+tracing-subscriber = { version = "0.3", features = ["fmt", "registry"] }
 tracing-appender = "0.2"
 directories = "6.0.0"
-dirs = "6.0.0"
-notify = "8.2.0"
-rand = "0.10.0"
-aes = "0.8"
-sha2 = "0.10"
-hex = "0.4"
 libloading = "0.9.0"
 parking_lot = "0.12"
 zip = "8.2.0"
 chrono = { version = "0.4", features = ["serde"] }
-tempfile = "3"
 opener = "0.8.4"
 
 # 本地依赖
 worktools-shared-types = { path = "../../shared/types" }
 worktools-plugin-api = { path = "../../shared/plugin-api" }
+
+[dev-dependencies]
+tempfile = "3"

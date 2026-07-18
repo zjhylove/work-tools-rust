@@ -190,8 +190,8 @@ impl JarParser {
             let (business_module, version) = extract_path_segments(&full_path);
 
             // 获取请求参数和返回类型
-            let (req_fields, mut req_nodes, resp_nodes) = self
-                .with_class(class_name, |class_file| {
+            let (req_fields, mut req_nodes, resp_nodes) =
+                self.with_class(class_name, |class_file| {
                     self.extract_method_fields(class_file, method_name, &mut HashSet::new())
                 })?;
 
@@ -297,15 +297,18 @@ impl JarParser {
                     if self.class_exists(inner_type)
                         && type_resolver::is_custom_type_private(inner_type)
                     {
-                        let (inner_fields, inner_nodes) =
-                            type_resolver::extract_dto_fields(
-                                inner_type,
-                                self,
-                                &mut resp_inner_visited,
-                            );
+                        let (inner_fields, inner_nodes) = type_resolver::extract_dto_fields(
+                            inner_type,
+                            self,
+                            &mut resp_inner_visited,
+                        );
                         if !inner_fields.is_empty() {
                             inner_data.push(ResolvedInnerType {
-                                short_name: inner_type.rsplit('.').next().unwrap_or(inner_type).to_string(),
+                                short_name: inner_type
+                                    .rsplit('.')
+                                    .next()
+                                    .unwrap_or(inner_type)
+                                    .to_string(),
                                 fields: inner_fields,
                                 nodes: inner_nodes,
                             });
@@ -348,9 +351,7 @@ impl JarParser {
                     let data_field = if data_field.is_some() {
                         data_field
                     } else {
-                        wrapper_fields
-                            .iter_mut()
-                            .find(|f| f.field_type == "Object")
+                        wrapper_fields.iter_mut().find(|f| f.field_type == "Object")
                     };
                     if let Some(f) = data_field {
                         f.field_type = first.short_name.clone();
@@ -391,9 +392,8 @@ impl JarParser {
                 }
             } else {
                 // ── 回退：从方法描述符获取返回类型 ──
-                let return_type = type_resolver::get_return_type_from_descriptor(
-                    &method.descriptor.to_string(),
-                );
+                let return_type =
+                    type_resolver::get_return_type_from_descriptor(&method.descriptor.to_string());
 
                 if self.class_exists(&return_type)
                     && type_resolver::is_custom_type_private(&return_type)

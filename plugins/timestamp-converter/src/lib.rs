@@ -24,7 +24,10 @@ fn parse_datetime_to_ts(dt_str: &str, tz: &Tz) -> Option<i64> {
         return Some(dt.timestamp());
     }
     if let Ok(naive) = NaiveDateTime::parse_from_str(dt_str, "%Y-%m-%d %H:%M:%S") {
-        return tz.from_local_datetime(&naive).single().map(|d| d.timestamp());
+        return tz
+            .from_local_datetime(&naive)
+            .single()
+            .map(|d| d.timestamp());
     }
     None
 }
@@ -189,13 +192,19 @@ mod tests {
     #[test]
     fn test_parse_timestamp_millis() {
         // 13 digits → divided by 1000 to get seconds
-        assert_eq!(parse_timestamp("1700000000000").unwrap(), 1700000000000 / 1000);
+        assert_eq!(
+            parse_timestamp("1700000000000").unwrap(),
+            1700000000000 / 1000
+        );
     }
 
     #[test]
     fn test_parse_timestamp_micros() {
         // 16 digits → divided by 1_000_000 to get seconds
-        assert_eq!(parse_timestamp("1700000000000000").unwrap(), 1700000000000000 / 1_000_000);
+        assert_eq!(
+            parse_timestamp("1700000000000000").unwrap(),
+            1700000000000000 / 1_000_000
+        );
     }
 
     #[test]

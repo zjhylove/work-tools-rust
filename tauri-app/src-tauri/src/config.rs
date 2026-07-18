@@ -71,7 +71,10 @@ mod tests {
     #[test]
     fn load_plugin_config_rejects_path_traversal_id() {
         let result = load_plugin_config("../../etc/passwd");
-        assert!(result.is_err(), "load_plugin_config should reject '../../etc/passwd'");
+        assert!(
+            result.is_err(),
+            "load_plugin_config should reject '../../etc/passwd'"
+        );
         let err_msg = result.unwrap_err().to_string();
         assert!(
             err_msg.contains("非法插件 ID") || err_msg.contains("非法"),
@@ -96,7 +99,10 @@ mod tests {
     fn save_plugin_config_rejects_path_traversal_id() {
         let config = serde_json::json!({"key": "value"});
         let result = save_plugin_config("../../etc/passwd", &config);
-        assert!(result.is_err(), "save_plugin_config should reject '../../etc/passwd'");
+        assert!(
+            result.is_err(),
+            "save_plugin_config should reject '../../etc/passwd'"
+        );
         let err_msg = result.unwrap_err().to_string();
         assert!(
             err_msg.contains("非法插件 ID") || err_msg.contains("非法"),
@@ -124,7 +130,11 @@ mod tests {
         // "valid-id" passes validation but the file doesn't exist,
         // so it should succeed with empty JSON object (not an error).
         let result = load_plugin_config("valid-id");
-        assert!(result.is_ok(), "Valid ID with no config file should return Ok, got: {:?}", result.err());
+        assert!(
+            result.is_ok(),
+            "Valid ID with no config file should return Ok, got: {:?}",
+            result.err()
+        );
         assert_eq!(result.unwrap(), serde_json::json!({}));
     }
 
@@ -138,5 +148,38 @@ mod tests {
     fn load_plugin_config_rejects_empty_id() {
         let result = load_plugin_config("");
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn save_and_load_plugin_config_round_trip() {
+        let config = serde_json::json!({"theme": "dark", "fontSize": 14});
+        save_plugin_config("round-trip-test", &config).unwrap();
+
+        let loaded = load_plugin_config("round-trip-test").unwrap();
+        assert_eq!(loaded["theme"], "dark");
+        assert_eq!(loaded["fontSize"], 14);
+
+        // Cleanup
+        let history_dir = crate::paths::history_dir().unwrap();
+        let config_path = history_dir.join("plugins/round-trip-test.json");
+        let _ = std::fs::remove_file(config_path);
+    }
+
+    #[test]
+    fn save_plugin_config_overwrites_existing() {
+        let config1 = serde_json::json!({"v": 1});
+        save_plugin_config("overwrite-test", &config1).unwrap();
+
+        let config2 = serde_json::json!({"v": 2, "extra": true});
+        save_plugin_config("overwrite-test", &config2).unwrap();
+
+        let loaded = load_plugin_config("overwrite-test").unwrap();
+        assert_eq!(loaded["v"], 2);
+        assert_eq!(loaded["extra"], true);
+
+        // Cleanup
+        let history_dir = crate::paths::history_dir().unwrap();
+        let config_path = history_dir.join("plugins/overwrite-test.json");
+        let _ = std::fs::remove_file(config_path);
     }
 }

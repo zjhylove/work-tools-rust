@@ -23,8 +23,8 @@ use std::path::PathBuf;
 use std::sync::LazyLock;
 
 static BASE_DIR: LazyLock<Result<PathBuf>> = LazyLock::new(|| {
-    let user_dirs = directories::UserDirs::new()
-        .ok_or_else(|| anyhow::anyhow!("无法找到用户主目录"))?;
+    let user_dirs =
+        directories::UserDirs::new().ok_or_else(|| anyhow::anyhow!("无法找到用户主目录"))?;
     Ok(user_dirs.home_dir().join(".worktools"))
 });
 
