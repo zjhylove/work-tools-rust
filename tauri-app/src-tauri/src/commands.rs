@@ -164,11 +164,15 @@ pub async fn import_plugin_package(
 
     tracing::info!(plugin_dir = %plugin_dir.display(), "目标插件目录");
 
-    pkg.install(&plugin_dir)
+    let manifest = pkg.manifest.clone();
+    let install_dir = plugin_dir.clone();
+    tokio::task::spawn_blocking(move || pkg.install(&install_dir))
+        .await
+        .map_err(|e| format!("插件解压任务失败: {}", e))?
         .map_err(|e| format!("安装插件失败: {}", e))?;
 
     // 4. 注册 + 加载（共享逻辑）
-    register_and_load_plugin(&pkg.manifest, &plugin_dir, &manager).await
+    register_and_load_plugin(&manifest, &plugin_dir, &manager).await
 }
 
 /// 获取所有可用的插件（已安装 + 可安装）
