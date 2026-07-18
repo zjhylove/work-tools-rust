@@ -24,6 +24,7 @@ mod paths;
 pub mod plugin_manager; // pub: 可能被外部 crate 引用
 mod plugin_package;
 mod plugin_registry;
+mod path_safety;
 mod tray;
 
 use anyhow::Result;

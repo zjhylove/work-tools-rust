@@ -714,21 +714,9 @@ mod tests {
     // which reads $HOME at runtime, we test the *validation logic* in
     // isolation by constructing the check directly.
 
-    /// Core sandbox check extracted from write_file logic.
-    /// Returns Ok(()) if `target` is inside or equal to `base_dir`.
+    /// Delegate to the shared path_safety::sandbox_check implementation.
     fn sandbox_check(target: &std::path::Path, base_dir: &std::path::Path) -> Result<(), String> {
-        let canonical_target = std::fs::canonicalize(target)
-            .map_err(|e| format!("解析路径失败: {}", e))?;
-        let canonical_base = std::fs::canonicalize(base_dir)
-            .map_err(|e| format!("解析应用目录失败: {}", e))?;
-
-        if !canonical_target.starts_with(&canonical_base) {
-            return Err(format!(
-                "写入路径超出应用目录范围: {:?}",
-                canonical_target
-            ));
-        }
-        Ok(())
+        crate::path_safety::sandbox_check(target, base_dir)
     }
 
     #[test]
@@ -736,7 +724,6 @@ mod tests {
         let base = tempfile::tempdir().unwrap();
         let inner = base.path().join("subdir");
         std::fs::create_dir_all(&inner).unwrap();
-
         assert!(sandbox_check(&inner, base.path()).is_ok());
     }
 
@@ -745,7 +732,6 @@ mod tests {
         let base = tempfile::tempdir().unwrap();
         let file = base.path().join("file.txt");
         std::fs::write(&file, "hello").unwrap();
-
         assert!(sandbox_check(&file, base.path()).is_ok());
     }
 
@@ -753,33 +739,25 @@ mod tests {
     fn sandbox_rejects_path_outside_base() {
         let base = tempfile::tempdir().unwrap();
         let other = tempfile::tempdir().unwrap();
-
         assert!(sandbox_check(other.path(), base.path()).is_err());
     }
 
     #[test]
     fn sandbox_rejects_symlink_escape() {
+        // Duplicated here for regression safety; canonical implementation lives in path_safety.rs
         let base = tempfile::tempdir().unwrap();
         let other = tempfile::tempdir().unwrap();
 
         let symlink_path = base.path().join("escape");
         let symlink_result = {
             #[cfg(unix)]
-            {
-                std::os::unix::fs::symlink(other.path(), &symlink_path)
-            }
+            { std::os::unix::fs::symlink(other.path(), &symlink_path) }
             #[cfg(windows)]
-            {
-                std::os::windows::fs::symlink_dir(other.path(), &symlink_path)
-            }
+            { std::os::windows::fs::symlink_dir(other.path(), &symlink_path) }
         };
-
-        // Skip if symlink creation fails (e.g. no privilege on Windows)
         if symlink_result.is_err() {
             return;
         }
-
-        // canonicalize resolves the symlink to `other`, which is outside `base`
         let canonical = std::fs::canonicalize(&symlink_path).unwrap();
         let canonical_base = std::fs::canonicalize(base.path()).unwrap();
         if !canonical.starts_with(&canonical_base) {
@@ -791,8 +769,6 @@ mod tests {
     fn sandbox_rejects_nonexistent_path() {
         let base = tempfile::tempdir().unwrap();
         let ghost = PathBuf::from("/this/absolutely/does/not/exist");
-
-        // canonicalize of a nonexistent path fails → sandbox_check returns Err
         assert!(sandbox_check(&ghost, base.path()).is_err());
     }
 
