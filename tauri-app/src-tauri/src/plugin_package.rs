@@ -340,7 +340,9 @@ mod tests {
             "description": "A test plugin",
             "entry": "index.html",
             "files": {
-                "windows": format!("{id}.dll")
+                "windows": format!("{id}.dll"),
+                "macos": format!("lib{id}.dylib"),
+                "linux": format!("lib{id}.so")
             },
             "assets": { "entry": "index.html" }
         });
@@ -349,10 +351,15 @@ mod tests {
         zip.write_all(serde_json::to_string(&manifest).unwrap().as_bytes())
             .unwrap();
 
-        let lib_name = format!("{id}.dll");
-        zip.start_file(&lib_name, zip::write::FileOptions::<()>::default())
+        // Include dummy libs for all platforms so validate() passes everywhere
+        zip.start_file(format!("{id}.dll"), zip::write::FileOptions::<()>::default())
             .unwrap();
         zip.write_all(b"dll_data").unwrap();
+        zip.start_file(format!("lib{id}.dylib"), zip::write::FileOptions::<()>::default())
+            .unwrap();
+        zip.write_all(b"dylib_data").unwrap();
+        zip.start_file(format!("lib{id}.so"), zip::write::FileOptions::<()>::default())
+            .unwrap();
 
         zip.start_file(
             "assets/index.html",
@@ -413,7 +420,11 @@ mod tests {
             "version": "1.0.0",
             "description": "bad",
             "entry": "index.html",
-            "files": { "windows": "has_spaces.dll" },
+            "files": {
+                "windows": "has_spaces.dll",
+                "macos": "libhas_spaces.dylib",
+                "linux": "libhas_spaces.so"
+            },
             "assets": { "entry": "index.html" }
         });
         zip.start_file("manifest.json", zip::write::FileOptions::<()>::default())
@@ -423,6 +434,11 @@ mod tests {
         zip.start_file("has_spaces.dll", zip::write::FileOptions::<()>::default())
             .unwrap();
         zip.write_all(b"dll").unwrap();
+        zip.start_file("libhas_spaces.dylib", zip::write::FileOptions::<()>::default())
+            .unwrap();
+        zip.write_all(b"dylib").unwrap();
+        zip.start_file("libhas_spaces.so", zip::write::FileOptions::<()>::default())
+            .unwrap();
         zip.start_file(
             "assets/index.html",
             zip::write::FileOptions::<()>::default(),
@@ -438,7 +454,6 @@ mod tests {
     #[test]
     fn test_install_zip_slip_rejected() {
         let dir = TempDir::new().unwrap();
-        // Create a ZIP with a path traversal entry
         let zip_path = dir.path().join("test.zip");
         let mut zip = zip::ZipWriter::new(std::fs::File::create(&zip_path).unwrap());
         let manifest = serde_json::json!({
@@ -447,7 +462,11 @@ mod tests {
             "version": "1.0.0",
             "description": "bad",
             "entry": "index.html",
-            "files": { "windows": "evil.dll" },
+            "files": {
+                "windows": "evil.dll",
+                "macos": "libevil.dylib",
+                "linux": "libevil.so"
+            },
             "assets": { "entry": "index.html" }
         });
         zip.start_file("manifest.json", zip::write::FileOptions::<()>::default())
@@ -457,6 +476,11 @@ mod tests {
         zip.start_file("evil.dll", zip::write::FileOptions::<()>::default())
             .unwrap();
         zip.write_all(b"dll").unwrap();
+        zip.start_file("libevil.dylib", zip::write::FileOptions::<()>::default())
+            .unwrap();
+        zip.write_all(b"dylib").unwrap();
+        zip.start_file("libevil.so", zip::write::FileOptions::<()>::default())
+            .unwrap();
         zip.start_file(
             "assets/index.html",
             zip::write::FileOptions::<()>::default(),
@@ -499,7 +523,11 @@ mod tests {
             "version": "1.0.0",
             "description": "bad",
             "entry": "index.html",
-            "files": { "windows": "../evil.dll" },
+            "files": {
+                "windows": "../evil.dll",
+                "macos": "lib../evil.dylib",
+                "linux": "lib../evil.so"
+            },
             "assets": { "entry": "index.html" }
         });
         zip.start_file("manifest.json", zip::write::FileOptions::<()>::default())
@@ -509,6 +537,11 @@ mod tests {
         zip.start_file("../evil.dll", zip::write::FileOptions::<()>::default())
             .unwrap();
         zip.write_all(b"dll").unwrap();
+        zip.start_file("lib../evil.dylib", zip::write::FileOptions::<()>::default())
+            .unwrap();
+        zip.write_all(b"dylib").unwrap();
+        zip.start_file("lib../evil.so", zip::write::FileOptions::<()>::default())
+            .unwrap();
         zip.start_file(
             "assets/index.html",
             zip::write::FileOptions::<()>::default(),
@@ -543,7 +576,11 @@ mod tests {
             "version": "1.0.0",
             "description": "bad",
             "entry": "index.html",
-            "files": { "windows": "foo..bar.dll" },
+            "files": {
+                "windows": "foo..bar.dll",
+                "macos": "libfoo..bar.dylib",
+                "linux": "libfoo..bar.so"
+            },
             "assets": { "entry": "index.html" }
         });
         zip.start_file("manifest.json", zip::write::FileOptions::<()>::default())
@@ -553,6 +590,11 @@ mod tests {
         zip.start_file("foo..bar.dll", zip::write::FileOptions::<()>::default())
             .unwrap();
         zip.write_all(b"dll").unwrap();
+        zip.start_file("libfoo..bar.dylib", zip::write::FileOptions::<()>::default())
+            .unwrap();
+        zip.write_all(b"dylib").unwrap();
+        zip.start_file("libfoo..bar.so", zip::write::FileOptions::<()>::default())
+            .unwrap();
         zip.start_file(
             "assets/index.html",
             zip::write::FileOptions::<()>::default(),
