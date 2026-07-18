@@ -25,7 +25,6 @@ impl DbDocData {
     }
 }
 
-
 /// 数据存储管理器
 pub struct DbDocStorage {
     storage: PluginStorage,
@@ -98,7 +97,8 @@ impl DbDocStorage {
 
         // 返回时解密密码
         if let Some(ref encrypted) = config.password {
-            config.password = self.decrypt_password(encrypted)
+            config.password = self
+                .decrypt_password(encrypted)
                 .inspect_err(|e| tracing::warn!("解密连接密码失败: {e}"))
                 .ok();
         }

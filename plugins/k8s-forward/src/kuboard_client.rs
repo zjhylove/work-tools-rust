@@ -98,11 +98,7 @@ impl KuboardClient {
 
     /// 获取 SSO req_id
     async fn fetch_req_id(&self) -> Result<String> {
-        let resp = self
-            .client
-            .get(self.url("/kuboard/cluster"))
-            .send()
-            .await?;
+        let resp = self.client.get(self.url("/kuboard/cluster")).send().await?;
         let mut dummy = None;
         let resp =
             Self::follow_get_redirects(&self.client, &self.base_url, resp, &mut dummy).await?;

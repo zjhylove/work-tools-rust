@@ -362,7 +362,8 @@ mod tests {
     }
     #[test]
     fn test_count_diff_with_changes() {
-        let stats = TextDiff::count_diff_lines("line1\nline2\nline3", "line1\nchanged\nline3\nline4");
+        let stats =
+            TextDiff::count_diff_lines("line1\nline2\nline3", "line1\nchanged\nline3\nline4");
         // Verify some changes are detected (exact counts depend on diff algorithm)
         assert!(stats.additions + stats.deletions + stats.modifications > 0);
         // Identical texts would give all zeros; this should not be identical

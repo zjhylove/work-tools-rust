@@ -23,10 +23,10 @@
 
 use crate::models::{ForwardRule, ReconnectInfo, RuleType, SshConnectionState};
 use anyhow::{anyhow, Result};
+use parking_lot::Mutex;
 use ssh2::Session;
 use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};
-use parking_lot::Mutex;
 use std::sync::Arc;
 use std::thread;
 use std::time::Duration;
@@ -143,10 +143,12 @@ impl SshService {
 
     pub fn get_reconnect_info(&self) -> Option<ReconnectInfo> {
         self.reconnect_state.lock().as_ref().map(|rs| {
-            let duration_until_retry = rs.next_retry_at
+            let duration_until_retry = rs
+                .next_retry_at
                 .checked_duration_since(std::time::Instant::now())
                 .unwrap_or(std::time::Duration::from_secs(0));
-            let next_retry_time = std::time::SystemTime::now() + std::time::Duration::from_secs(duration_until_retry.as_secs());
+            let next_retry_time = std::time::SystemTime::now()
+                + std::time::Duration::from_secs(duration_until_retry.as_secs());
             ReconnectInfo {
                 retry_count: rs.retry_count,
                 max_retries: rs.max_retries,
@@ -507,7 +509,11 @@ impl SshService {
                     }
                 }
 
-                tracing::info!("SSH 重连尝试 {}/10，{} 秒后执行...", attempt, delay.as_secs());
+                tracing::info!(
+                    "SSH 重连尝试 {}/10，{} 秒后执行...",
+                    attempt,
+                    delay.as_secs()
+                );
                 let sleep_until = std::time::Instant::now() + delay;
                 while std::time::Instant::now() < sleep_until {
                     if *stop.lock() {
@@ -604,13 +610,16 @@ impl SshService {
 /// TCP 连接被防火墙/NAT 静默丢弃后仍返回 true。
 /// 此函数短暂切换到阻塞模式尝试创建 channel，能真正检测 TCP 层断连。
 fn probe_connection(session: &Option<Arc<Mutex<Session>>>) -> bool {
-    session.as_ref().map(|s| {
-        let session = s.lock();
-        session.set_blocking(true);
-        session.set_timeout(5000);
-        let result = session.channel_session();
-        session.set_blocking(false);
-        session.set_timeout(0);
-        result.is_ok()
-    }).unwrap_or(false)
+    session
+        .as_ref()
+        .map(|s| {
+            let session = s.lock();
+            session.set_blocking(true);
+            session.set_timeout(5000);
+            let result = session.channel_session();
+            session.set_blocking(false);
+            session.set_timeout(0);
+            result.is_ok()
+        })
+        .unwrap_or(false)
 }

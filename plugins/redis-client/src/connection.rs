@@ -15,7 +15,10 @@ pub enum SshAuth {
     #[serde(rename = "password")]
     Password { password_obfuscated: String },
     #[serde(rename = "key")]
-    KeyPath { key_path: String, passphrase_obfuscated: Option<String> },
+    KeyPath {
+        key_path: String,
+        passphrase_obfuscated: Option<String>,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -64,11 +67,16 @@ impl SshConfig {
     /// Obfuscate plaintext passwords so stored config can be deobfuscated on use.
     pub fn normalize(&mut self) {
         match &mut self.auth {
-            SshAuth::Password { password_obfuscated } => {
+            SshAuth::Password {
+                password_obfuscated,
+            } => {
                 let p = std::mem::take(password_obfuscated);
                 *password_obfuscated = crate::hex::obfuscate(&p);
             }
-            SshAuth::KeyPath { passphrase_obfuscated, .. } => {
+            SshAuth::KeyPath {
+                passphrase_obfuscated,
+                ..
+            } => {
                 if let Some(p) = passphrase_obfuscated.take() {
                     *passphrase_obfuscated = Some(crate::hex::obfuscate(&p));
                 }

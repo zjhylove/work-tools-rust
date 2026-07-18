@@ -117,10 +117,7 @@ impl PluginManifest {
             } else {
                 "unknown"
             };
-            anyhow::bail!(
-                "manifest.files.{} 未配置当前平台的动态库文件名",
-                platform
-            );
+            anyhow::bail!("manifest.files.{} 未配置当前平台的动态库文件名", platform);
         }
         Ok(())
     }
@@ -196,21 +193,14 @@ impl PluginPackage {
 
             // enclosed_name() 拒绝以 /.. 或 .. 开头的条目
             let Some(enclosed) = entry.enclosed_name() else {
-                anyhow::bail!(
-                    "插件包包含非法路径条目 (ZIP Slip): {}",
-                    entry.name()
-                );
+                anyhow::bail!("插件包包含非法路径条目 (ZIP Slip): {}", entry.name());
             };
 
             let target = canonical_dir.join(enclosed);
 
             // 验证解压目标仍在插件目录内
             if !target.starts_with(&canonical_dir) {
-                anyhow::bail!(
-                    "插件包包含路径穿越条目: {} -> {:?}",
-                    entry.name(),
-                    target
-                );
+                anyhow::bail!("插件包包含路径穿越条目: {} -> {:?}", entry.name(), target);
             }
 
             if entry.is_dir() {
@@ -354,18 +344,26 @@ mod tests {
             },
             "assets": { "entry": "index.html" }
         });
-        zip.start_file("manifest.json", zip::write::FileOptions::<()>::default()).unwrap();
-        zip.write_all(serde_json::to_string(&manifest).unwrap().as_bytes()).unwrap();
+        zip.start_file("manifest.json", zip::write::FileOptions::<()>::default())
+            .unwrap();
+        zip.write_all(serde_json::to_string(&manifest).unwrap().as_bytes())
+            .unwrap();
 
         let lib_name = format!("{id}.dll");
-        zip.start_file(&lib_name, zip::write::FileOptions::<()>::default()).unwrap();
+        zip.start_file(&lib_name, zip::write::FileOptions::<()>::default())
+            .unwrap();
         zip.write_all(b"dll_data").unwrap();
 
-        zip.start_file("assets/index.html", zip::write::FileOptions::<()>::default()).unwrap();
+        zip.start_file(
+            "assets/index.html",
+            zip::write::FileOptions::<()>::default(),
+        )
+        .unwrap();
         zip.write_all(b"<html></html>").unwrap();
 
         if let Some((name, data)) = extra_entry {
-            zip.start_file(name, zip::write::FileOptions::<()>::default()).unwrap();
+            zip.start_file(name, zip::write::FileOptions::<()>::default())
+                .unwrap();
             zip.write_all(data).unwrap();
         }
 
@@ -386,7 +384,8 @@ mod tests {
         let dir = TempDir::new().unwrap();
         let zip_path = dir.path().join("test.zip");
         let mut zip = zip::ZipWriter::new(std::fs::File::create(&zip_path).unwrap());
-        zip.start_file("dummy.txt", zip::write::FileOptions::<()>::default()).unwrap();
+        zip.start_file("dummy.txt", zip::write::FileOptions::<()>::default())
+            .unwrap();
         zip.write_all(b"hello").unwrap();
         zip.finish().unwrap();
         let data = std::fs::read(&zip_path).unwrap();
@@ -417,11 +416,18 @@ mod tests {
             "files": { "windows": "has_spaces.dll" },
             "assets": { "entry": "index.html" }
         });
-        zip.start_file("manifest.json", zip::write::FileOptions::<()>::default()).unwrap();
-        zip.write_all(serde_json::to_string(&manifest).unwrap().as_bytes()).unwrap();
-        zip.start_file("has_spaces.dll", zip::write::FileOptions::<()>::default()).unwrap();
+        zip.start_file("manifest.json", zip::write::FileOptions::<()>::default())
+            .unwrap();
+        zip.write_all(serde_json::to_string(&manifest).unwrap().as_bytes())
+            .unwrap();
+        zip.start_file("has_spaces.dll", zip::write::FileOptions::<()>::default())
+            .unwrap();
         zip.write_all(b"dll").unwrap();
-        zip.start_file("assets/index.html", zip::write::FileOptions::<()>::default()).unwrap();
+        zip.start_file(
+            "assets/index.html",
+            zip::write::FileOptions::<()>::default(),
+        )
+        .unwrap();
         zip.write_all(b"<html></html>").unwrap();
         zip.finish().unwrap();
         let data = std::fs::read(&zip_path).unwrap();
@@ -444,14 +450,25 @@ mod tests {
             "files": { "windows": "evil.dll" },
             "assets": { "entry": "index.html" }
         });
-        zip.start_file("manifest.json", zip::write::FileOptions::<()>::default()).unwrap();
-        zip.write_all(serde_json::to_string(&manifest).unwrap().as_bytes()).unwrap();
-        zip.start_file("evil.dll", zip::write::FileOptions::<()>::default()).unwrap();
+        zip.start_file("manifest.json", zip::write::FileOptions::<()>::default())
+            .unwrap();
+        zip.write_all(serde_json::to_string(&manifest).unwrap().as_bytes())
+            .unwrap();
+        zip.start_file("evil.dll", zip::write::FileOptions::<()>::default())
+            .unwrap();
         zip.write_all(b"dll").unwrap();
-        zip.start_file("assets/index.html", zip::write::FileOptions::<()>::default()).unwrap();
+        zip.start_file(
+            "assets/index.html",
+            zip::write::FileOptions::<()>::default(),
+        )
+        .unwrap();
         zip.write_all(b"<html></html>").unwrap();
         // ZIP Slip entry: try to write outside plugin dir
-        zip.start_file("../../etc/crontab", zip::write::FileOptions::<()>::default()).unwrap();
+        zip.start_file(
+            "../../etc/crontab",
+            zip::write::FileOptions::<()>::default(),
+        )
+        .unwrap();
         zip.write_all(b"malicious").unwrap();
         zip.finish().unwrap();
 
@@ -485,18 +502,28 @@ mod tests {
             "files": { "windows": "../evil.dll" },
             "assets": { "entry": "index.html" }
         });
-        zip.start_file("manifest.json", zip::write::FileOptions::<()>::default()).unwrap();
-        zip.write_all(serde_json::to_string(&manifest).unwrap().as_bytes()).unwrap();
-        zip.start_file("../evil.dll", zip::write::FileOptions::<()>::default()).unwrap();
+        zip.start_file("manifest.json", zip::write::FileOptions::<()>::default())
+            .unwrap();
+        zip.write_all(serde_json::to_string(&manifest).unwrap().as_bytes())
+            .unwrap();
+        zip.start_file("../evil.dll", zip::write::FileOptions::<()>::default())
+            .unwrap();
         zip.write_all(b"dll").unwrap();
-        zip.start_file("assets/index.html", zip::write::FileOptions::<()>::default()).unwrap();
+        zip.start_file(
+            "assets/index.html",
+            zip::write::FileOptions::<()>::default(),
+        )
+        .unwrap();
         zip.write_all(b"<html></html>").unwrap();
         zip.finish().unwrap();
 
         let data = std::fs::read(&zip_path).unwrap();
         let pkg = PluginPackage::from_zip_bytes(&data).unwrap();
         let result = pkg.validate();
-        assert!(result.is_err(), "validate() should reject path traversal ID '../evil'");
+        assert!(
+            result.is_err(),
+            "validate() should reject path traversal ID '../evil'"
+        );
         let err_msg = result.unwrap_err().to_string();
         assert!(
             err_msg.contains("小写字母") || err_msg.contains("非法") || err_msg.contains("连字符"),
@@ -519,11 +546,18 @@ mod tests {
             "files": { "windows": "foo..bar.dll" },
             "assets": { "entry": "index.html" }
         });
-        zip.start_file("manifest.json", zip::write::FileOptions::<()>::default()).unwrap();
-        zip.write_all(serde_json::to_string(&manifest).unwrap().as_bytes()).unwrap();
-        zip.start_file("foo..bar.dll", zip::write::FileOptions::<()>::default()).unwrap();
+        zip.start_file("manifest.json", zip::write::FileOptions::<()>::default())
+            .unwrap();
+        zip.write_all(serde_json::to_string(&manifest).unwrap().as_bytes())
+            .unwrap();
+        zip.start_file("foo..bar.dll", zip::write::FileOptions::<()>::default())
+            .unwrap();
         zip.write_all(b"dll").unwrap();
-        zip.start_file("assets/index.html", zip::write::FileOptions::<()>::default()).unwrap();
+        zip.start_file(
+            "assets/index.html",
+            zip::write::FileOptions::<()>::default(),
+        )
+        .unwrap();
         zip.write_all(b"<html></html>").unwrap();
         zip.finish().unwrap();
 
@@ -577,7 +611,10 @@ mod tests {
                 macos: None,
                 linux: None,
             },
-            assets: AssetsConfig { entry: "index.html".into(), icon: None },
+            assets: AssetsConfig {
+                entry: "index.html".into(),
+                icon: None,
+            },
             permissions: Vec::new(),
             screenshots: Vec::new(),
         };
@@ -602,7 +639,10 @@ mod tests {
                 macos: None,
                 linux: None,
             },
-            assets: AssetsConfig { entry: "index.html".into(), icon: None },
+            assets: AssetsConfig {
+                entry: "index.html".into(),
+                icon: None,
+            },
             permissions: Vec::new(),
             screenshots: Vec::new(),
         };

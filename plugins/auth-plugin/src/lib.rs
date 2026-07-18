@@ -291,6 +291,8 @@ mod tests {
         // Base32 encoded 20 bytes = 32 chars with padding
         assert_eq!(secret.len(), 32);
         // Base32 uses RFC 4648 alphabet (A-Z, 2-7, =)
-        assert!(secret.chars().all(|c| c.is_ascii_alphanumeric() || c == '='));
+        assert!(secret
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '='));
     }
 }

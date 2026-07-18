@@ -31,9 +31,9 @@
 //! - `block_on`: 同步等待异步操作完成
 
 use anyhow::Result;
+use parking_lot::Mutex;
 use serde_json::{json, Value};
 use std::collections::HashMap;
-use parking_lot::Mutex;
 use tokio::runtime::Runtime;
 use worktools_plugin_api::storage::PluginStorage;
 use worktools_plugin_api::*;
@@ -100,7 +100,12 @@ impl K8sForwardPlugin {
     // ── SSH 管理 ──
 
     /// 恢复指定连接的转发规则到 SSH 服务
-    fn restore_forwards(&self, ssh: &mut SshService, connection_id: &str, data: &mut PluginData) -> usize {
+    fn restore_forwards(
+        &self,
+        ssh: &mut SshService,
+        connection_id: &str,
+        data: &mut PluginData,
+    ) -> usize {
         let mut restored = 0;
         for rule in data.forward_rules.iter_mut() {
             if rule.ssh_connection_id != connection_id {
@@ -129,7 +134,9 @@ impl K8sForwardPlugin {
         let connection_id = get_str(params, "connection_id")?;
 
         let data = self.load_data()?;
-        let conn = data.ssh_connections.iter()
+        let conn = data
+            .ssh_connections
+            .iter()
             .find(|c| c.id == connection_id)
             .ok_or_else(|| anyhow::anyhow!("SSH 连接配置不存在"))?;
 
@@ -168,7 +175,8 @@ impl K8sForwardPlugin {
     fn handle_ssh_reconnect(&self, params: &Value) -> Result<Value> {
         let connection_id = get_str(params, "connection_id")?;
         let mut connections = self.ssh_connections.lock();
-        let ssh = connections.get_mut(connection_id)
+        let ssh = connections
+            .get_mut(connection_id)
             .ok_or_else(|| anyhow::anyhow!("SSH 连接不存在"))?;
         if ssh.is_connected() {
             return Err(anyhow::anyhow!("SSH 已连接，无需重连"));
@@ -185,7 +193,9 @@ impl K8sForwardPlugin {
     fn handle_ssh_status(&self, params: &Value) -> Result<Value> {
         let connection_id = get_str(params, "connection_id")?;
         let data = self.load_data()?;
-        let conn = data.ssh_connections.iter()
+        let conn = data
+            .ssh_connections
+            .iter()
             .find(|c| c.id == connection_id)
             .ok_or_else(|| anyhow::anyhow!("SSH 连接配置不存在"))?;
 
@@ -217,7 +227,11 @@ impl K8sForwardPlugin {
                 self.save_data(&data_mut)?;
             }
             ssh.start_heartbeat();
-            tracing::info!("SSH [{}] 重连成功，已恢复 {} 条转发规则", conn.name, restored);
+            tracing::info!(
+                "SSH [{}] 重连成功，已恢复 {} 条转发规则",
+                conn.name,
+                restored
+            );
         }
 
         let state = ssh.connection_state();
@@ -265,7 +279,9 @@ impl K8sForwardPlugin {
     fn handle_ssh_update_connection(&self, params: &Value) -> Result<Value> {
         let id = get_str(params, "id")?;
         let mut data = self.load_data()?;
-        let conn = data.ssh_connections.iter_mut()
+        let conn = data
+            .ssh_connections
+            .iter_mut()
             .find(|c| c.id == id)
             .ok_or_else(|| anyhow::anyhow!("连接不存在"))?;
 
@@ -298,7 +314,8 @@ impl K8sForwardPlugin {
         data.ssh_connections.retain(|c| c.id != id);
         data.ssh = None;
 
-        let removed_rules: Vec<ForwardRule> = data.forward_rules
+        let removed_rules: Vec<ForwardRule> = data
+            .forward_rules
             .iter()
             .filter(|r| r.ssh_connection_id == id)
             .cloned()
@@ -325,21 +342,28 @@ impl K8sForwardPlugin {
         let data = self.load_data()?;
         let connections = self.ssh_connections.lock();
 
-        let list: Vec<Value> = data.ssh_connections.iter().map(|conn| {
-            let ssh = connections.get(&conn.id);
-            let state = ssh.map(|s| s.connection_state()).unwrap_or(SshConnectionState::Disconnected);
-            let connected = state == SshConnectionState::Connected;
-            let reconnect_info = ssh.and_then(|s| s.get_reconnect_info());
-            serde_json::to_value(SshStatus {
-                connected,
-                host: Some(conn.host.clone()),
-                port: Some(conn.port),
-                status: state,
-                reconnect_info,
-                connection_id: Some(conn.id.clone()),
-                connection_name: Some(conn.name.clone()),
-            }).unwrap_or(json!({}))
-        }).collect();
+        let list: Vec<Value> = data
+            .ssh_connections
+            .iter()
+            .map(|conn| {
+                let ssh = connections.get(&conn.id);
+                let state = ssh
+                    .map(|s| s.connection_state())
+                    .unwrap_or(SshConnectionState::Disconnected);
+                let connected = state == SshConnectionState::Connected;
+                let reconnect_info = ssh.and_then(|s| s.get_reconnect_info());
+                serde_json::to_value(SshStatus {
+                    connected,
+                    host: Some(conn.host.clone()),
+                    port: Some(conn.port),
+                    status: state,
+                    reconnect_info,
+                    connection_id: Some(conn.id.clone()),
+                    connection_name: Some(conn.name.clone()),
+                })
+                .unwrap_or(json!({}))
+            })
+            .collect();
 
         Ok(json!(list))
     }
@@ -431,7 +455,8 @@ impl K8sForwardPlugin {
 
         // 创建 SSH 隧道
         let mut connections = self.ssh_connections.lock();
-        let ssh = connections.get_mut(connection_id)
+        let ssh = connections
+            .get_mut(connection_id)
             .ok_or_else(|| anyhow::anyhow!("SSH 连接不存在"))?;
         if !ssh.is_connected() {
             return Err(anyhow::anyhow!("SSH 未连接，请先连接所选的 SSH 服务器"));
@@ -444,7 +469,12 @@ impl K8sForwardPlugin {
         let rule_id = uuid::Uuid::new_v4().to_string();
 
         if let Some(ref p) = *self.proxy.lock() {
-            p.register(&domain, &format!("127.0.0.1:{}", local_port), &rule_id, false);
+            p.register(
+                &domain,
+                &format!("127.0.0.1:{}", local_port),
+                &rule_id,
+                false,
+            );
             p.register(&addr, &format!("127.0.0.1:{}", local_port), &rule_id, true);
         }
 
@@ -801,7 +831,9 @@ impl K8sForwardPlugin {
 
         // 持久化：更新转发规则中的 pod_name
         let mut data = self.load_data()?;
-        let rule = data.forward_rules.iter_mut()
+        let rule = data
+            .forward_rules
+            .iter_mut()
             .find(|r| r.id == rule_id && r.rule_type == RuleType::K8s)
             .ok_or_else(|| anyhow::anyhow!("未找到对应的 K8s 转发规则"))?;
         rule.pod_name = Some(domain.to_string());

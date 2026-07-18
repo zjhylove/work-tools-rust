@@ -45,10 +45,10 @@ fn mock_collection_value(
     // 检查元素类型是否匹配某个嵌套节点
     let child_node = all_nodes.iter().find(|n| {
         let node_short = short_name(&n.node_name);
-        node_short == element_short ||
-        n.node_name.ends_with(&format!(".{}", element_short)) ||
-        n.node_name.ends_with(&format!("/{}", element_short)) ||
-        (info.element_type.contains('.') && short_name(&info.element_type) == node_short)
+        node_short == element_short
+            || n.node_name.ends_with(&format!(".{}", element_short))
+            || n.node_name.ends_with(&format!("/{}", element_short))
+            || (info.element_type.contains('.') && short_name(&info.element_type) == node_short)
     });
 
     if let Some(child) = child_node {
@@ -57,12 +57,7 @@ fn mock_collection_value(
         let obj_value1 = generate_node_mock(child, all_nodes, item_indent, true);
         let obj_value2 = generate_node_mock(child, all_nodes, item_indent, true);
 
-        format!(
-            "[\n{},\n{}\n{}]",
-            obj_value1,
-            obj_value2,
-            item_indent
-        )
+        format!("[\n{},\n{}\n{}]", obj_value1, obj_value2, item_indent)
     } else {
         // 基础类型值（单元素数组）
         format!("[{}]", mock_literal(&info.element_type, "\"\""))
@@ -173,7 +168,12 @@ fn short_name(name: &str) -> &str {
 ///
 /// `block_mode`: false = 内联模式，左花括号紧跟 ": " 不含缩进（用于对象字段值）;
 ///               true  = 块级模式，左花括号有独立缩进（用于数组元素等多行上下文）
-fn generate_node_mock(node: &NodeInfo, all_nodes: &[NodeInfo], indent: &str, block_mode: bool) -> String {
+fn generate_node_mock(
+    node: &NodeInfo,
+    all_nodes: &[NodeInfo],
+    indent: &str,
+    block_mode: bool,
+) -> String {
     let inner_indent = format!("  {}", indent);
     let mut lines = Vec::new();
     lines.push(if block_mode {

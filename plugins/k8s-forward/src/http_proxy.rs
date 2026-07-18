@@ -26,8 +26,8 @@ use hyper::{
     body::Incoming, server::conn::http1, service::service_fn, Request, Response, StatusCode,
 };
 use hyper_util::rt::TokioIo;
-use std::collections::HashMap;
 use parking_lot::Mutex;
+use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::net::TcpListener;
 use tokio::sync::oneshot;
@@ -82,9 +82,7 @@ impl HttpProxySvc {
     /// 注销单个域名映射
     pub fn unregister(&self, domain: &str) {
         self.mappings.lock().remove(domain);
-        self.mapping_list
-            .lock()
-            .retain(|m| m.domain != domain);
+        self.mapping_list.lock().retain(|m| m.domain != domain);
     }
 
     /// 按规则 ID 注销所有相关映射

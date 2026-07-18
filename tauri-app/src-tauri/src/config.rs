@@ -71,7 +71,10 @@ mod tests {
     #[test]
     fn load_plugin_config_rejects_path_traversal_id() {
         let result = load_plugin_config("../../etc/passwd");
-        assert!(result.is_err(), "load_plugin_config should reject '../../etc/passwd'");
+        assert!(
+            result.is_err(),
+            "load_plugin_config should reject '../../etc/passwd'"
+        );
         let err_msg = result.unwrap_err().to_string();
         assert!(
             err_msg.contains("非法插件 ID") || err_msg.contains("非法"),
@@ -96,7 +99,10 @@ mod tests {
     fn save_plugin_config_rejects_path_traversal_id() {
         let config = serde_json::json!({"key": "value"});
         let result = save_plugin_config("../../etc/passwd", &config);
-        assert!(result.is_err(), "save_plugin_config should reject '../../etc/passwd'");
+        assert!(
+            result.is_err(),
+            "save_plugin_config should reject '../../etc/passwd'"
+        );
         let err_msg = result.unwrap_err().to_string();
         assert!(
             err_msg.contains("非法插件 ID") || err_msg.contains("非法"),
@@ -124,7 +130,11 @@ mod tests {
         // "valid-id" passes validation but the file doesn't exist,
         // so it should succeed with empty JSON object (not an error).
         let result = load_plugin_config("valid-id");
-        assert!(result.is_ok(), "Valid ID with no config file should return Ok, got: {:?}", result.err());
+        assert!(
+            result.is_ok(),
+            "Valid ID with no config file should return Ok, got: {:?}",
+            result.err()
+        );
         assert_eq!(result.unwrap(), serde_json::json!({}));
     }
 

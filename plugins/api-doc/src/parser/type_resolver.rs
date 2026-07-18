@@ -331,7 +331,11 @@ pub fn extract_dto_fields(
 
         // 构建显示的类型名称
         let display_type = if let Some(ref info) = collection_info {
-            format!("{}<{}>", info.container, short_type_name(&info.element_type))
+            format!(
+                "{}<{}>",
+                info.container,
+                short_type_name(&info.element_type)
+            )
         } else {
             short_type_name(&resolved_type).to_string()
         };

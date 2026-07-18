@@ -22,9 +22,9 @@
 
 use anyhow::Result;
 use chrono::Utc;
+use parking_lot::Mutex;
 use serde::Serialize;
 use std::collections::VecDeque;
-use parking_lot::Mutex;
 use tracing::Subscriber;
 use tracing_subscriber::layer::{Context, Layer};
 use tracing_subscriber::prelude::*;

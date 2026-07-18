@@ -14,16 +14,13 @@ use std::path::Path;
 /// message suitable for returning to the caller.
 #[allow(dead_code)]
 pub fn sandbox_check(target: &Path, base_dir: &Path) -> Result<(), String> {
-    let canonical_target = std::fs::canonicalize(target)
-        .map_err(|e| format!("解析路径失败: {}", e))?;
-    let canonical_base = std::fs::canonicalize(base_dir)
-        .map_err(|e| format!("解析应用目录失败: {}", e))?;
+    let canonical_target =
+        std::fs::canonicalize(target).map_err(|e| format!("解析路径失败: {}", e))?;
+    let canonical_base =
+        std::fs::canonicalize(base_dir).map_err(|e| format!("解析应用目录失败: {}", e))?;
 
     if !canonical_target.starts_with(&canonical_base) {
-        return Err(format!(
-            "写入路径超出应用目录范围: {:?}",
-            canonical_target
-        ));
+        return Err(format!("写入路径超出应用目录范围: {:?}", canonical_target));
     }
     Ok(())
 }

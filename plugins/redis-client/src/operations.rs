@@ -1,4 +1,4 @@
-use redis::{Connection, Commands};
+use redis::{Commands, Connection};
 use serde_json::Value;
 use std::collections::HashMap;
 
@@ -41,11 +41,14 @@ pub fn scan_key_infos(
     for raw_key in keys {
         let display_key = key_to_display(raw_key);
         let key_type: String = redis::from_redis_value(
-            results.get(i).unwrap_or(&redis::Value::BulkString("unknown".into()))
-        ).unwrap_or_else(|_| "unknown".to_string());
-        let ttl: i64 = redis::from_redis_value(
-            results.get(i + 1).unwrap_or(&redis::Value::Int(-2))
-        ).unwrap_or(-2);
+            results
+                .get(i)
+                .unwrap_or(&redis::Value::BulkString("unknown".into())),
+        )
+        .unwrap_or_else(|_| "unknown".to_string());
+        let ttl: i64 =
+            redis::from_redis_value(results.get(i + 1).unwrap_or(&redis::Value::Int(-2)))
+                .unwrap_or(-2);
         i += 2;
         key_infos.push(serde_json::json!({
             "key": display_key,

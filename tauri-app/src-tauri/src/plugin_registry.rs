@@ -84,7 +84,6 @@ impl PluginRegistry {
             .map_err(|e| anyhow::anyhow!("注册表加载任务失败: {}", e))?
     }
 
-
     /// 使用指定路径创建注册表
     ///
     /// 如果文件已存在，从中加载；否则初始化为空的 HashMap。
@@ -334,7 +333,9 @@ mod tests {
             registry_file: registry_file.clone(),
             installed: HashMap::new(),
         };
-        registry.register(make_test_plugin("persist-test", temp_dir.path())).unwrap();
+        registry
+            .register(make_test_plugin("persist-test", temp_dir.path()))
+            .unwrap();
 
         // File should exist
         assert!(registry_file.exists());
@@ -390,9 +391,15 @@ mod tests {
             registry_file,
             installed: HashMap::new(),
         };
-        registry.register(make_test_plugin("a", temp_dir.path())).unwrap();
-        registry.register(make_test_plugin("b", temp_dir.path())).unwrap();
-        registry.register(make_test_plugin("c", temp_dir.path())).unwrap();
+        registry
+            .register(make_test_plugin("a", temp_dir.path()))
+            .unwrap();
+        registry
+            .register(make_test_plugin("b", temp_dir.path()))
+            .unwrap();
+        registry
+            .register(make_test_plugin("c", temp_dir.path()))
+            .unwrap();
 
         let all = registry.get_installed();
         assert_eq!(all.len(), 3);
@@ -411,7 +418,9 @@ mod tests {
             registry_file,
             installed: HashMap::new(),
         };
-        registry.register(make_test_plugin("toggle-test", temp_dir.path())).unwrap();
+        registry
+            .register(make_test_plugin("toggle-test", temp_dir.path()))
+            .unwrap();
         assert!(registry.is_enabled("toggle-test"));
 
         registry.set_enabled("toggle-test", false).unwrap();
@@ -464,7 +473,9 @@ mod tests {
         registry.register(good_plugin).unwrap();
 
         // Plugin with missing files
-        registry.register(make_test_plugin("bad", temp_dir.path())).unwrap();
+        registry
+            .register(make_test_plugin("bad", temp_dir.path()))
+            .unwrap();
 
         assert_eq!(registry.installed.len(), 2);
         registry.verify_installations().unwrap();
@@ -521,7 +532,9 @@ mod tests {
         });
         std::fs::write(&registry_file, serde_json::to_string(&data).unwrap()).unwrap();
 
-        let registry = PluginRegistry::with_path_async(registry_file).await.unwrap();
+        let registry = PluginRegistry::with_path_async(registry_file)
+            .await
+            .unwrap();
         assert!(registry.is_installed("beta"));
         assert_eq!(registry.get("beta").unwrap().version, "3.0.0");
         assert!(!registry.is_enabled("beta"));
@@ -532,7 +545,9 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let registry_file = temp_dir.path().join("nonexistent-async.json");
 
-        let registry = PluginRegistry::with_path_async(registry_file).await.unwrap();
+        let registry = PluginRegistry::with_path_async(registry_file)
+            .await
+            .unwrap();
         assert!(registry.get_installed().is_empty());
     }
 
@@ -565,7 +580,9 @@ mod tests {
             installed: HashMap::new(),
         };
 
-        registry.register(make_test_plugin("to-remove", temp_dir.path())).unwrap();
+        registry
+            .register(make_test_plugin("to-remove", temp_dir.path()))
+            .unwrap();
         registry.unregister_async("to-remove").await.unwrap();
 
         // Verify persistence: reload from file

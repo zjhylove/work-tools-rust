@@ -27,9 +27,9 @@ use crate::plugin_package::{PluginManifest, PluginPackage};
 use crate::plugin_registry::{InstalledPlugin, PluginRegistry};
 use serde::Deserialize;
 use serde_json::Value;
-use tokio::fs as tfs;
 use std::sync::Arc;
 use tauri::{Manager, State};
+use tokio::fs as tfs;
 
 /// 校验插件 ID 格式：只允许小写字母、数字和连字符。
 ///
@@ -144,13 +144,12 @@ pub async fn import_plugin_package(
     tracing::info!(file_path = %file_path, "开始导入插件包");
 
     let fp = file_path.clone();
-    let pkg = tokio::task::spawn_blocking(move || {
-        PluginPackage::from_zip(std::path::Path::new(&fp))
-    })
-    .await
-    .map_err(|e| format!("插件包加载任务失败: {}", e))?
-    .inspect_err(|e| tracing::error!(file_path = %file_path, "加载插件包失败: {}", e))
-    .map_err(|e| format!("加载插件包失败: {}", e))?;
+    let pkg =
+        tokio::task::spawn_blocking(move || PluginPackage::from_zip(std::path::Path::new(&fp)))
+            .await
+            .map_err(|e| format!("插件包加载任务失败: {}", e))?
+            .inspect_err(|e| tracing::error!(file_path = %file_path, "加载插件包失败: {}", e))
+            .map_err(|e| format!("加载插件包失败: {}", e))?;
 
     // 2. 验证插件包完整性
     pkg.validate()
@@ -307,9 +306,7 @@ pub async fn uninstall_plugin(
                 if metadata.is_dir() {
                     let manifest_path = path.join("manifest.json");
                     if let Ok(content) = tfs::read_to_string(&manifest_path).await {
-                        if let Ok(manifest) =
-                            serde_json::from_str::<serde_json::Value>(&content)
-                        {
+                        if let Ok(manifest) = serde_json::from_str::<serde_json::Value>(&content) {
                             // 检查 manifest 中的 id 是否匹配目标插件
                             if manifest
                                 .get("id")
@@ -445,17 +442,13 @@ pub async fn write_file(path: String, content: String) -> Result<(), String> {
     let canonical_path = tfs::canonicalize(std::path::Path::new(&path))
         .await
         .map_err(|e| format!("解析路径失败: {}", e))?;
-    let base = crate::paths::worktools_base()
-        .map_err(|e| format!("获取应用目录失败: {}", e))?;
+    let base = crate::paths::worktools_base().map_err(|e| format!("获取应用目录失败: {}", e))?;
     let canonical_base = tfs::canonicalize(&base)
         .await
         .map_err(|e| format!("解析应用目录失败: {}", e))?;
 
     if !canonical_path.starts_with(&canonical_base) {
-        return Err(format!(
-            "写入路径超出应用目录范围: {:?}",
-            canonical_path
-        ));
+        return Err(format!("写入路径超出应用目录范围: {:?}", canonical_path));
     }
 
     tfs::write(&canonical_path, &content)
@@ -505,11 +498,7 @@ pub async fn open_file_dialog(
             let name = filter["name"].as_str().unwrap_or("Files");
             let extensions: Vec<&str> = filter["extensions"]
                 .as_array()
-                .map(|arr| {
-                    arr.iter()
-                        .filter_map(|v| v.as_str())
-                        .collect()
-                })
+                .map(|arr| arr.iter().filter_map(|v| v.as_str()).collect())
                 .unwrap_or_default();
             if !extensions.is_empty() {
                 builder = builder.add_filter(name, &extensions);
@@ -617,8 +606,8 @@ pub async fn set_window_theme(theme: String, app: tauri::AppHandle) -> Result<()
         #[cfg(target_os = "macos")]
         {
             let color = match theme.as_str() {
-                "dark" => tauri::window::Color(26, 27, 30, 255),   // matches --bg-primary: #1a1b1e
-                _ => tauri::window::Color(248, 249, 250, 255),      // matches --bg-secondary: #f8f9fa
+                "dark" => tauri::window::Color(26, 27, 30, 255), // matches --bg-primary: #1a1b1e
+                _ => tauri::window::Color(248, 249, 250, 255),   // matches --bg-secondary: #f8f9fa
             };
             w.set_background_color(Some(color))
                 .map_err(|e| e.to_string())?;
@@ -626,7 +615,6 @@ pub async fn set_window_theme(theme: String, app: tauri::AppHandle) -> Result<()
     }
     Ok(())
 }
-
 
 /// 注册插件到注册表并增量加载。
 ///
@@ -677,8 +665,8 @@ async fn register_and_load_plugin(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::path::PathBuf;
     use parking_lot::Mutex;
+    use std::path::PathBuf;
 
     // Serialization lock for tests that share global LOG_RING state.
     // Prevents parallel test interference.
@@ -781,9 +769,13 @@ mod tests {
         let symlink_path = base.path().join("escape");
         let symlink_result = {
             #[cfg(unix)]
-            { std::os::unix::fs::symlink(other.path(), &symlink_path) }
+            {
+                std::os::unix::fs::symlink(other.path(), &symlink_path)
+            }
             #[cfg(windows)]
-            { std::os::windows::fs::symlink_dir(other.path(), &symlink_path) }
+            {
+                std::os::windows::fs::symlink_dir(other.path(), &symlink_path)
+            }
         };
         if symlink_result.is_err() {
             return;
@@ -859,7 +851,10 @@ mod tests {
     #[tokio::test]
     async fn open_url_rejects_custom_scheme() {
         let result = open_url("custom-protocol://do-evil".into()).await;
-        assert!(result.is_err(), "custom-protocol: scheme should be rejected");
+        assert!(
+            result.is_err(),
+            "custom-protocol: scheme should be rejected"
+        );
     }
 
     // Note: We do NOT test http/https/mailto acceptance here because

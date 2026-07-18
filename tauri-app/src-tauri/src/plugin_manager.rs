@@ -28,11 +28,11 @@
 
 use anyhow::{Context, Result};
 use libloading::{Library, Symbol};
+use parking_lot::RwLock;
 use serde_json::Value;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use parking_lot::RwLock;
 use tokio::sync::RwLock as AsyncRwLock;
 use worktools_plugin_api::{Plugin, PluginCreateFn};
 use worktools_shared_types::PluginInfo;
@@ -161,7 +161,6 @@ impl PluginManager {
         }
     }
 
-
     // ── 构造与初始化 ──
 
     /// 创建新的插件管理器
@@ -196,9 +195,9 @@ impl PluginManager {
 
         // 将同步 I/O 移到 spawn_blocking，避免阻塞 tokio 异步运行时
         let plugin_dir = self.plugin_dir.clone();
-        let scan_result = tokio::task::spawn_blocking(move || {
-            scan_plugin_dir(&plugin_dir)
-        }).await.map_err(|e| anyhow::anyhow!("插件扫描任务失败: {}", e))?;
+        let scan_result = tokio::task::spawn_blocking(move || scan_plugin_dir(&plugin_dir))
+            .await
+            .map_err(|e| anyhow::anyhow!("插件扫描任务失败: {}", e))?;
 
         let lib_paths = scan_result.context("扫描插件目录失败")?;
 
@@ -353,7 +352,8 @@ impl PluginManager {
     /// PluginInfo 存储在外层 — 只需外层读锁，无需触及内层锁（lock-free 查询）
     pub async fn get_installed_plugins(&self) -> Vec<PluginInfo> {
         self.plugins
-            .read().await
+            .read()
+            .await
             .values()
             .map(|(info, _)| info.clone())
             .collect()
@@ -362,14 +362,17 @@ impl PluginManager {
     /// 只需外层读锁 — 不触及 PluginInstance 内层锁
     pub async fn get_plugin(&self, plugin_id: &str) -> Option<PluginInfo> {
         self.plugins
-            .read().await
+            .read()
+            .await
             .get(plugin_id)
             .map(|(info, _)| info.clone())
     }
     /// 获取插件视图 HTML
     pub async fn get_plugin_view(&self, plugin_id: &str) -> Result<String> {
-        let (_, inst_arc) = self.plugins
-            .read().await
+        let (_, inst_arc) = self
+            .plugins
+            .read()
+            .await
             .get(plugin_id)
             .cloned()
             .ok_or_else(|| anyhow::anyhow!("插件不存在: {}", plugin_id))?;
@@ -418,8 +421,10 @@ impl PluginManager {
         params: Value,
     ) -> Result<Value> {
         // 读锁查找 + clone Arc（立即释放读锁）
-        let (_, inst_arc) = self.plugins
-            .read().await
+        let (_, inst_arc) = self
+            .plugins
+            .read()
+            .await
             .get(plugin_id)
             .cloned()
             .ok_or_else(|| anyhow::anyhow!("插件不存在: {}", plugin_id))?;
@@ -436,8 +441,7 @@ impl PluginManager {
             std::time::Duration::from_secs(30),
             tokio::task::spawn_blocking(move || {
                 let mut inst = inst_arc.write();
-                inst
-                    .instance
+                inst.instance
                     .handle_call(&method_owned, params_owned)
                     .inspect_err(|e| {
                         tracing::error!(
@@ -448,14 +452,19 @@ impl PluginManager {
                         );
                     })
                     .map_err(|e| anyhow::anyhow!("插件方法调用失败: {}", e))
-            })
-        ).await;
+            }),
+        )
+        .await;
 
         match result {
             Ok(Ok(Ok(value))) => Ok(value),
             Ok(Ok(Err(e))) => Err(e),
             Ok(Err(_)) => Err(anyhow::anyhow!("插件调用任务异常")),
-            Err(_) => Err(anyhow::anyhow!("插件方法调用超时 (30s): {}::{}", timeout_pid, timeout_method)),
+            Err(_) => Err(anyhow::anyhow!(
+                "插件方法调用超时 (30s): {}::{}",
+                timeout_pid,
+                timeout_method
+            )),
         }
     }
 }
@@ -523,7 +532,8 @@ mod tests {
         std::fs::write(
             plugin_dir.join("manifest.json"),
             serde_json::to_string(&manifest).unwrap(),
-        ).unwrap();
+        )
+        .unwrap();
 
         // Create a fake .dll file
         std::fs::write(plugin_dir.join(&lib_name), "fake").unwrap();
@@ -558,7 +568,8 @@ mod tests {
         std::fs::write(
             plugin_dir.join("manifest.json"),
             serde_json::to_string(&manifest).unwrap(),
-        ).unwrap();
+        )
+        .unwrap();
 
         // No .dll file created — should not appear in results
         let result = scan_plugin_dir(dir.path()).unwrap();
