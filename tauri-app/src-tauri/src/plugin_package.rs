@@ -321,14 +321,14 @@ mod tests {
             },
             "assets": { "entry": "index.html" }
         });
-        zip.start_file("manifest.json", zip::write::FileOptions::<()>::default());
+        zip.start_file("manifest.json", zip::write::FileOptions::<()>::default()).unwrap();
         zip.write_all(serde_json::to_string(&manifest).unwrap().as_bytes()).unwrap();
 
         let lib_name = format!("{id}.dll");
-        zip.start_file(&lib_name, zip::write::FileOptions::<()>::default());
+        zip.start_file(&lib_name, zip::write::FileOptions::<()>::default()).unwrap();
         zip.write_all(b"dll_data").unwrap();
 
-        zip.start_file("assets/index.html", zip::write::FileOptions::<()>::default());
+        zip.start_file("assets/index.html", zip::write::FileOptions::<()>::default()).unwrap();
         zip.write_all(b"<html></html>").unwrap();
 
         if let Some((name, data)) = extra_entry {
@@ -353,7 +353,7 @@ mod tests {
         let dir = TempDir::new().unwrap();
         let zip_path = dir.path().join("test.zip");
         let mut zip = zip::ZipWriter::new(std::fs::File::create(&zip_path).unwrap());
-        zip.start_file("dummy.txt", zip::write::FileOptions::<()>::default());
+        zip.start_file("dummy.txt", zip::write::FileOptions::<()>::default()).unwrap();
         zip.write_all(b"hello").unwrap();
         zip.finish().unwrap();
         let data = std::fs::read(&zip_path).unwrap();
@@ -384,11 +384,11 @@ mod tests {
             "files": { "windows": "has_spaces.dll" },
             "assets": { "entry": "index.html" }
         });
-        zip.start_file("manifest.json", zip::write::FileOptions::<()>::default());
+        zip.start_file("manifest.json", zip::write::FileOptions::<()>::default()).unwrap();
         zip.write_all(serde_json::to_string(&manifest).unwrap().as_bytes()).unwrap();
-        zip.start_file("has_spaces.dll", zip::write::FileOptions::<()>::default());
+        zip.start_file("has_spaces.dll", zip::write::FileOptions::<()>::default()).unwrap();
         zip.write_all(b"dll").unwrap();
-        zip.start_file("assets/index.html", zip::write::FileOptions::<()>::default());
+        zip.start_file("assets/index.html", zip::write::FileOptions::<()>::default()).unwrap();
         zip.write_all(b"<html></html>").unwrap();
         zip.finish().unwrap();
         let data = std::fs::read(&zip_path).unwrap();
