@@ -92,6 +92,38 @@ impl PluginManifest {
             None
         }
     }
+
+    /// 验证 manifest 是否满足当前平台的要求
+    ///
+    /// 检查必要字段（id, name, version）是否非空，以及当前平台是否有对应的动态库配置。
+    /// 返回第一个发现的验证错误。
+    pub fn validate(&self) -> Result<()> {
+        if self.id.trim().is_empty() {
+            anyhow::bail!("manifest.id 不能为空");
+        }
+        if self.name.trim().is_empty() {
+            anyhow::bail!("manifest.name 不能为空");
+        }
+        if self.version.trim().is_empty() {
+            anyhow::bail!("manifest.version 不能为空");
+        }
+        if self.get_library_filename().is_none() {
+            let platform = if cfg!(target_os = "macos") {
+                "macos"
+            } else if cfg!(target_os = "linux") {
+                "linux"
+            } else if cfg!(target_os = "windows") {
+                "windows"
+            } else {
+                "unknown"
+            };
+            anyhow::bail!(
+                "manifest.files.{} 未配置当前平台的动态库文件名",
+                platform
+            );
+        }
+        Ok(())
+    }
 }
 
 /// 前端资源配置
@@ -129,6 +161,7 @@ impl PluginPackage {
         // `from_reader` 直接从 ZIP 条目流中反序列化 JSON
         let manifest: PluginManifest =
             serde_json::from_reader(manifest_file).context("解析 manifest.json 失败")?;
+        manifest.validate().context("manifest.json 验证失败")?;
 
         Ok(Self {
             manifest,
@@ -525,5 +558,55 @@ mod tests {
         assert!(install_dir.join("manifest.json").exists());
         assert!(install_dir.join("assets/index.html").exists());
         assert!(install_dir.join("normal-plugin.dll").exists());
+    }
+
+    #[test]
+    fn test_manifest_validate_rejects_empty_id() {
+        let manifest = PluginManifest {
+            id: String::new(),
+            name: "Test".into(),
+            description: "desc".into(),
+            version: "1.0.0".into(),
+            icon: None,
+            author: None,
+            homepage: None,
+            min_app_version: None,
+            license: None,
+            files: PlatformFiles {
+                windows: Some("test.dll".into()),
+                macos: None,
+                linux: None,
+            },
+            assets: AssetsConfig { entry: "index.html".into(), icon: None },
+            permissions: Vec::new(),
+            screenshots: Vec::new(),
+        };
+        let err = manifest.validate().unwrap_err();
+        assert!(err.to_string().contains("id"));
+    }
+
+    #[test]
+    fn test_manifest_validate_rejects_missing_platform_lib() {
+        let manifest = PluginManifest {
+            id: "test".into(),
+            name: "Test".into(),
+            description: "desc".into(),
+            version: "1.0.0".into(),
+            icon: None,
+            author: None,
+            homepage: None,
+            min_app_version: None,
+            license: None,
+            files: PlatformFiles {
+                windows: None,
+                macos: None,
+                linux: None,
+            },
+            assets: AssetsConfig { entry: "index.html".into(), icon: None },
+            permissions: Vec::new(),
+            screenshots: Vec::new(),
+        };
+        let err = manifest.validate().unwrap_err();
+        assert!(err.to_string().contains("windows") || err.to_string().contains("动态库"));
     }
 }
