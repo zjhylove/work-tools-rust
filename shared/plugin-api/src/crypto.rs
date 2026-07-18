@@ -99,48 +99,11 @@ pub fn decrypt_ecb_with_seed(seed: &str, encoded: &str) -> Result<String> {
     String::from_utf8(decrypted).context("解密结果非有效 UTF-8")
 }
 
-/// Generate random bytes using OS CSPRNG.
+/// Generate random bytes using OS CSPRNG via `getrandom` crate.
 fn rand_bytes(len: usize) -> Vec<u8> {
-    use std::time::{SystemTime, UNIX_EPOCH};
-
-    // Deterministic fallback: SHA-256 of (seed + timestamp + counter)
-    // Not ideal but avoids adding a new rand dependency.
-    // In production, use `getrandom` or `rand` crate.
-    let mut result = Vec::with_capacity(len);
-    let base = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_nanos();
-
-    // Use a thread-local counter for uniqueness
-    use std::sync::atomic::{AtomicU64, Ordering};
-    static COUNTER: AtomicU64 = AtomicU64::new(0);
-    let counter = COUNTER.fetch_add(1, Ordering::Relaxed);
-
-    let mut hasher = Sha256::new();
-    hasher.update(base.to_le_bytes());
-    hasher.update(counter.to_le_bytes());
-    let hash = hasher.finalize();
-
-    // Expand hash to fill output
-    let mut i = 0;
-    while result.len() < len {
-        if i < 32 {
-            result.push(hash[i]);
-            i += 1;
-        } else {
-            // Re-hash
-            let mut hasher2 = Sha256::new();
-            hasher2.update(hash);
-            let new_hash = hasher2.finalize();
-            // Use new_hash bytes
-            let j = i % 32;
-            result.push(new_hash[j]);
-            i += 1;
-        }
-    }
-
-    result
+    let mut buf = vec![0u8; len];
+    getrandom::fill(&mut buf).expect("OS CSPRNG failure");
+    buf
 }
 
 #[cfg(test)]

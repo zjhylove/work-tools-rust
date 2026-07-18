@@ -7258,6 +7258,7 @@ dependencies = [
  "anyhow",
  "directories",
  "dirs 6.0.0",
+ "getrandom 0.3.4",
  "hex",
  "serde",
  "serde_json",
