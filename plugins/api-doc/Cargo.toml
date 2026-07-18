@@ -13,5 +13,5 @@ serde_json = "1.0"
 anyhow = "1.0"
 chrono = { version = "0.4", features = ["serde"] }
 tracing = "0.1"
-zip = "2"
+zip = "8.2"
 cafebabe = "0.9"
