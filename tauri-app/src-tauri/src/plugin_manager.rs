@@ -546,6 +546,23 @@ mod tests {
         assert!(result.is_empty());
     }
 
+    #[test]
+    fn scan_plugin_dir_fallback_without_manifest() {
+        let dir = tempfile::tempdir().unwrap();
+        let plugin_dir = dir.path().join("legacy-plugin");
+        std::fs::create_dir_all(&plugin_dir).unwrap();
+
+        // No manifest.json — uses fallback: prefix + dir_name (with hyphens→underscores) + ext
+        let ext = PluginManager::get_platform_extension();
+        let prefix = PluginManager::get_platform_prefix();
+        let lib_name = format!("{}legacy_plugin.{}", prefix, ext);
+        std::fs::write(plugin_dir.join(&lib_name), "fake").unwrap();
+
+        let result = scan_plugin_dir(dir.path()).unwrap();
+        assert_eq!(result.len(), 1);
+        assert!(result[0].ends_with(&lib_name));
+    }
+
     #[tokio::test]
     async fn new_creates_plugin_dir() {
         let dir = tempfile::tempdir().unwrap();

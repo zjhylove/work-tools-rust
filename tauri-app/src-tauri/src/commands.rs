@@ -143,10 +143,14 @@ pub async fn import_plugin_package(
 ) -> Result<String, String> {
     tracing::info!(file_path = %file_path, "开始导入插件包");
 
-    // 1. 从 ZIP 文件加载插件包
-    let pkg = PluginPackage::from_zip(std::path::Path::new(&file_path))
-        .inspect_err(|e| tracing::error!(file_path = %file_path, "加载插件包失败: {}", e))
-        .map_err(|e| format!("加载插件包失败: {}", e))?;
+    let fp = file_path.clone();
+    let pkg = tokio::task::spawn_blocking(move || {
+        PluginPackage::from_zip(std::path::Path::new(&fp))
+    })
+    .await
+    .map_err(|e| format!("插件包加载任务失败: {}", e))?
+    .inspect_err(|e| tracing::error!(file_path = %file_path, "加载插件包失败: {}", e))
+    .map_err(|e| format!("加载插件包失败: {}", e))?;
 
     // 2. 验证插件包完整性
     pkg.validate()

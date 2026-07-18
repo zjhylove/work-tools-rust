@@ -465,4 +465,38 @@ mod tests {
         // Should not error on unregistering nonexistent
         registry.unregister("ghost").unwrap();
     }
+
+    #[tokio::test]
+    async fn test_with_path_async_loads_file() {
+        let temp_dir = TempDir::new().unwrap();
+        let registry_file = temp_dir.path().join("async-test.json");
+
+        let data = serde_json::json!({
+            "beta": {
+                "id": "beta",
+                "name": "Beta Plugin",
+                "description": "desc",
+                "version": "3.0.0",
+                "installed_at": "2026-06-01T00:00:00Z",
+                "enabled": false,
+                "assets_path": "/tmp/assets",
+                "library_path": "/tmp/lib.so"
+            }
+        });
+        std::fs::write(&registry_file, serde_json::to_string(&data).unwrap()).unwrap();
+
+        let registry = PluginRegistry::with_path_async(registry_file).await.unwrap();
+        assert!(registry.is_installed("beta"));
+        assert_eq!(registry.get("beta").unwrap().version, "3.0.0");
+        assert!(!registry.is_enabled("beta"));
+    }
+
+    #[tokio::test]
+    async fn test_with_path_async_empty_when_missing() {
+        let temp_dir = TempDir::new().unwrap();
+        let registry_file = temp_dir.path().join("nonexistent-async.json");
+
+        let registry = PluginRegistry::with_path_async(registry_file).await.unwrap();
+        assert!(registry.get_installed().is_empty());
+    }
 }
