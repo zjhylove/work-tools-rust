@@ -164,13 +164,17 @@ fn register_functions(engine: &mut Engine) {
 
     // ── 哈希函数 ─────────────────────────────────────
 
-    // Java 兼容的简单 hashCode
+    // Java 兼容的 String.hashCode()
+    // Java 的 hashCode 返回 int（32 位有符号），运算在 int 范围内溢出截断。
+    // 因此必须用 i32 + wrapping 复现溢出语义，否则长字符串结果会与 Java 不一致。
+    // 返回 i64 仅是为了与其它哈希函数统一类型；负数符号保留，由调用方 abs() 处理，
+    // 与 Java Math.abs(hashCode) 行为一致。
     engine.register_fn("hash_code", |s: &str| -> i64 {
-        let mut h: i64 = 0;
+        let mut h: i32 = 0;
         for &b in s.as_bytes() {
-            h = h.wrapping_mul(31).wrapping_add(b as i64);
+            h = h.wrapping_mul(31).wrapping_add(b as i32);
         }
-        h
+        h as i64
     });
 
     // MurmurHash3 32-bit（与 Java 版一致）

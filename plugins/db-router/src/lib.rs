@@ -312,4 +312,18 @@ mod tests {
         assert!(!match_rule("ORD123", &rule));
         assert!(!match_rule("INV1234567", &rule));
     }
+    #[test]
+    fn test_hash_code_java_compatible() {
+        // 复现 Java Math.abs(account_no.hashCode()) % 100 的分库路由场景。
+        // Java String.hashCode() 返回 int（32 位有符号，乘 31 累加，溢出截断），
+        // 对 "ECCC8E65524D2487E043650A1803172F" 算得 1974971894 → abs % 100 = 94。
+        // 旧实现误用 i64 不溢出，结果为 86，导致路由到错误分库。
+        let mut rule = make_rule("", 0);
+        rule.route_script =
+            "let database = (abs(hash_code(code)) % 100).to_string(); let table_suffix = \"\";"
+                .to_string();
+        let (database, _) =
+            crate::engine::execute_script("ECCC8E65524D2487E043650A1803172F", &rule).unwrap();
+        assert_eq!(database, "94");
+    }
 }
